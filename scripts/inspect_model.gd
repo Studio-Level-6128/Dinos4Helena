@@ -2,15 +2,23 @@ extends SceneTree
 
 
 func _initialize() -> void:
-	var source := "res://assets/models/trex/Trex.fbx"
-	var packed := load(source) as PackedScene
-	if packed == null:
-		push_error("Could not load " + source)
-		quit(1)
-		return
-	var instance := packed.instantiate()
-	_print_node(instance, "")
-	instance.free()
+	var sources := [
+		"res://assets/models/trex/Trex.fbx",
+		"res://assets/models/dinosaurs/Triceratops.fbx",
+		"res://assets/models/dinosaurs/Stegosaurus.fbx",
+		"res://assets/models/dinosaurs/Velociraptor.fbx",
+		"res://assets/models/dinosaurs/Parasaurolophus.fbx",
+		"res://assets/models/dinosaurs/Apatosaurus.fbx"
+	]
+	for source in sources:
+		print("\n=== " + source + " ===")
+		var packed := load(source) as PackedScene
+		if packed == null:
+			push_error("Could not load " + source)
+			continue
+		var instance := packed.instantiate()
+		_print_node(instance, "")
+		instance.free()
 	quit()
 
 

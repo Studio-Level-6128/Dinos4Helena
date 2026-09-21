@@ -1,6 +1,8 @@
 # Dinos4Helena
 
-A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has an animated T-Rex, a third-person follow camera, two-handed touch controls, and a procedural prehistoric valley.
+A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has six selectable animated dinosaurs, a third-person follow camera, two-handed touch controls, and a procedural prehistoric valley.
+
+The game opens on a cinematic dinosaur-selection screen titled **DINOS4HELENA**, with the subtitle “Helena's Dino game - made by dad.” Choose T-Rex, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus. The top-right `MAIN MENU` button returns to the selection screen at any time.
 
 ## Play the prototype
 
@@ -81,6 +83,8 @@ Google Play requires Android App Bundles for new apps. Keep release signing cred
 
 ## Project choices
 
-The game uses Godot's Compatibility renderer for broad Android GPU support. The current T-Rex comes from Quaternius' [Animated Dinosaur Pack](https://quaternius.com/packs/animateddinosaurs.html), is dedicated to the public domain under CC0 1.0, and includes idle, walk, run, jump, attack, and death animations. The original license and precise provenance are stored beside the model in `assets/models/trex/`.
+The game uses Godot's Compatibility renderer for broad Android GPU support. All six playable models come from Quaternius' [Animated Dinosaur Pack](https://quaternius.com/packs/animateddinosaurs.html), are dedicated to the public domain under CC0 1.0, and include idle, walk, run, jump, and attack animations. The original license and precise provenance are stored in `assets/models/dinosaurs/`.
+
+The photorealistic menu background and portraits were generated specifically for this game. Their prompt provenance is recorded in `assets/ui/menu/GENERATED_ASSETS.md`.
 
 The landscape is assembled from inexpensive procedural primitives so it runs well on mobile and can later be replaced incrementally with authored terrain and foliage.

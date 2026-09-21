@@ -10,9 +10,11 @@ func _run() -> void:
 	var world := scene.instantiate()
 	root.add_child(world)
 	await process_frame
+	assert(world.menu_layer.visible, "Main menu was not shown on launch")
+	world._start_game("trex")
 	await physics_frame
 
-	var player := world.get_node("PlayerT-Rex") as CharacterBody3D
+	var player := world.get_node("PrehistoricWorld/PlayerDinosaur") as CharacterBody3D
 	var initial_z := player.position.z
 	player.set_mobile_action("move_forward", true)
 	player.set_mobile_action("run", true)

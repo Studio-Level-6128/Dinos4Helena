@@ -1,17 +1,184 @@
 extends Node3D
 
 const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
+const DINOSAURS := [
+	{"id": "trex", "name": "T-Rex"},
+	{"id": "triceratops", "name": "Triceratops"},
+	{"id": "stegosaurus", "name": "Stegosaurus"},
+	{"id": "velociraptor", "name": "Velociraptor"},
+	{"id": "parasaurolophus", "name": "Parasaurolophus"},
+	{"id": "apatosaurus", "name": "Apatosaurus"}
+]
 
 var player: CharacterBody3D
 var status_label: Label
+var world_root: Node3D
+var game_hud: CanvasLayer
+var menu_layer: CanvasLayer
+var selected_dino_name := "T-Rex"
 
 
 func _ready() -> void:
 	_create_input_actions()
+	_build_main_menu()
+
+
+func _start_game(dino_id: String) -> void:
+	for dinosaur in DINOSAURS:
+		if dinosaur.id == dino_id:
+			selected_dino_name = dinosaur.name
+			break
+	menu_layer.hide()
+	world_root = Node3D.new()
+	world_root.name = "PrehistoricWorld"
+	add_child(world_root)
 	_build_environment()
 	_build_landscape()
-	_build_player()
+	_build_player(dino_id)
 	_build_hud()
+
+
+func _return_to_main_menu() -> void:
+	if is_instance_valid(game_hud):
+		game_hud.queue_free()
+	if is_instance_valid(world_root):
+		world_root.queue_free()
+	player = null
+	status_label = null
+	menu_layer.show()
+
+
+func _build_main_menu() -> void:
+	menu_layer = CanvasLayer.new()
+	menu_layer.name = "MainMenu"
+	add_child(menu_layer)
+
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_layer.add_child(root)
+
+	var background := TextureRect.new()
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.texture = load("res://assets/ui/menu/prehistoric-valley.png")
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(background)
+
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.015, 0.04, 0.025, 0.46)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(shade)
+
+	var title := Label.new()
+	title.text = "DINOS4HELENA"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	title.position = Vector2(-440, 34)
+	title.size = Vector2(880, 78)
+	title.add_theme_font_size_override("font_size", 58)
+	title.add_theme_color_override("font_color", Color("fff2c2"))
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	title.add_theme_constant_override("shadow_offset_x", 3)
+	title.add_theme_constant_override("shadow_offset_y", 4)
+	root.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "Helena's Dino game - made by dad"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	subtitle.position = Vector2(-350, 108)
+	subtitle.size = Vector2(700, 40)
+	subtitle.add_theme_font_size_override("font_size", 23)
+	subtitle.add_theme_color_override("font_color", Color("f5dc9d"))
+	subtitle.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	subtitle.add_theme_constant_override("shadow_offset_x", 2)
+	subtitle.add_theme_constant_override("shadow_offset_y", 2)
+	root.add_child(subtitle)
+
+	var prompt := Label.new()
+	prompt.text = "CHOOSE YOUR DINOSAUR"
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	prompt.position = Vector2(-260, 169)
+	prompt.size = Vector2(520, 42)
+	prompt.add_theme_font_size_override("font_size", 21)
+	prompt.add_theme_color_override("font_color", Color.WHITE)
+	root.add_child(prompt)
+
+	var cards := HBoxContainer.new()
+	cards.name = "DinosaurCards"
+	cards.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	cards.position = Vector2(-590, 220)
+	cards.size = Vector2(1180, 360)
+	cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards.add_theme_constant_override("separation", 12)
+	root.add_child(cards)
+
+	for dinosaur in DINOSAURS:
+		cards.add_child(_create_dino_card(dinosaur.id, dinosaur.name))
+
+	var footer := Label.new()
+	footer.text = "Select a dinosaur to begin your prehistoric adventure"
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	footer.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	footer.position = Vector2(-350, -54)
+	footer.size = Vector2(700, 32)
+	footer.add_theme_font_size_override("font_size", 17)
+	footer.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
+	root.add_child(footer)
+
+
+func _create_dino_card(dino_id: String, display_name: String) -> Control:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(184, 320)
+	panel.add_theme_stylebox_override("panel", _card_style())
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+	panel.add_child(column)
+
+	var portrait := TextureButton.new()
+	portrait.custom_minimum_size = Vector2(168, 205)
+	portrait.texture_normal = load("res://assets/ui/menu/%s.png" % dino_id)
+	portrait.ignore_texture_size = true
+	portrait.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_COVERED
+	portrait.tooltip_text = "Play as " + display_name
+	portrait.pressed.connect(_start_game.bind(dino_id))
+	column.add_child(portrait)
+
+	var name_label := Label.new()
+	name_label.text = display_name.to_upper()
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 17 if display_name.length() < 13 else 14)
+	name_label.add_theme_color_override("font_color", Color("fff2c2"))
+	column.add_child(name_label)
+
+	var play := Button.new()
+	play.text = "PLAY"
+	play.focus_mode = Control.FOCUS_NONE
+	play.add_theme_font_size_override("font_size", 16)
+	play.add_theme_color_override("font_color", Color("f7f2d0"))
+	play.add_theme_stylebox_override("normal", _button_style(Color(0.12, 0.25, 0.16, 0.92), Color(0.72, 0.83, 0.42, 0.8)))
+	play.add_theme_stylebox_override("hover", _button_style(Color(0.24, 0.43, 0.22, 0.96), Color("f7f2d0")))
+	play.add_theme_stylebox_override("pressed", _button_style(Color(0.52, 0.64, 0.24, 1.0), Color.WHITE))
+	play.pressed.connect(_start_game.bind(dino_id))
+	column.add_child(play)
+	return panel
+
+
+func _card_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.025, 0.075, 0.045, 0.88)
+	style.border_color = Color(0.82, 0.72, 0.35, 0.72)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(14)
+	style.content_margin_left = 7
+	style.content_margin_right = 7
+	style.content_margin_top = 7
+	style.content_margin_bottom = 9
+	return style
 
 
 func _build_environment() -> void:
@@ -33,7 +200,7 @@ func _build_environment() -> void:
 	environment.fog_density = 0.006
 	environment.fog_sky_affect = 0.45
 	world_environment.environment = environment
-	add_child(world_environment)
+	world_root.add_child(world_environment)
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
@@ -41,13 +208,13 @@ func _build_environment() -> void:
 	sun.light_energy = 1.25
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 55.0
-	add_child(sun)
+	world_root.add_child(sun)
 
 
 func _build_landscape() -> void:
 	var ground := StaticBody3D.new()
 	ground.name = "Ground"
-	add_child(ground)
+	world_root.add_child(ground)
 
 	var ground_mesh := MeshInstance3D.new()
 	var ground_box := BoxMesh.new()
@@ -88,26 +255,27 @@ func _build_landscape() -> void:
 		_create_rock(rock_positions[index], 0.7 + float(index % 3) * 0.35)
 
 
-func _build_player() -> void:
+func _build_player(dino_id: String) -> void:
 	player = CharacterBody3D.new()
-	player.name = "PlayerT-Rex"
+	player.name = "PlayerDinosaur"
 	player.set_script(PLAYER_SCRIPT)
+	player.set("dino_id", dino_id)
 	player.position = Vector3(0.0, 0.1, 5.0)
-	add_child(player)
+	world_root.add_child(player)
 	player.screamed.connect(_on_dino_screamed)
 
 
 func _build_hud() -> void:
-	var layer := CanvasLayer.new()
-	layer.name = "TouchControls"
-	add_child(layer)
+	game_hud = CanvasLayer.new()
+	game_hud.name = "TouchControls"
+	add_child(game_hud)
 
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layer.add_child(root)
+	game_hud.add_child(root)
 
 	var title := Label.new()
-	title.text = "DINOS4HELENA  •  T-REX PROTOTYPE"
+	title.text = "DINOS4HELENA  •  " + selected_dino_name.to_upper()
 	title.position = Vector2(18, 14)
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color("f4f0cf"))
@@ -168,6 +336,20 @@ func _build_hud() -> void:
 	keyboard_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.68))
 	root.add_child(keyboard_hint)
 
+	var menu_button := Button.new()
+	menu_button.text = "←  MAIN MENU"
+	menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	menu_button.position = Vector2(-190, 16)
+	menu_button.size = Vector2(170, 46)
+	menu_button.focus_mode = Control.FOCUS_NONE
+	menu_button.add_theme_font_size_override("font_size", 16)
+	menu_button.add_theme_color_override("font_color", Color("f7f2d0"))
+	menu_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.84), Color(0.72, 0.83, 0.42, 0.72)))
+	menu_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.94), Color("f7f2d0")))
+	menu_button.add_theme_stylebox_override("pressed", _button_style(Color(0.48, 0.6, 0.24, 1.0), Color.WHITE))
+	menu_button.pressed.connect(_return_to_main_menu)
+	root.add_child(menu_button)
+
 
 func _add_action_button(parent: Control, caption: String, action: StringName, button_position: Vector2, button_size: Vector2) -> void:
 	var button := Button.new()
@@ -220,7 +402,7 @@ func _create_pond(pond_position: Vector3, pond_size: Vector2) -> void:
 	water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	water.metallic = 0.1
 	pond.material_override = water
-	add_child(pond)
+	world_root.add_child(pond)
 
 
 func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
@@ -234,14 +416,14 @@ func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
 	hill.position = hill_position
 	hill.scale = hill_scale
 	hill.material_override = _material(Color("58763e"), 1.0)
-	add_child(hill)
+	world_root.add_child(hill)
 
 
 func _create_tree(tree_position: Vector3, tree_scale: float) -> void:
 	var tree := Node3D.new()
 	tree.position = tree_position
 	tree.scale = Vector3.ONE * tree_scale
-	add_child(tree)
+	world_root.add_child(tree)
 
 	var trunk := MeshInstance3D.new()
 	var trunk_mesh := CylinderMesh.new()
@@ -277,7 +459,7 @@ func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
 	rock.scale = Vector3(1.25, 0.65, 0.9) * rock_scale
 	rock.rotation_degrees.y = rock_position.x * 7.0
 	rock.material_override = _material(Color("77796e"), 1.0)
-	add_child(rock)
+	world_root.add_child(rock)
 
 
 func _material(color: Color, roughness: float) -> StandardMaterial3D:
