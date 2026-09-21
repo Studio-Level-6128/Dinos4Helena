@@ -24,6 +24,7 @@ func _run() -> void:
 		assert(player.dino_id == dino_id, "Wrong dinosaur selected: " + dino_id)
 		assert(player.animation_player != null, "Missing animations for: " + dino_id)
 		assert(player.animation_player.get_animation_list().size() >= 5, "Incomplete animation set for: " + dino_id)
+		assert(player.audio_streams.size() == 7, "Incomplete sound set for: " + dino_id)
 		assert(is_equal_approx(player.run_speed, float(config.get_value(dino_id, "run_speed"))), "Wrong speed for: " + dino_id)
 		assert(player.strength == int(config.get_value(dino_id, "strength")), "Wrong strength for: " + dino_id)
 		assert(player.max_health == int(config.get_value(dino_id, "max_health")), "Wrong health for: " + dino_id)

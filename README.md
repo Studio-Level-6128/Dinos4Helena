@@ -1,6 +1,6 @@
 # Dinos4Helena
 
-A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has six selectable animated dinosaurs, a third-person follow camera, two-handed touch controls, and a procedural prehistoric valley.
+A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has six selectable animated dinosaurs, a third-person follow camera, two-handed touch controls, species-specific sound design, and a procedural prehistoric valley.
 
 The game opens on a cinematic dinosaur-selection screen titled **DINOS4HELENA**, with the subtitle “Helena's Dino game - made by dad.” Choose T-Rex, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus. The top-right `MAIN MENU` button returns to the selection screen at any time.
 
@@ -17,7 +17,21 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 | Attack | `ATTACK` | `F` |
 | Scream | `SCREAM` (roar pose, sound, and shockwave) | `R` |
 
-The landscape currently includes a lake, wooded areas, rocks, distant hills, atmospheric fog, and mobile-friendly lighting.
+The landscape currently includes a lake, wooded areas, rocks, distant hills, atmospheric fog, mobile-friendly lighting, and layered looping prehistoric ambience. Every dinosaur has its own scream, walking, running, jumping, ducking, attacking, and hurt sounds. Movement audio follows the dinosaur's pace, while action and vocal effects use independent 3D channels so important sounds are not cut off by footsteps.
+
+## Sound library
+
+The checked-in MP3 assets under `assets/audio/` were generated with ElevenLabs' sound-effects model. The exact prompts, durations, and output format are recorded in `scripts/generate-sounds.sh`; provenance and scientific caveats are in `assets/audio/GENERATED_ASSETS.md`.
+
+To regenerate missing clips, create a local `.env` from the safe template and run:
+
+```bash
+cp .env.example .env
+# Add ELEVENLABS_API_KEY to .env, then:
+./scripts/generate-sounds.sh
+```
+
+`.env` and `.env.*` are ignored by Git, while `.env.example` remains tracked. The generator is resumable and skips existing clips to avoid duplicate API charges.
 
 ## Dinosaur balancing
 
@@ -50,6 +64,7 @@ Use `Terminal > Run Task`:
 - `Godot: Open editor` opens the visual scene/asset editor.
 - `Godot: Run game` runs the game on the desktop.
 - `Godot: Gameplay smoke test` verifies movement and actions without opening a window.
+- `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.
 - `Android: Connected devices` lists USB-connected Android devices.
 

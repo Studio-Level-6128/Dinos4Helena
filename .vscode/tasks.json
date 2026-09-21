@@ -33,6 +33,12 @@
       "group": "test"
     },
     {
+      "label": "Audio: Generate missing sounds",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/generate-sounds.sh",
+      "problemMatcher": []
+    },
+    {
       "label": "Android: Build debug APK",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/build-android.sh",

@@ -15,6 +15,9 @@ func _run() -> void:
 	await physics_frame
 
 	var player := world.get_node("PrehistoricWorld/PlayerDinosaur") as CharacterBody3D
+	assert(player.audio_streams.size() == 7, "Velociraptor sound library did not load")
+	assert(world.get_node_or_null("PrehistoricWorld/PrehistoricJungle") != null, "Jungle ambience did not start")
+	assert(world.get_node_or_null("PrehistoricWorld/DistantDinosaurs") != null, "Distant dinosaur ambience did not start")
 	var initial_z := player.position.z
 	player.set_mobile_action("move_forward", true)
 	player.set_mobile_action("run", true)
@@ -57,7 +60,12 @@ func _run() -> void:
 	assert(scream_count[0] == 1, "T-Rex scream did not trigger")
 	assert("idle" in player.current_animation.to_lower(), "Scream incorrectly reused the attack animation")
 
-	print("Gameplay smoke test passed: movement, run, duck, jump, attack, and scream")
+	var health_before_hit: int = player.health
+	player.take_damage(12)
+	assert(player.health == health_before_hit - 12, "Damage did not reduce dinosaur health")
+	assert(player.vocal_audio.playing, "Hurt sound did not play")
+
+	print("Gameplay smoke test passed: movement, actions, health, species audio, and ambience")
 	world.queue_free()
 	await process_frame
 	quit()

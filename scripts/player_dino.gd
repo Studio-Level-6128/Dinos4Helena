@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 signal screamed
+signal health_changed(current_health: int, maximum_health: int)
 
 var dino_id := "trex"
 var dino_config := ConfigFile.new()
@@ -17,12 +18,17 @@ var health := 100
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var model_root: Node3D
 var animation_player: AnimationPlayer
-var roar_audio: AudioStreamPlayer3D
+var action_audio: AudioStreamPlayer3D
+var movement_audio: AudioStreamPlayer3D
+var vocal_audio: AudioStreamPlayer3D
+var audio_streams: Dictionary = {}
 var current_animation := ""
 var mobile_actions: Dictionary = {}
 var attack_time := 0.0
 var scream_time := 0.0
+var footstep_time := 0.0
 var jump_was_pressed := false
+var duck_was_pressed := false
 
 
 func _ready() -> void:
@@ -41,12 +47,13 @@ func _ready() -> void:
 	_build_collision()
 	_build_model()
 	_build_follow_camera()
-	_build_roar_audio()
+	_build_audio()
 
 
 func _physics_process(delta: float) -> void:
 	attack_time = maxf(attack_time - delta, 0.0)
 	scream_time = maxf(scream_time - delta, 0.0)
+	footstep_time = maxf(footstep_time - delta, 0.0)
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -54,11 +61,11 @@ func _physics_process(delta: float) -> void:
 	var wants_jump := _action_pressed("jump")
 	if wants_jump and not jump_was_pressed and can_jump and is_on_floor() and attack_time <= 0.0:
 		velocity.y = jump_velocity
+		_play_action_sound("jump")
 	jump_was_pressed = wants_jump
 
 	if _action_just_pressed("attack") and attack_time <= 0.0:
-		attack_time = 0.85
-		_play_animation("attack", true)
+		_start_attack()
 
 	if _action_just_pressed("scream") and scream_time <= 0.0:
 		_start_scream()
@@ -71,6 +78,9 @@ func _physics_process(delta: float) -> void:
 	steering = clampf(steering, -1.0, 1.0)
 
 	var ducking := _action_pressed("duck")
+	if ducking and not duck_was_pressed:
+		_play_action_sound("duck")
+	duck_was_pressed = ducking
 	var running := _action_pressed("run") and not ducking
 	var speed := duck_speed if ducking else (run_speed if running else walk_speed)
 
@@ -92,15 +102,16 @@ func _physics_process(delta: float) -> void:
 	model_root.rotation.x = lerpf(model_root.rotation.x, roar_tilt, 9.0 * delta)
 	model_root.position.y = lerpf(model_root.position.y, 0.18 if scream_time > 0.0 else 0.0, 8.0 * delta)
 	move_and_slide()
-	_update_animation(not is_zero_approx(throttle), running, ducking)
+	var moving := not is_zero_approx(throttle) and attack_time <= 0.0 and scream_time <= 0.0
+	_update_footsteps(moving and is_on_floor(), running, ducking)
+	_update_animation(moving, running, ducking)
 
 
 func set_mobile_action(action: StringName, pressed: bool) -> void:
 	var was_pressed: bool = mobile_actions.get(action, false)
 	mobile_actions[action] = pressed
-	if pressed and not was_pressed and action == "attack":
-		attack_time = 0.85
-		_play_animation("attack", true)
+	if pressed and not was_pressed and action == "attack" and attack_time <= 0.0:
+		_start_attack()
 	if pressed and not was_pressed and action == "scream" and scream_time <= 0.0:
 		_start_scream()
 
@@ -152,29 +163,57 @@ func _build_follow_camera() -> void:
 	spring_arm.add_child(camera)
 
 
-func _build_roar_audio() -> void:
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = 22050
-	stream.stereo = false
-	var duration := 1.15
-	var sample_count := int(stream.mix_rate * duration)
-	var samples := PackedByteArray()
-	samples.resize(sample_count * 2)
-	for index in sample_count:
-		var time := float(index) / float(stream.mix_rate)
-		var envelope := sin(PI * time / duration)
-		var frequency := 54.0 + sin(time * 17.0) * 9.0
-		var growl := sin(TAU * frequency * time) + 0.45 * sin(TAU * frequency * 1.91 * time)
-		growl += 0.18 * sin(TAU * 31.0 * time + sin(time * 43.0))
-		var sample := int(clampf(growl * envelope * 10500.0, -32767.0, 32767.0))
-		samples.encode_s16(index * 2, sample)
-	stream.data = samples
-	roar_audio = AudioStreamPlayer3D.new()
-	roar_audio.stream = stream
-	roar_audio.unit_size = 18.0
-	roar_audio.max_distance = 60.0
-	add_child(roar_audio)
+func _build_audio() -> void:
+	for sound_name in ["scream", "walk", "run", "jump", "duck", "attack", "hurt"]:
+		var path := "res://assets/audio/dinosaurs/%s/%s.mp3" % [dino_id, sound_name]
+		if ResourceLoader.exists(path):
+			audio_streams[sound_name] = load(path)
+
+	action_audio = _create_audio_player("ActionAudio", 18.0, 55.0, -2.0)
+	movement_audio = _create_audio_player("MovementAudio", 12.0, 45.0, -5.0)
+	vocal_audio = _create_audio_player("VocalAudio", 24.0, 80.0, 0.0)
+
+
+func _create_audio_player(player_name: String, unit_size: float, max_distance: float, volume_db: float) -> AudioStreamPlayer3D:
+	var audio := AudioStreamPlayer3D.new()
+	audio.name = player_name
+	audio.unit_size = unit_size
+	audio.max_distance = max_distance
+	audio.volume_db = volume_db
+	add_child(audio)
+	return audio
+
+
+func _play_action_sound(sound_name: String) -> void:
+	var stream: AudioStream = audio_streams.get(sound_name)
+	if stream == null:
+		return
+	var audio := vocal_audio if sound_name in ["scream", "hurt"] else action_audio
+	audio.stream = stream
+	audio.play()
+
+
+func _update_footsteps(moving: bool, running: bool, ducking: bool) -> void:
+	if not moving:
+		footstep_time = 0.0
+		return
+	if footstep_time > 0.0:
+		return
+	var sound_name := "run" if running and not ducking else "walk"
+	var stream: AudioStream = audio_streams.get(sound_name)
+	if stream:
+		movement_audio.stream = stream
+		movement_audio.play()
+	var body_size_factor := clampf(model_scale / 0.20, 0.8, 1.65)
+	var clip_duration := stream.get_length() if stream else 0.8
+	var minimum_interval := 0.34 if running and not ducking else 0.58
+	footstep_time = maxf(clip_duration * 0.92, minimum_interval) * body_size_factor
+
+
+func _start_attack() -> void:
+	attack_time = 0.85
+	_play_animation("attack", true)
+	_play_action_sound("attack")
 
 
 func _update_animation(moving: bool, running: bool, ducking: bool) -> void:
@@ -192,10 +231,17 @@ func _update_animation(moving: bool, running: bool, ducking: bool) -> void:
 func _start_scream() -> void:
 	scream_time = 1.2
 	_play_animation("idle", true)
-	if roar_audio:
-		roar_audio.play()
+	_play_action_sound("scream")
 	_spawn_roar_wave()
 	screamed.emit()
+
+
+func take_damage(amount: int) -> void:
+	if amount <= 0 or health <= 0:
+		return
+	health = maxi(health - amount, 0)
+	_play_action_sound("hurt")
+	health_changed.emit(health, max_health)
 
 
 func _spawn_roar_wave() -> void:

@@ -28,6 +28,7 @@ func _start_game(dino_id: String) -> void:
 	world_root.name = "PrehistoricWorld"
 	add_child(world_root)
 	_build_environment()
+	_build_ambient_audio()
 	_build_landscape()
 	_build_player(dino_id)
 	_build_hud()
@@ -229,6 +230,26 @@ func _build_environment() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 55.0
 	world_root.add_child(sun)
+
+
+func _build_ambient_audio() -> void:
+	var ambient_layers := [
+		["prehistoric_jungle", -16.0],
+		["distant_dinosaurs", -23.0]
+	]
+	for layer in ambient_layers:
+		var path := "res://assets/audio/ambient/%s.mp3" % layer[0]
+		if not ResourceLoader.exists(path):
+			continue
+		var stream := load(path)
+		if stream is AudioStreamMP3:
+			stream.loop = true
+		var audio := AudioStreamPlayer.new()
+		audio.name = str(layer[0]).to_pascal_case()
+		audio.stream = stream
+		audio.volume_db = layer[1]
+		world_root.add_child(audio)
+		audio.play()
 
 
 func _build_landscape() -> void:
