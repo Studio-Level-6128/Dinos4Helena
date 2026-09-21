@@ -6,6 +6,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	assert(ProjectSettings.get_setting("display/window/handheld/orientation") == 4, "Android orientation is not locked to landscape")
 	var scene := load("res://scenes/main.tscn") as PackedScene
 	var world := scene.instantiate()
 	root.add_child(world)
