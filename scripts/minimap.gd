@@ -39,22 +39,39 @@ func _draw() -> void:
 	draw_rect(play_area, Color("668b49"), true)
 	draw_rect(play_area, Color(0.9, 0.88, 0.58, 0.75), false, 1.5)
 
+	for biome in map_layout.get("biomes", []):
+		var biome_position: Vector2 = biome["position"]
+		var biome_radius: float = biome["radius"] * play_area.size.x / (world_half_size * 2.0)
+		var biome_color := Color(0.12, 0.29, 0.12, 0.72) if biome["type"] == "forest" else Color(0.48, 0.62, 0.29, 0.62)
+		draw_circle(_world_to_map(biome_position), biome_radius, biome_color)
 	for pond in map_layout.get("ponds", []):
 		var pond_position: Vector3 = pond["position"]
 		var pond_size: Vector2 = pond["size"]
 		var pixel_size := _world_size_to_map(pond_size)
 		draw_rect(Rect2(_world_to_map(Vector2(pond_position.x, pond_position.z)) - pixel_size * 0.5, pixel_size), Color(0.16, 0.49, 0.66, 0.92), true)
+	for river in map_layout.get("rivers", []):
+		var river_map_points := PackedVector2Array()
+		for river_point in river["points"]:
+			river_map_points.append(_world_to_map(river_point))
+		var river_width := float(river["width"]) * play_area.size.x / (world_half_size * 2.0)
+		draw_polyline(river_map_points, Color(0.12, 0.42, 0.55, 0.95), maxf(river_width, 2.0), true)
 	for hill in map_layout.get("hills", []):
 		var hill_position: Vector3 = hill["position"]
 		var hill_scale: Vector3 = hill["scale"]
 		var hill_radius := maxf(hill_scale.x, hill_scale.z) * play_area.size.x / (world_half_size * 2.0)
 		draw_circle(_world_to_map(Vector2(hill_position.x, hill_position.z)), hill_radius, Color(0.27, 0.38, 0.2, 0.92))
+	for formation in map_layout.get("high_ground", []):
+		var formation_position: Vector3 = formation["position"]
+		draw_circle(_world_to_map(Vector2(formation_position.x, formation_position.z)), 3.2, Color(0.38, 0.39, 0.32, 0.96))
 	for tree in map_layout.get("trees", []):
 		var tree_position: Vector3 = tree["position"]
 		draw_circle(_world_to_map(Vector2(tree_position.x, tree_position.z)), 2.1, Color(0.08, 0.28, 0.12, 1.0))
 	for rock in map_layout.get("rocks", []):
 		var rock_position: Vector3 = rock["position"]
 		draw_circle(_world_to_map(Vector2(rock_position.x, rock_position.z)), 1.7, Color(0.48, 0.49, 0.45, 1.0))
+	for log_data in map_layout.get("logs", []):
+		var log_position: Vector3 = log_data["position"]
+		draw_circle(_world_to_map(Vector2(log_position.x, log_position.z)), 1.5, Color(0.30, 0.20, 0.11, 1.0))
 
 	_draw_unexplored_fog()
 	var font := ThemeDB.fallback_font

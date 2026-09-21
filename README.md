@@ -17,9 +17,17 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 | Attack | `ATTACK` | `F` |
 | Scream | `SCREAM` (roar pose, sound, and shockwave) | `R` |
 
-The game now creates a 400×400 procedural prehistoric world—over thirteen times the original ground area. Each six-digit world seed deterministically controls the number, position, and size of ponds, hills, trees, and rocks. Enter a seed on the dinosaur-selection screen to replay a world, or press `NEW RANDOM SEED` for a new one. The central spawn area is kept clear and generated landmarks are spaced to avoid obvious overlaps.
+The game creates a 400×400 procedural prehistoric world. Each six-digit world seed deterministically controls its forest and grassland biomes, lakes, winding river, hills, dense mixed forests, grounded rocks, fallen trees, prehistoric understory, cloud cover, and object variation. Enter a seed on the dinosaur-selection screen to replay a world, or press `NEW RANDOM SEED` for a new one. The central spawn area is kept clear, solid landmarks avoid water, and generated features are spaced to avoid obvious overlaps.
 
-Trees, rocks, and hills have solid collision geometry, and four invisible perimeter walls keep every dinosaur inside the valley. The live minimap beneath the main-menu button shows the map boundary and the dinosaur's current position and facing direction. Its fog of war hides terrain and landmarks until the dinosaur explores the surrounding area; explored cells remain visible for the rest of that game.
+Trees, fallen logs, rocks, hills, and tiered high-ground formations have solid collision geometry, and four invisible perimeter walls keep every dinosaur inside the valley. The high-ground tiers rise in jump-sized steps to broad lookout platforms. The live minimap beneath the main-menu button shows the map boundary and the dinosaur's current position and facing direction. Its fog of war hides terrain and landmarks until the dinosaur explores the surrounding area; explored cells remain visible for the rest of that game.
+
+The world uses animated shader water with earthy banks for seeded lakes and rivers, a visible directional sun with mobile-friendly shadows, and a seeded layer of slowly moving clouds. Dense Araucaria forests contain ferns, cycads, and undergrowth, while open grasslands contain lightweight grass clusters.
+
+## Environment model library
+
+Eleven locally stored GLB assets provide multiple living and dead tree forms, ferns, cycads, horsetails, fiddleheads, undergrowth, grass, fallen logs, and mossy basalt rocks. They are CC0 models from 3DAssets.dev; exact source pages, dimensions, licensing, and conversion notes are recorded in `assets/models/environment/SOURCE.md`.
+
+The checked-in models need no network connection at runtime. To restore missing source assets, run `scripts/download-environment-assets.sh` or the `Assets: Download environment models` VS Code task. The script downloads and dequantizes them into the format supported by this Godot build.
 
 Every dinosaur has its own scream, walking, running, jumping, ducking, attacking, and hurt sounds. Movement audio follows the dinosaur's pace, while action and vocal effects use independent 3D channels so important sounds are not cut off by footsteps.
 
@@ -70,6 +78,7 @@ Use `Terminal > Run Task`:
 - `Godot: Gameplay smoke test` verifies movement and actions without opening a window.
 - `Godot: Procedural world test` verifies six-digit seed reproducibility and variation.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.
+- `Assets: Download environment models` restores the CC0 environment model library if needed.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.
 - `Android: Connected devices` lists USB-connected Android devices.
 
@@ -119,4 +128,4 @@ The game uses Godot's Compatibility renderer for broad Android GPU support. All 
 
 The photorealistic menu background and portraits were generated specifically for this game. Their prompt provenance is recorded in `assets/ui/menu/GENERATED_ASSETS.md`.
 
-The landscape is assembled from inexpensive procedural primitives so it runs well on mobile and can later be replaced incrementally with authored terrain and foliage.
+The seeded landscape combines inexpensive procedural terrain, water, lighting, clouds, and biome overlays with a small reusable CC0 environment-model library. Repeated assets share imported meshes and materials to keep the expanded world practical on mobile hardware.

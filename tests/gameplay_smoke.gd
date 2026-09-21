@@ -22,7 +22,7 @@ func _run() -> void:
 	var boundary := world.get_node_or_null("PrehistoricWorld/MapBoundary")
 	assert(boundary != null and boundary.get_child_count() == 4, "Map boundary is incomplete")
 	var obstacles := world.get_tree().get_nodes_in_group("world_obstacle")
-	var expected_obstacles: int = world.generated_hills.size() + world.generated_trees.size() + world.generated_rocks.size()
+	var expected_obstacles: int = world.generated_hills.size() + world.generated_trees.size() + world.generated_rocks.size() + world.generated_logs.size() + world.generated_high_ground.size() * 4
 	assert(obstacles.size() == expected_obstacles and obstacles.size() >= 100, "Procedural landscape obstacles are missing collision bodies")
 	for obstacle in obstacles:
 		assert(not obstacle.find_children("*", "CollisionShape3D", true, false).is_empty(), "An obstacle has no collision shape")

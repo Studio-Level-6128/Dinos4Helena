@@ -47,6 +47,12 @@
       "problemMatcher": []
     },
     {
+      "label": "Assets: Download environment models",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/download-environment-assets.sh",
+      "problemMatcher": []
+    },
+    {
       "label": "Android: Build debug APK",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/build-android.sh",

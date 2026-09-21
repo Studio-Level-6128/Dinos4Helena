@@ -2,8 +2,22 @@ extends Node3D
 
 const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
 const MINIMAP_SCRIPT := preload("res://scripts/minimap.gd")
+const CLOUD_SCRIPT := preload("res://scripts/cloud.gd")
 const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 const MAP_HALF_SIZE := 200.0
+const ENVIRONMENT_MODEL_PATHS := {
+	"tree": "res://assets/models/environment/araucaria_conifer.glb",
+	"fern": "res://assets/models/environment/forest_fern.glb",
+	"rock": "res://assets/models/environment/mossy_basalt_rock.glb",
+	"cycad": "res://assets/models/environment/cycad.glb",
+	"undergrowth": "res://assets/models/environment/forest_undergrowth.glb",
+	"grass": "res://assets/models/environment/grass_cluster.glb",
+	"tree_fern": "res://assets/models/environment/tree_fern.glb",
+	"dead_tree": "res://assets/models/environment/dead_tree_snag.glb",
+	"fallen_log": "res://assets/models/environment/fallen_rainforest_log.glb",
+	"horsetail": "res://assets/models/environment/horsetail_colony.glb",
+	"fiddlehead": "res://assets/models/environment/fiddlehead_cluster.glb"
+}
 
 var player: CharacterBody3D
 var status_label: Label
@@ -19,6 +33,13 @@ var generated_ponds: Array = []
 var generated_hills: Array = []
 var generated_trees: Array = []
 var generated_rocks: Array = []
+var generated_rivers: Array = []
+var generated_vegetation: Array = []
+var generated_biomes: Array = []
+var generated_clouds: Array = []
+var generated_high_ground: Array = []
+var generated_logs: Array = []
+var environment_models: Dictionary = {}
 
 
 func _ready() -> void:
@@ -38,6 +59,7 @@ func _start_game(dino_id: String) -> void:
 	add_child(world_root)
 	_generate_world_layout()
 	_build_environment()
+	_build_clouds()
 	_build_ambient_audio()
 	_build_landscape()
 	_build_player(dino_id)
@@ -285,6 +307,8 @@ func _build_environment() -> void:
 	sky_material.sky_horizon_color = Color("d6e6b5")
 	sky_material.ground_bottom_color = Color("425b2e")
 	sky_material.ground_horizon_color = Color("c7d39b")
+	sky_material.sun_angle_max = 10.0
+	sky_material.sun_curve = 0.08
 	sky.sky_material = sky_material
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
@@ -297,12 +321,45 @@ func _build_environment() -> void:
 	world_root.add_child(world_environment)
 
 	var sun := DirectionalLight3D.new()
+	sun.name = "Sun"
 	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
 	sun.light_color = Color("fff1c4")
-	sun.light_energy = 1.25
+	sun.light_energy = 1.42
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 55.0
+	sun.directional_shadow_max_distance = 90.0
 	world_root.add_child(sun)
+
+
+func _build_clouds() -> void:
+	var cloud_layer := Node3D.new()
+	cloud_layer.name = "Clouds"
+	world_root.add_child(cloud_layer)
+	var cloud_material := StandardMaterial3D.new()
+	cloud_material.albedo_color = Color(0.94, 0.97, 0.96, 0.72)
+	cloud_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	cloud_material.roughness = 1.0
+	cloud_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var puff_mesh := SphereMesh.new()
+	puff_mesh.radius = 1.0
+	puff_mesh.height = 2.0
+	puff_mesh.radial_segments = 12
+	puff_mesh.rings = 6
+	for cloud_data in generated_clouds:
+		var cloud := Node3D.new()
+		cloud.name = "Cloud"
+		cloud.set_script(CLOUD_SCRIPT)
+		cloud.position = cloud_data["position"]
+		cloud.call("setup", cloud_data["direction"], cloud_data["speed"], MAP_HALF_SIZE + 35.0)
+		cloud_layer.add_child(cloud)
+		var cloud_scale: float = cloud_data["scale"]
+		for puff_index in 4:
+			var puff := MeshInstance3D.new()
+			puff.mesh = puff_mesh
+			puff.material_override = cloud_material
+			puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			puff.position = Vector3((float(puff_index) - 1.5) * 2.3, sin(float(puff_index) * 1.7) * 0.45, cos(float(puff_index) * 1.3) * 0.8) * cloud_scale
+			puff.scale = Vector3(2.4, 0.72, 1.45) * cloud_scale * (0.82 + float(puff_index % 2) * 0.22)
+			cloud.add_child(puff)
 
 
 func _build_ambient_audio() -> void:
@@ -330,45 +387,152 @@ func _generate_world_layout() -> void:
 	generated_hills.clear()
 	generated_trees.clear()
 	generated_rocks.clear()
+	generated_rivers.clear()
+	generated_vegetation.clear()
+	generated_biomes.clear()
+	generated_clouds.clear()
+	generated_high_ground.clear()
+	generated_logs.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = map_seed
 	var occupied: Array = []
 
-	for index in rng.randi_range(4, 7):
-		var pond_size := Vector2(rng.randf_range(14.0, 30.0), rng.randf_range(10.0, 22.0))
+	for index in rng.randi_range(3, 5):
+		generated_biomes.append({
+			"type": "forest",
+			"position": _random_clear_position(rng, 45.0),
+			"radius": rng.randf_range(42.0, 64.0)
+		})
+	for index in rng.randi_range(2, 4):
+		generated_biomes.append({
+			"type": "grassland",
+			"position": _random_clear_position(rng, 38.0),
+			"radius": rng.randf_range(38.0, 58.0)
+		})
+
+	for index in rng.randi_range(3, 5):
+		var pond_size := Vector2(rng.randf_range(22.0, 44.0), rng.randf_range(16.0, 34.0))
 		var pond_radius := maxf(pond_size.x, pond_size.y) * 0.6
 		var pond_position := _find_world_position(rng, pond_radius, occupied, 8.0)
 		generated_ponds.append({"position": Vector3(pond_position.x, 0.025, pond_position.y), "size": pond_size})
 		occupied.append({"position": pond_position, "radius": pond_radius})
 
-	for index in rng.randi_range(9, 14):
+	var river_points := PackedVector2Array()
+	var horizontal_river := rng.randf() > 0.5
+	var river_offset := rng.randf_range(52.0, 105.0) * (-1.0 if rng.randf() < 0.5 else 1.0)
+	var river_phase := rng.randf_range(0.0, TAU)
+	for point_index in 21:
+		var along := lerpf(-MAP_HALF_SIZE - 8.0, MAP_HALF_SIZE + 8.0, float(point_index) / 20.0)
+		var across := river_offset + sin(float(point_index) * 0.62 + river_phase) * rng.randf_range(12.0, 25.0)
+		river_points.append(Vector2(along, across) if horizontal_river else Vector2(across, along))
+	generated_rivers.append({"points": river_points, "width": rng.randf_range(8.0, 13.0)})
+
+	for index in rng.randi_range(10, 15):
 		var hill_scale := Vector3(rng.randf_range(9.0, 20.0), rng.randf_range(3.5, 8.0), rng.randf_range(8.0, 18.0))
 		var hill_radius := maxf(hill_scale.x, hill_scale.z) * 0.82
 		var hill_position := _find_world_position(rng, hill_radius, occupied, 7.0)
 		generated_hills.append({"position": Vector3(hill_position.x, hill_scale.y * 0.48, hill_position.y), "scale": hill_scale})
 		occupied.append({"position": hill_position, "radius": hill_radius})
 
-	for index in rng.randi_range(75, 105):
-		var tree_scale := rng.randf_range(0.75, 1.45)
-		var tree_position := _find_world_position(rng, 1.6 * tree_scale, occupied, 2.5)
-		generated_trees.append({"position": Vector3(tree_position.x, 0.0, tree_position.y), "scale": tree_scale})
-		occupied.append({"position": tree_position, "radius": 0.55 * tree_scale})
+	for index in rng.randi_range(10, 14):
+		var formation_position := _find_world_position(rng, 7.5, occupied, 5.0)
+		generated_high_ground.append({
+			"position": Vector3(formation_position.x, 0.0, formation_position.y),
+			"rotation": rng.randf_range(0.0, TAU),
+			"scale": rng.randf_range(0.9, 1.3)
+		})
+		occupied.append({"position": formation_position, "radius": 7.5})
 
-	for index in rng.randi_range(28, 45):
+	for index in rng.randi_range(118, 152):
+		var tree_scale := rng.randf_range(1.0, 2.15)
+		var tree_position := _find_biome_position(rng, "forest", 1.55 * tree_scale, occupied, 1.7)
+		var tree_roll := rng.randf()
+		var tree_type := "tree" if tree_roll < 0.72 else ("tree_fern" if tree_roll < 0.92 else "dead_tree")
+		generated_trees.append({"type": tree_type, "position": Vector3(tree_position.x, 0.0, tree_position.y), "scale": tree_scale, "rotation": rng.randf_range(0.0, TAU)})
+		occupied.append({"position": tree_position, "radius": 0.58 * tree_scale})
+
+	for index in rng.randi_range(52, 72):
 		var rock_scale := rng.randf_range(0.65, 1.65)
 		var rock_position := _find_world_position(rng, 1.1 * rock_scale, occupied, 1.5)
 		generated_rocks.append({"position": Vector3(rock_position.x, 0.0, rock_position.y), "scale": rock_scale})
 		occupied.append({"position": rock_position, "radius": 0.9 * rock_scale})
 
+	for index in rng.randi_range(18, 28):
+		var log_scale := rng.randf_range(0.8, 1.35)
+		var log_position := _find_biome_position(rng, "forest", 3.5 * log_scale, occupied, 1.2)
+		generated_logs.append({"position": Vector3(log_position.x, 0.0, log_position.y), "scale": log_scale, "rotation": rng.randf_range(0.0, TAU)})
+		occupied.append({"position": log_position, "radius": 3.5 * log_scale})
 
-func _find_world_position(rng: RandomNumberGenerator, radius: float, occupied: Array, spacing: float) -> Vector2:
-	var edge_padding := radius + 8.0
+	for index in rng.randi_range(220, 285):
+		var plant_roll := rng.randf()
+		var plant_type := "fern"
+		if plant_roll < 0.24:
+			plant_type = "undergrowth"
+		elif plant_roll < 0.40:
+			plant_type = "cycad"
+		elif plant_roll < 0.63:
+			plant_type = "horsetail"
+		elif plant_roll < 0.82:
+			plant_type = "fiddlehead"
+		var plant_scale := rng.randf_range(0.75, 1.5)
+		var plant_position := _find_biome_position(rng, "forest", 0.7 * plant_scale, [], 0.0)
+		generated_vegetation.append({"type": plant_type, "position": Vector3(plant_position.x, 0.02, plant_position.y), "scale": plant_scale, "rotation": rng.randf_range(0.0, TAU)})
+
+	for index in rng.randi_range(360, 460):
+		var grass_scale := rng.randf_range(0.7, 1.4)
+		var grass_position := _find_biome_position(rng, "grassland", 0.45 * grass_scale, [], 0.0)
+		generated_vegetation.append({"type": "grass", "position": Vector3(grass_position.x, 0.015, grass_position.y), "scale": grass_scale, "rotation": rng.randf_range(0.0, TAU)})
+
+	for index in rng.randi_range(8, 13):
+		var wind_angle := rng.randf_range(-0.25, 0.25)
+		generated_clouds.append({
+			"position": Vector3(rng.randf_range(-MAP_HALF_SIZE, MAP_HALF_SIZE), rng.randf_range(34.0, 52.0), rng.randf_range(-MAP_HALF_SIZE, MAP_HALF_SIZE)),
+			"scale": rng.randf_range(1.4, 2.8),
+			"direction": Vector3(cos(wind_angle), 0.0, sin(wind_angle)),
+			"speed": rng.randf_range(0.7, 1.6)
+		})
+
+
+func _random_clear_position(rng: RandomNumberGenerator, edge_padding: float) -> Vector2:
 	for attempt in 100:
 		var candidate := Vector2(
 			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding),
 			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding)
 		)
-		if candidate.length() < 28.0 + radius:
+		if candidate.length() > 35.0:
+			return candidate
+	return Vector2(80.0, 80.0)
+
+
+func _find_biome_position(rng: RandomNumberGenerator, biome_type: String, radius: float, occupied: Array, spacing: float) -> Vector2:
+	var matching_biomes: Array = generated_biomes.filter(func(biome: Dictionary) -> bool: return biome["type"] == biome_type)
+	for attempt in 240:
+		var biome: Dictionary = matching_biomes[rng.randi_range(0, matching_biomes.size() - 1)]
+		var angle := rng.randf_range(0.0, TAU)
+		var distance := sqrt(rng.randf()) * float(biome["radius"])
+		var candidate: Vector2 = biome["position"] + Vector2(cos(angle), sin(angle)) * distance
+		if absf(candidate.x) > MAP_HALF_SIZE - radius - 6.0 or absf(candidate.y) > MAP_HALF_SIZE - radius - 6.0:
+			continue
+		if candidate.length() < 28.0 + radius or _is_position_in_water(candidate, radius):
+			continue
+		var available := true
+		for item in occupied:
+			if candidate.distance_to(item["position"]) < radius + float(item["radius"]) + spacing:
+				available = false
+				break
+		if available:
+			return candidate
+	return _find_world_position(rng, radius, occupied, spacing)
+
+
+func _find_world_position(rng: RandomNumberGenerator, radius: float, occupied: Array, spacing: float) -> Vector2:
+	var edge_padding := radius + 8.0
+	for attempt in 300:
+		var candidate := Vector2(
+			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding),
+			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding)
+		)
+		if candidate.length() < 28.0 + radius or _is_position_in_water(candidate, radius):
 			continue
 		var available := true
 		for item in occupied:
@@ -383,7 +547,25 @@ func _find_world_position(rng: RandomNumberGenerator, radius: float, occupied: A
 	)
 
 
+func _is_position_in_water(candidate: Vector2, radius: float) -> bool:
+	for pond in generated_ponds:
+		var pond_position: Vector3 = pond["position"]
+		var pond_size: Vector2 = pond["size"]
+		var relative := candidate - Vector2(pond_position.x, pond_position.z)
+		var expanded_half_size := pond_size * 0.5 + Vector2.ONE * radius
+		if Vector2(relative.x / expanded_half_size.x, relative.y / expanded_half_size.y).length_squared() <= 1.0:
+			return true
+	for river in generated_rivers:
+		var points: PackedVector2Array = river["points"]
+		var river_radius := float(river["width"]) * 0.5 + radius
+		for point_index in points.size() - 1:
+			if Geometry2D.get_closest_point_to_segment(candidate, points[point_index], points[point_index + 1]).distance_to(candidate) <= river_radius:
+				return true
+	return false
+
+
 func _build_landscape() -> void:
+	_load_environment_models()
 	var ground := StaticBody3D.new()
 	ground.name = "Ground"
 	world_root.add_child(ground)
@@ -404,14 +586,57 @@ func _build_landscape() -> void:
 	ground.add_child(ground_collision)
 	_build_map_boundary()
 
+	for biome in generated_biomes:
+		_create_biome_ground(biome)
 	for pond in generated_ponds:
 		_create_pond(pond["position"], pond["size"])
+	for river in generated_rivers:
+		_create_river(river["points"], river["width"])
 	for hill in generated_hills:
 		_create_hill(hill["position"], hill["scale"])
+	for formation in generated_high_ground:
+		_create_high_ground(formation)
 	for tree in generated_trees:
-		_create_tree(tree["position"], tree["scale"])
+		_create_tree(tree)
 	for rock in generated_rocks:
 		_create_rock(rock["position"], rock["scale"])
+	for log_data in generated_logs:
+		_create_fallen_log(log_data)
+	for vegetation in generated_vegetation:
+		_create_vegetation(vegetation)
+
+
+func _load_environment_models() -> void:
+	environment_models.clear()
+	for model_name in ENVIRONMENT_MODEL_PATHS:
+		var scene := load(ENVIRONMENT_MODEL_PATHS[model_name]) as PackedScene
+		assert(scene != null, "Missing environment model: " + model_name)
+		environment_models[model_name] = scene
+
+
+func _create_biome_ground(biome: Dictionary) -> void:
+	var patch_group := Node3D.new()
+	patch_group.name = str(biome["type"]).capitalize() + "Ground"
+	world_root.add_child(patch_group)
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 1.0
+	mesh.bottom_radius = 1.0
+	mesh.height = 0.012
+	mesh.radial_segments = 36
+	var center: Vector2 = biome["position"]
+	var radius: float = biome["radius"]
+	var color := Color("405f35") if biome["type"] == "forest" else Color("789b4d")
+	var patch_material := _material(color, 1.0)
+	for patch_index in 6:
+		var patch := MeshInstance3D.new()
+		patch.mesh = mesh
+		var angle := float(patch_index) * TAU / 5.0 + center.x * 0.013
+		var patch_radius := radius if patch_index == 0 else radius * (0.38 + 0.07 * sin(center.y + float(patch_index)))
+		var offset := Vector2.ZERO if patch_index == 0 else Vector2(cos(angle), sin(angle)) * radius * 0.43
+		patch.position = Vector3(center.x + offset.x, 0.006 + float(patch_index) * 0.0002, center.y + offset.y)
+		patch.scale = Vector3(patch_radius, 1.0, patch_radius * (0.76 + 0.08 * float(patch_index % 3)))
+		patch.material_override = patch_material
+		patch_group.add_child(patch)
 
 
 func _build_player(dino_id: String) -> void:
@@ -521,10 +746,14 @@ func _build_hud() -> void:
 	minimap.clip_contents = true
 	root.add_child(minimap)
 	minimap.call("setup", player, MAP_HALF_SIZE, {
+		"biomes": generated_biomes,
 		"ponds": generated_ponds,
+		"rivers": generated_rivers,
 		"hills": generated_hills,
+		"high_ground": generated_high_ground,
 		"trees": generated_trees,
-		"rocks": generated_rocks
+		"rocks": generated_rocks,
+		"logs": generated_logs
 	})
 
 
@@ -572,16 +801,102 @@ func _button_style(color: Color, border_color: Color) -> StyleBoxFlat:
 
 
 func _create_pond(pond_position: Vector3, pond_size: Vector2) -> void:
-	var pond := MeshInstance3D.new()
-	var mesh := PlaneMesh.new()
-	mesh.size = pond_size
-	pond.mesh = mesh
-	pond.position = pond_position
-	var water := _material(Color(0.16, 0.49, 0.66, 0.78), 0.2)
-	water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	water.metallic = 0.1
-	pond.material_override = water
-	world_root.add_child(pond)
+	var lake := Node3D.new()
+	lake.name = "Lake"
+	lake.position = pond_position
+	world_root.add_child(lake)
+	var bank := MeshInstance3D.new()
+	bank.mesh = _round_water_mesh()
+	bank.scale = Vector3(pond_size.x * 0.5 + 2.6, 1.0, pond_size.y * 0.5 + 2.6)
+	bank.position.y = 0.008
+	bank.material_override = _material(Color("756843"), 1.0)
+	lake.add_child(bank)
+	var water := MeshInstance3D.new()
+	water.mesh = _round_water_mesh()
+	water.scale = Vector3(pond_size.x * 0.5, 1.0, pond_size.y * 0.5)
+	water.position.y = 0.035
+	water.material_override = _water_material()
+	lake.add_child(water)
+
+
+func _create_river(points: PackedVector2Array, width: float) -> void:
+	var river := Node3D.new()
+	river.name = "River"
+	world_root.add_child(river)
+	var bank := MeshInstance3D.new()
+	bank.mesh = _river_ribbon_mesh(points, width + 5.0, 0.012)
+	bank.material_override = _material(Color("756843"), 1.0)
+	river.add_child(bank)
+	var water := MeshInstance3D.new()
+	water.mesh = _river_ribbon_mesh(points, width, 0.035)
+	water.material_override = _water_material()
+	river.add_child(water)
+
+
+func _round_water_mesh() -> CylinderMesh:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 1.0
+	mesh.bottom_radius = 1.0
+	mesh.height = 0.035
+	mesh.radial_segments = 48
+	mesh.rings = 1
+	return mesh
+
+
+func _river_ribbon_mesh(points: PackedVector2Array, width: float, height: float) -> ArrayMesh:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for point_index in points.size():
+		var previous := points[maxi(point_index - 1, 0)]
+		var following := points[mini(point_index + 1, points.size() - 1)]
+		var direction := (following - previous).normalized()
+		var side := Vector2(-direction.y, direction.x) * width * 0.5
+		vertices.append(Vector3(points[point_index].x + side.x, height, points[point_index].y + side.y))
+		vertices.append(Vector3(points[point_index].x - side.x, height, points[point_index].y - side.y))
+		normals.append(Vector3.UP)
+		normals.append(Vector3.UP)
+		var progress := float(point_index) / float(maxi(points.size() - 1, 1))
+		uvs.append(Vector2(0.0, progress * 12.0))
+		uvs.append(Vector2(1.0, progress * 12.0))
+		if point_index < points.size() - 1:
+			var base := point_index * 2
+			indices.append_array(PackedInt32Array([base, base + 2, base + 1, base + 1, base + 2, base + 3]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _water_material() -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode blend_mix, depth_prepass_alpha, cull_disabled;
+
+void vertex() {
+	VERTEX.y += sin(VERTEX.x * 0.24 + TIME * 1.2) * 0.035;
+	VERTEX.y += cos(VERTEX.z * 0.19 - TIME * 0.85) * 0.025;
+}
+
+void fragment() {
+	float ripple = sin((UV.x + UV.y) * 24.0 + TIME * 1.5) * 0.5 + 0.5;
+	ALBEDO = mix(vec3(0.045, 0.25, 0.31), vec3(0.12, 0.48, 0.55), ripple * 0.28);
+	ROUGHNESS = 0.16;
+	METALLIC = 0.08;
+	SPECULAR = 0.85;
+	ALPHA = 0.82;
+}
+"""
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	return material
 
 
 func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
@@ -607,10 +922,55 @@ func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
 	hill_body.add_child(collision)
 
 
-func _create_tree(tree_position: Vector3, tree_scale: float) -> void:
+func _create_high_ground(formation: Dictionary) -> void:
+	var root := Node3D.new()
+	root.name = "JumpableHighGround"
+	root.position = formation["position"]
+	root.rotation.y = formation["rotation"]
+	root.scale = Vector3.ONE * float(formation["scale"])
+	world_root.add_child(root)
+	var tiers := [
+		Vector2(2.9, 0.55),
+		Vector2(2.65, 1.05),
+		Vector2(2.9, 1.55),
+		Vector2(3.75, 2.15)
+	]
+	for tier_index in tiers.size():
+		var tier_data: Vector2 = tiers[tier_index]
+		var tier_radius := tier_data.x
+		var tier_height := tier_data.y
+		var tier := StaticBody3D.new()
+		tier.name = "HighGroundTier"
+		tier.position = Vector3((float(tier_index) - 1.5) * 4.15, tier_height * 0.5, sin(float(tier_index) * 1.9) * 0.55)
+		tier.add_to_group("world_obstacle")
+		root.add_child(tier)
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = tier_radius * 0.92
+		mesh.bottom_radius = tier_radius
+		mesh.height = tier_height
+		mesh.radial_segments = 9
+		mesh.rings = 2
+		mesh_instance.mesh = mesh
+		mesh_instance.material_override = _material(Color("59634b").lightened(float(tier_index) * 0.025), 0.96)
+		tier.add_child(mesh_instance)
+		var collision := CollisionShape3D.new()
+		var shape := CylinderShape3D.new()
+		shape.radius = tier_radius * 0.94
+		shape.height = tier_height
+		collision.shape = shape
+		tier.add_child(collision)
+
+
+func _create_tree(tree_data: Dictionary) -> void:
+	var tree_position: Vector3 = tree_data["position"]
+	var tree_scale: float = tree_data["scale"]
+	var tree_rotation: float = tree_data["rotation"]
+	var tree_type: String = tree_data.get("type", "tree")
 	var tree := Node3D.new()
 	tree.name = "Tree"
 	tree.position = tree_position
+	tree.rotation.y = tree_rotation
 	tree.scale = Vector3.ONE * tree_scale
 	world_root.add_child(tree)
 
@@ -619,58 +979,70 @@ func _create_tree(tree_position: Vector3, tree_scale: float) -> void:
 	tree_body.add_to_group("world_obstacle")
 	tree.add_child(tree_body)
 	var tree_collision := CollisionShape3D.new()
+	var dimensions := {
+		"tree": Vector2(0.48, 5.5),
+		"tree_fern": Vector2(0.36, 2.35),
+		"dead_tree": Vector2(0.42, 3.5)
+	}
+	var collision_size: Vector2 = dimensions.get(tree_type, dimensions["tree"])
 	var tree_shape := CylinderShape3D.new()
-	tree_shape.radius = 0.43
-	tree_shape.height = 3.8
+	tree_shape.radius = collision_size.x
+	tree_shape.height = collision_size.y
 	tree_collision.shape = tree_shape
-	tree_collision.position.y = 1.9
+	tree_collision.position.y = collision_size.y * 0.5
 	tree_body.add_child(tree_collision)
 
-	var trunk := MeshInstance3D.new()
-	var trunk_mesh := CylinderMesh.new()
-	trunk_mesh.top_radius = 0.24
-	trunk_mesh.bottom_radius = 0.43
-	trunk_mesh.height = 3.8
-	trunk.mesh = trunk_mesh
-	trunk.position.y = 1.9
-	trunk.material_override = _material(Color("6a4c2f"), 1.0)
-	tree.add_child(trunk)
-
-	for layer_index in 3:
-		var crown := MeshInstance3D.new()
-		var crown_mesh := CylinderMesh.new()
-		crown_mesh.top_radius = 0.0
-		crown_mesh.bottom_radius = 2.0 - float(layer_index) * 0.28
-		crown_mesh.height = 2.4
-		crown.mesh = crown_mesh
-		crown.position.y = 3.7 + float(layer_index) * 1.15
-		crown.material_override = _material(Color("315f38").lightened(float(layer_index) * 0.06), 1.0)
-		tree.add_child(crown)
+	var model: Node3D = (environment_models[tree_type] as PackedScene).instantiate()
+	model.name = tree_type.to_pascal_case()
+	tree.add_child(model)
 
 
 func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
 	var rock_body := StaticBody3D.new()
 	rock_body.name = "RockObstacle"
-	rock_body.position = rock_position + Vector3(0, 0.35 * rock_scale, 0)
+	rock_body.position = rock_position
 	rock_body.rotation_degrees.y = rock_position.x * 7.0
+	rock_body.scale = Vector3.ONE * rock_scale
 	rock_body.add_to_group("world_obstacle")
 	world_root.add_child(rock_body)
 
-	var rock := MeshInstance3D.new()
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.8
-	mesh.height = 1.2
-	mesh.radial_segments = 10
-	mesh.rings = 6
-	rock.mesh = mesh
-	var rock_visual_scale := Vector3(1.25, 0.65, 0.9) * rock_scale
-	rock.scale = rock_visual_scale
-	rock.material_override = _material(Color("77796e"), 1.0)
+	var rock: Node3D = (environment_models["rock"] as PackedScene).instantiate()
+	rock.name = "MossyBasaltRock"
 	rock_body.add_child(rock)
 
 	var collision := CollisionShape3D.new()
-	collision.shape = _ellipsoid_shape(Vector3(0.8 * rock_visual_scale.x, 0.6 * rock_visual_scale.y, 0.8 * rock_visual_scale.z))
+	collision.shape = _ellipsoid_shape(Vector3(1.1, 0.78, 0.86))
+	collision.position.y = 0.78
 	rock_body.add_child(collision)
+
+
+func _create_fallen_log(log_data: Dictionary) -> void:
+	var log_body := StaticBody3D.new()
+	log_body.name = "FallenLogObstacle"
+	log_body.position = log_data["position"]
+	log_body.rotation.y = log_data["rotation"]
+	log_body.scale = Vector3.ONE * float(log_data["scale"])
+	log_body.add_to_group("world_obstacle")
+	world_root.add_child(log_body)
+	var model: Node3D = (environment_models["fallen_log"] as PackedScene).instantiate()
+	model.name = "FallenRainforestLog"
+	log_body.add_child(model)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(6.5, 1.2, 1.45)
+	collision.shape = shape
+	collision.position.y = 0.6
+	log_body.add_child(collision)
+
+
+func _create_vegetation(vegetation: Dictionary) -> void:
+	var plant_type: String = vegetation["type"]
+	var plant: Node3D = (environment_models[plant_type] as PackedScene).instantiate()
+	plant.name = plant_type.capitalize()
+	plant.position = vegetation["position"]
+	plant.rotation.y = vegetation["rotation"]
+	plant.scale = Vector3.ONE * float(vegetation["scale"])
+	world_root.add_child(plant)
 
 
 func _build_map_boundary() -> void:
