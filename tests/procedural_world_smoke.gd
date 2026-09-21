@@ -25,7 +25,12 @@ func _run() -> void:
 	assert(app.generated_vegetation.size() >= 580, "Procedural world has too little ground vegetation")
 	assert(app.generated_logs.size() >= 18, "Procedural world has too few fallen logs")
 	assert(app.generated_high_ground.size() >= 10, "Procedural world has too little jumpable high ground")
-	assert(app.generated_dinosaurs.size() >= 10, "Procedural world has too little wildlife")
+	assert(app.generated_dinosaurs.size() >= 16, "Procedural world has too little wildlife")
+	assert(app.generated_tokens.size() == 30, "Procedural world has the wrong number of power-up tokens")
+	var texture_variants := {}
+	for dinosaur in app.generated_dinosaurs:
+		texture_variants[dinosaur["texture_variant"]] = true
+	assert(texture_variants.size() >= 2, "Wildlife does not use varied generated skins")
 	assert(app.generated_clouds.size() >= 8, "Procedural world has too few clouds")
 	assert(app.environment_models.size() == 11, "CC0 environment model library did not load")
 	assert(app.get_node_or_null("PrehistoricWorld/Sun") != null, "World has no sun")
@@ -38,6 +43,12 @@ func _run() -> void:
 	assert(is_zero_approx(first_rock.position.y), "Rock model is floating above the ground")
 	var rock_collision: CollisionShape3D = first_rock.find_children("*", "CollisionShape3D", true, false)[0]
 	assert(rock_collision.position.y > 0.0, "Rock collision is not seated above ground level")
+	var ground_mesh := app.get_node("PrehistoricWorld/Ground").find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	var ground_material := ground_mesh.material_override as StandardMaterial3D
+	assert(ground_material != null and ground_material.albedo_texture != null, "Generated ground texture was not applied")
+	var player_mesh := app.player.model_root.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	var skin_material := player_mesh.get_surface_override_material(0) as StandardMaterial3D
+	assert(skin_material != null and skin_material.albedo_texture != null, "Generated dinosaur skin was not applied")
 	app._return_to_main_menu()
 	await process_frame
 
@@ -60,7 +71,7 @@ func _run() -> void:
 
 
 func _layout_signature(app: Node) -> String:
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [
 		str(app.generated_ponds),
 		str(app.generated_rivers),
 		str(app.generated_biomes),
@@ -71,5 +82,6 @@ func _layout_signature(app: Node) -> String:
 		str(app.generated_logs),
 		str(app.generated_vegetation),
 		str(app.generated_dinosaurs),
+		str(app.generated_tokens),
 		str(app.generated_clouds)
 	]

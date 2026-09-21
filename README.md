@@ -20,7 +20,9 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 
 Health and energy bars appear in the upper-left corner. Every dinosaur starts with its species-specific maximum health and 100% energy. Walking, running, ducking, jumping, attacking, and screaming consume energy at deliberately gradual rates. At zero energy, health silently falls without repeatedly playing the hurt sound; reaching zero health plays the species' death animation and ends the game.
 
-Herbivores regain energy slowly by holding `EAT` near grass or another plant. While grazing, the dinosaur stops, lowers its body and head, and makes a repeated chewing motion. T-Rex and Velociraptor are carnivores and require meat, which will come from the planned hunting system; until prey is implemented, the game explains that meat is unavailable rather than allowing them to graze.
+Herbivores regain energy slowly by holding `EAT` near grass or another plant. While grazing, the dinosaur stops, lowers its body and head, and makes a repeated chewing motion. T-Rex and Velociraptor regain energy quickly by eating meat left after a hunt.
+
+Thirty glowing tokens are distributed throughout each seeded world: 14 health tokens restore 40 health, while 8 speed and 8 strength tokens double the matching stat for 30 seconds. Active bonuses and their countdowns appear beneath the health and energy bars. Tokens bob and rotate, disappear when collected, and respawn at a new clear location as the same type after a random 6–12 second delay. Counts, healing, bonus duration, and respawn timing are configurable under `[tokens]` in `config/dinosaurs.cfg`.
 
 The game creates a 400×400 procedural prehistoric world. Each six-digit world seed deterministically controls its forest and grassland biomes, lakes, winding river, hills, dense mixed forests, grounded rocks, fallen trees, prehistoric understory, cloud cover, and object variation. Enter a seed on the dinosaur-selection screen to replay a world, or press `NEW RANDOM SEED` for a new one. The central spawn area is kept clear, solid landmarks avoid water, and generated features are spaced to avoid obvious overlaps.
 
@@ -30,9 +32,9 @@ The world uses animated shader water with earthy banks for seeded lakes and rive
 
 ## Wildlife and combat
 
-Every seeded world also contains AI-controlled dinosaurs. Herbivores spawn in small same-species packs, wander around a shared home area, stay close to their herd, detect nearby carnivores, and run away. T-Rex and Velociraptor hunters spawn alone, search for nearby herbivores or the player, pursue their chosen prey, and attack at close range.
+Every seeded world also contains AI-controlled dinosaurs. Herbivores spawn in small same-species packs, wander around a shared home area, stay close to their herd, detect nearby carnivores, and run away. When actually struck, a herbivore briefly stands its ground and fights back while its attacker remains close. T-Rex and Velociraptor hunters spawn alone, search for nearby herbivores or the player, pursue their chosen prey, and attack at close range.
 
-Wild dinosaurs use the same configured health, strength, speed, scale, collision, and animation data as the playable species. The player's `ATTACK` action can hit a dinosaur in front of it, hunters can damage both wildlife and the player, and damaged NPCs briefly show their health. A defeated wild dinosaur plays its native death animation and leaves edible meat for carnivorous players.
+Wild dinosaurs use the same configured health, strength, speed, scale, collision, and animation data as the playable species. The player's `ATTACK` action can hit a dinosaur in front of it, hunters can damage both wildlife and the player, and damaged NPCs briefly show their health. Carnivores spend energy while walking, pursuing, and attacking; after a kill they claim the dropped meat, feed to recover energy, and only then resume hunting. A defeated wild dinosaur plays its native death animation and leaves edible meat, whose explored location remains marked on the minimap until the meat is consumed.
 
 ## Environment model library
 
@@ -93,6 +95,7 @@ Use `Terminal > Run Task`:
 - `Godot: Procedural world test` verifies six-digit seed reproducibility and variation.
 - `Godot: Health and energy test` verifies energy drain, starvation damage, grazing, HUD updates, and game over.
 - `Godot: Wildlife AI test` verifies packs, fleeing, pursuit, NPC/player combat, death, and meat drops.
+- `Godot: Power-up token test` verifies placement, animation, healing, doubled stats, HUD timers, consumption, and same-type respawning.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.
 - `Assets: Download environment models` restores the CC0 environment model library if needed.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.

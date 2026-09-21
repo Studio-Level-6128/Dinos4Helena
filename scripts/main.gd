@@ -4,6 +4,8 @@ const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
 const NPC_DINO_SCRIPT := preload("res://scripts/npc_dino.gd")
 const MINIMAP_SCRIPT := preload("res://scripts/minimap.gd")
 const CLOUD_SCRIPT := preload("res://scripts/cloud.gd")
+const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
+const POWERUP_TOKEN_SCRIPT := preload("res://scripts/powerup_token.gd")
 const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
 const CARNIVORE_IDS := ["trex", "velociraptor"]
@@ -31,6 +33,7 @@ var health_bar: ProgressBar
 var energy_bar: ProgressBar
 var health_label: Label
 var energy_label: Label
+var bonus_label: Label
 var selected_dino_name := "T-Rex"
 var selected_dino_id := "trex"
 var dinosaur_config := ConfigFile.new()
@@ -47,7 +50,9 @@ var generated_clouds: Array = []
 var generated_high_ground: Array = []
 var generated_logs: Array = []
 var generated_dinosaurs: Array = []
+var generated_tokens: Array = []
 var environment_models: Dictionary = {}
+var token_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -70,6 +75,7 @@ func _start_game(dino_id: String) -> void:
 	_build_clouds()
 	_build_ambient_audio()
 	_build_landscape()
+	_build_powerup_tokens()
 	_build_player(dino_id)
 	_build_wild_dinosaurs()
 	_build_hud()
@@ -86,6 +92,7 @@ func _return_to_main_menu() -> void:
 	energy_bar = null
 	health_label = null
 	energy_label = null
+	bonus_label = null
 	menu_layer.show()
 
 
@@ -407,6 +414,7 @@ func _generate_world_layout() -> void:
 	generated_high_ground.clear()
 	generated_logs.clear()
 	generated_dinosaurs.clear()
+	generated_tokens.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = map_seed
 	var occupied: Array = []
@@ -497,9 +505,9 @@ func _generate_world_layout() -> void:
 		var grass_position := _find_biome_position(rng, "grassland", 0.45 * grass_scale, [], 0.0)
 		generated_vegetation.append({"type": "grass", "position": Vector3(grass_position.x, 0.015, grass_position.y), "scale": grass_scale, "rotation": rng.randf_range(0.0, TAU)})
 
-	for pack_index in rng.randi_range(3, 5):
+	for pack_index in rng.randi_range(6, 9):
 		var species: String = HERBIVORE_IDS[rng.randi_range(0, HERBIVORE_IDS.size() - 1)]
-		var member_count := rng.randi_range(2, 3) if species == "apatosaurus" else rng.randi_range(3, 5)
+		var member_count := rng.randi_range(2, 4) if species == "apatosaurus" else rng.randi_range(4, 6)
 		var pack_radius := 10.0 if species == "apatosaurus" else 7.0
 		var pack_center := _find_world_position(rng, pack_radius, occupied, 5.0)
 		occupied.append({"position": pack_center, "radius": pack_radius})
@@ -512,7 +520,8 @@ func _generate_world_layout() -> void:
 				"position": Vector3(member_position.x, 0.1, member_position.y),
 				"pack_id": pack_index,
 				"patrol_center": Vector3(pack_center.x, 0.0, pack_center.y),
-				"rng_seed": rng.randi()
+				"rng_seed": rng.randi(),
+				"texture_variant": rng.randi_range(0, GENERATED_MATERIALS.dino_variant_count() - 1)
 			})
 
 	for hunter_index in rng.randi_range(4, 6):
@@ -524,8 +533,20 @@ func _generate_world_layout() -> void:
 			"position": Vector3(hunter_position.x, 0.1, hunter_position.y),
 			"pack_id": -1,
 			"patrol_center": Vector3(hunter_position.x, 0.0, hunter_position.y),
-			"rng_seed": rng.randi()
+			"rng_seed": rng.randi(),
+			"texture_variant": rng.randi_range(0, GENERATED_MATERIALS.dino_variant_count() - 1)
 		})
+
+	var token_counts := {
+		"health": int(dinosaur_config.get_value("tokens", "health_count", 14)),
+		"speed": int(dinosaur_config.get_value("tokens", "speed_count", 8)),
+		"strength": int(dinosaur_config.get_value("tokens", "strength_count", 8))
+	}
+	for token_type in token_counts:
+		for token_index in int(token_counts[token_type]):
+			var token_position := _find_world_position(rng, 1.4, occupied, 2.5)
+			generated_tokens.append({"type": token_type, "position": Vector3(token_position.x, 0.0, token_position.y)})
+			occupied.append({"position": token_position, "radius": 1.4})
 
 	for index in rng.randi_range(8, 13):
 		var wind_angle := rng.randf_range(-0.25, 0.25)
@@ -619,7 +640,7 @@ func _build_landscape() -> void:
 	ground_box.size = Vector3(MAP_HALF_SIZE * 2.0, 1.0, MAP_HALF_SIZE * 2.0)
 	ground_mesh.mesh = ground_box
 	ground_mesh.position.y = -0.5
-	ground_mesh.material_override = _material(Color("668b49"), 0.95)
+	ground_mesh.material_override = GENERATED_MATERIALS.ground_material(1 + map_seed % 2, 0.055)
 	ground.add_child(ground_mesh)
 
 	var ground_collision := CollisionShape3D.new()
@@ -669,8 +690,8 @@ func _create_biome_ground(biome: Dictionary) -> void:
 	mesh.radial_segments = 36
 	var center: Vector2 = biome["position"]
 	var radius: float = biome["radius"]
-	var color := Color("405f35") if biome["type"] == "forest" else Color("789b4d")
-	var patch_material := _material(color, 1.0)
+	var texture_variant: int = 0 if biome["type"] == "forest" else (1 + abs(int(center.x + center.y)) % 2)
+	var patch_material: StandardMaterial3D = GENERATED_MATERIALS.ground_material(texture_variant, 0.09)
 	for patch_index in 6:
 		var patch := MeshInstance3D.new()
 		patch.mesh = mesh
@@ -688,11 +709,13 @@ func _build_player(dino_id: String) -> void:
 	player.name = "PlayerDinosaur"
 	player.set_script(PLAYER_SCRIPT)
 	player.set("dino_id", dino_id)
+	player.set("texture_variant", posmod(map_seed + DINO_IDS.find(dino_id), GENERATED_MATERIALS.dino_variant_count()))
 	player.position = Vector3(0.0, 0.1, 5.0)
 	world_root.add_child(player)
 	player.screamed.connect(_on_dino_screamed)
 	player.health_changed.connect(_on_health_changed)
 	player.energy_changed.connect(_on_energy_changed)
+	player.bonuses_changed.connect(_on_bonuses_changed)
 	player.died.connect(_on_player_died)
 	player.status_requested.connect(_show_status_message)
 
@@ -710,8 +733,71 @@ func _build_wild_dinosaurs() -> void:
 		npc.set("pack_id", data["pack_id"])
 		npc.set("patrol_center", data["patrol_center"])
 		npc.set("rng_seed", data["rng_seed"])
+		npc.set("texture_variant", data.get("texture_variant", index))
 		npc.position = data["position"]
 		wildlife.add_child(npc)
+
+
+func _build_powerup_tokens() -> void:
+	token_rng.seed = map_seed ^ 0x51C0FFEE
+	for token_data in generated_tokens:
+		_spawn_powerup_token(token_data["type"], token_data["position"])
+
+
+func _spawn_powerup_token(token_type: String, token_position: Vector3) -> void:
+	if not is_instance_valid(world_root):
+		return
+	var token := Area3D.new()
+	token.set_script(POWERUP_TOKEN_SCRIPT)
+	token.set("token_type", token_type)
+	token.position = token_position
+	token.connect("consumed", _on_powerup_consumed)
+	world_root.add_child(token)
+
+
+func _on_powerup_consumed(token_type: String) -> void:
+	var minimum := float(dinosaur_config.get_value("tokens", "respawn_min_seconds", 6.0))
+	var maximum := float(dinosaur_config.get_value("tokens", "respawn_max_seconds", 12.0))
+	get_tree().create_timer(token_rng.randf_range(minimum, maximum)).timeout.connect(_respawn_powerup_token.bind(token_type))
+
+
+func _respawn_powerup_token(token_type: String) -> void:
+	if not is_instance_valid(world_root) or not is_instance_valid(player):
+		return
+	_spawn_powerup_token(token_type, _random_clear_token_position())
+
+
+func _random_clear_token_position() -> Vector3:
+	for attempt in 120:
+		var candidate := _find_world_position(token_rng, 1.4, [], 0.0)
+		if _is_token_position_clear(candidate):
+			return Vector3(candidate.x, 0.0, candidate.y)
+	return Vector3(35.0, 0.0, 35.0)
+
+
+func _is_token_position_clear(candidate: Vector2) -> bool:
+	for hill in generated_hills:
+		var hill_position: Vector3 = hill["position"]
+		var hill_scale: Vector3 = hill["scale"]
+		if candidate.distance_to(Vector2(hill_position.x, hill_position.z)) < maxf(hill_scale.x, hill_scale.z) + 2.0:
+			return false
+	for tree in generated_trees:
+		var tree_position: Vector3 = tree["position"]
+		if candidate.distance_to(Vector2(tree_position.x, tree_position.z)) < 2.5:
+			return false
+	for rock in generated_rocks:
+		var rock_position: Vector3 = rock["position"]
+		if candidate.distance_to(Vector2(rock_position.x, rock_position.z)) < 3.0:
+			return false
+	for log_data in generated_logs:
+		var log_position: Vector3 = log_data["position"]
+		if candidate.distance_to(Vector2(log_position.x, log_position.z)) < 5.0:
+			return false
+	for formation in generated_high_ground:
+		var formation_position: Vector3 = formation["position"]
+		if candidate.distance_to(Vector2(formation_position.x, formation_position.z)) < 11.0:
+			return false
+	return true
 
 
 func _build_hud() -> void:
@@ -824,6 +910,7 @@ func _build_hud() -> void:
 	})
 	_on_health_changed(player.health, player.max_health)
 	_on_energy_changed(player.energy, player.max_energy)
+	_on_bonuses_changed(player.speed_bonus_time, player.strength_bonus_time)
 
 
 func _build_vital_bars(parent: Control) -> void:
@@ -831,6 +918,16 @@ func _build_vital_bars(parent: Control) -> void:
 	energy_bar = _create_vital_bar(parent, "EnergyBar", Vector2(18, 69), Color("e4b83f"))
 	health_label = health_bar.get_node("Label") as Label
 	energy_label = energy_bar.get_node("Label") as Label
+	bonus_label = Label.new()
+	bonus_label.name = "ActiveBonuses"
+	bonus_label.position = Vector2(18, 94)
+	bonus_label.size = Vector2(360, 24)
+	bonus_label.add_theme_font_size_override("font_size", 14)
+	bonus_label.add_theme_color_override("font_color", Color("77e6f5"))
+	bonus_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	bonus_label.add_theme_constant_override("shadow_offset_x", 1)
+	bonus_label.add_theme_constant_override("shadow_offset_y", 1)
+	parent.add_child(bonus_label)
 
 
 func _create_vital_bar(parent: Control, bar_name: String, bar_position: Vector2, fill_color: Color) -> ProgressBar:
@@ -1023,7 +1120,7 @@ func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
 	mesh.rings = 10
 	hill.mesh = mesh
 	hill.scale = hill_scale
-	hill.material_override = _material(Color("58763e"), 1.0)
+	hill.material_override = GENERATED_MATERIALS.ground_material(0 if int(hill_position.x) % 2 == 0 else 1, 0.11)
 	hill_body.add_child(hill)
 
 	var collision := CollisionShape3D.new()
@@ -1061,7 +1158,7 @@ func _create_high_ground(formation: Dictionary) -> void:
 		mesh.radial_segments = 9
 		mesh.rings = 2
 		mesh_instance.mesh = mesh
-		mesh_instance.material_override = _material(Color("59634b").lightened(float(tier_index) * 0.025), 0.96)
+		mesh_instance.material_override = GENERATED_MATERIALS.rock_material(tier_index + int(formation["position"].x), 0.48)
 		tier.add_child(mesh_instance)
 		var collision := CollisionShape3D.new()
 		var shape := CylinderShape3D.new()
@@ -1104,6 +1201,7 @@ func _create_tree(tree_data: Dictionary) -> void:
 	var model: Node3D = (environment_models[tree_type] as PackedScene).instantiate()
 	model.name = tree_type.to_pascal_case()
 	tree.add_child(model)
+	GENERATED_MATERIALS.apply_bark(model, abs(int(tree_position.x * 13.0 + tree_position.z * 7.0)))
 
 
 func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
@@ -1118,6 +1216,7 @@ func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
 	var rock: Node3D = (environment_models["rock"] as PackedScene).instantiate()
 	rock.name = "MossyBasaltRock"
 	rock_body.add_child(rock)
+	GENERATED_MATERIALS.apply_rock(rock, abs(int(rock_position.x * 11.0 + rock_position.z * 17.0)))
 
 	var collision := CollisionShape3D.new()
 	collision.shape = _ellipsoid_shape(Vector3(1.1, 0.78, 0.86))
@@ -1136,6 +1235,8 @@ func _create_fallen_log(log_data: Dictionary) -> void:
 	var model: Node3D = (environment_models["fallen_log"] as PackedScene).instantiate()
 	model.name = "FallenRainforestLog"
 	log_body.add_child(model)
+	var log_position: Vector3 = log_data["position"]
+	GENERATED_MATERIALS.apply_bark(model, abs(int(log_position.x * 5.0 + log_position.z * 3.0)))
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(6.5, 1.2, 1.45)
@@ -1257,6 +1358,17 @@ func _on_energy_changed(current_energy: float, maximum_energy: float) -> void:
 	energy_bar.max_value = maximum_energy
 	energy_bar.value = current_energy
 	energy_label.text = "ENERGY  %d%%" % int(round(current_energy / maximum_energy * 100.0))
+
+
+func _on_bonuses_changed(speed_seconds: float, strength_seconds: float) -> void:
+	if not is_instance_valid(bonus_label):
+		return
+	var bonuses: Array[String] = []
+	if speed_seconds > 0.0:
+		bonuses.append("SPEED ×2  %ds" % int(ceil(speed_seconds)))
+	if strength_seconds > 0.0:
+		bonuses.append("STRENGTH ×2  %ds" % int(ceil(strength_seconds)))
+	bonus_label.text = "   •   ".join(bonuses)
 
 
 func _on_player_died() -> void:

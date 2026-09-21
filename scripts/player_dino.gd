@@ -1,12 +1,16 @@
 extends CharacterBody3D
 
+const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
+
 signal screamed
 signal health_changed(current_health: int, maximum_health: int)
 signal energy_changed(current_energy: float, maximum_energy: float)
+signal bonuses_changed(speed_seconds: float, strength_seconds: float)
 signal died
 signal status_requested(message: String)
 
 var dino_id := "trex"
+var texture_variant := 0
 var dino_config := ConfigFile.new()
 var model_scale := 0.20
 var walk_speed := 4.0
@@ -14,6 +18,14 @@ var run_speed := 8.0
 var duck_speed := 2.2
 var turn_speed := 2.4
 var strength := 1
+var base_walk_speed := 4.0
+var base_run_speed := 8.0
+var base_duck_speed := 2.2
+var base_strength := 1
+var speed_bonus_time := 0.0
+var strength_bonus_time := 0.0
+var token_bonus_duration := 30.0
+var token_health_restore := 40
 var can_jump := true
 var jump_velocity := 7.0
 var max_health := 100
@@ -63,6 +75,12 @@ func _ready() -> void:
 	duck_speed = dino_config.get_value(dino_id, "duck_speed", 2.2)
 	turn_speed = dino_config.get_value(dino_id, "turn_speed", 2.4)
 	strength = dino_config.get_value(dino_id, "strength", 1)
+	base_walk_speed = walk_speed
+	base_run_speed = run_speed
+	base_duck_speed = duck_speed
+	base_strength = strength
+	token_bonus_duration = dino_config.get_value("tokens", "bonus_duration_seconds", 30.0)
+	token_health_restore = dino_config.get_value("tokens", "health_restore", 40)
 	can_jump = dino_config.get_value(dino_id, "can_jump", true)
 	jump_velocity = dino_config.get_value(dino_id, "jump_velocity", 7.0)
 	max_health = dino_config.get_value(dino_id, "max_health", 100)
@@ -94,6 +112,7 @@ func _physics_process(delta: float) -> void:
 	if dead:
 		velocity = Vector3.ZERO
 		return
+	_update_powerups(delta)
 	attack_time = maxf(attack_time - delta, 0.0)
 	scream_time = maxf(scream_time - delta, 0.0)
 	footstep_time = maxf(footstep_time - delta, 0.0)
@@ -195,6 +214,7 @@ func _build_model() -> void:
 	# The source FBX faces +Z. Godot gameplay convention uses -Z as forward.
 	model_root.rotation.y = PI
 	add_child(model_root)
+	GENERATED_MATERIALS.apply_dino_skin(model_root, texture_variant)
 	animation_player = model_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if animation_player:
 		for key in ["idle", "walk", "run"]:
@@ -369,6 +389,51 @@ func restore_energy(amount: float) -> void:
 	energy = minf(energy + amount, max_energy)
 	if not is_equal_approx(previous, energy):
 		energy_changed.emit(energy, max_energy)
+
+
+func restore_health(amount: int) -> void:
+	if amount <= 0 or dead:
+		return
+	var previous := health
+	health = mini(health + amount, max_health)
+	if health != previous:
+		health_changed.emit(health, max_health)
+
+
+func collect_token(token_type: String) -> void:
+	match token_type:
+		"health":
+			var restored := mini(token_health_restore, max_health - health)
+			restore_health(token_health_restore)
+			status_requested.emit("Health token: +%d health" % restored if restored > 0 else "Health is already full")
+		"speed":
+			speed_bonus_time = token_bonus_duration
+			walk_speed = base_walk_speed * 2.0
+			run_speed = base_run_speed * 2.0
+			duck_speed = base_duck_speed * 2.0
+			status_requested.emit("Speed doubled for %d seconds" % int(token_bonus_duration))
+		"strength":
+			strength_bonus_time = token_bonus_duration
+			strength = base_strength * 2
+			status_requested.emit("Strength doubled for %d seconds" % int(token_bonus_duration))
+	bonuses_changed.emit(speed_bonus_time, strength_bonus_time)
+
+
+func _update_powerups(delta: float) -> void:
+	var previous_speed_time := speed_bonus_time
+	var previous_strength_time := strength_bonus_time
+	if speed_bonus_time > 0.0:
+		speed_bonus_time = maxf(speed_bonus_time - delta, 0.0)
+		if speed_bonus_time <= 0.0:
+			walk_speed = base_walk_speed
+			run_speed = base_run_speed
+			duck_speed = base_duck_speed
+	if strength_bonus_time > 0.0:
+		strength_bonus_time = maxf(strength_bonus_time - delta, 0.0)
+		if strength_bonus_time <= 0.0:
+			strength = base_strength
+	if int(ceil(previous_speed_time)) != int(ceil(speed_bonus_time)) or int(ceil(previous_strength_time)) != int(ceil(strength_bonus_time)):
+		bonuses_changed.emit(speed_bonus_time, strength_bonus_time)
 
 
 func _update_eating(delta: float, wants_eat: bool) -> void:

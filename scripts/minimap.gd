@@ -72,6 +72,7 @@ func _draw() -> void:
 	for log_data in map_layout.get("logs", []):
 		var log_position: Vector3 = log_data["position"]
 		draw_circle(_world_to_map(Vector2(log_position.x, log_position.z)), 1.5, Color(0.30, 0.20, 0.11, 1.0))
+	_draw_feast_markers()
 
 	_draw_unexplored_fog()
 	var font := ThemeDB.fallback_font
@@ -90,6 +91,26 @@ func _draw() -> void:
 	draw_colored_polygon(arrow, Color("ffcf4d"))
 	var outline := PackedVector2Array([arrow[0], arrow[1], arrow[2], arrow[0]])
 	draw_polyline(outline, Color(0.08, 0.06, 0.02, 0.95), 2.0, true)
+
+
+func _draw_feast_markers() -> void:
+	if not is_inside_tree():
+		return
+	for candidate in get_tree().get_nodes_in_group("edible_meat"):
+		if not candidate is Node3D:
+			continue
+		var meat := candidate as Node3D
+		var marker := _world_to_map(Vector2(meat.global_position.x, meat.global_position.z))
+		draw_circle(marker, 4.0, Color("e94b3c"))
+		draw_circle(marker, 4.0, Color("fff0c2"), false, 1.4)
+		draw_line(marker + Vector2(-2.2, -2.2), marker + Vector2(2.2, 2.2), Color("fff0c2"), 1.2)
+		draw_line(marker + Vector2(-2.2, 2.2), marker + Vector2(2.2, -2.2), Color("fff0c2"), 1.2)
+
+
+func get_feast_marker_count() -> int:
+	if not is_inside_tree():
+		return 0
+	return get_tree().get_nodes_in_group("edible_meat").size()
 
 
 func _draw_unexplored_fog() -> void:
