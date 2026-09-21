@@ -17,7 +17,9 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 | Attack | `ATTACK` | `F` |
 | Scream | `SCREAM` (roar pose, sound, and shockwave) | `R` |
 
-The landscape currently includes a lake, wooded areas, rocks, distant hills, atmospheric fog, mobile-friendly lighting, and layered looping prehistoric ambience. Trees, rocks, and hills have solid collision geometry, and four invisible perimeter walls keep every dinosaur inside the valley. The live minimap beneath the main-menu button shows the map boundary, pond, hills, trees, rocks, and the dinosaur's current position and facing direction.
+The game now creates a 400×400 procedural prehistoric world—over thirteen times the original ground area. Each six-digit world seed deterministically controls the number, position, and size of ponds, hills, trees, and rocks. Enter a seed on the dinosaur-selection screen to replay a world, or press `NEW RANDOM SEED` for a new one. The central spawn area is kept clear and generated landmarks are spaced to avoid obvious overlaps.
+
+Trees, rocks, and hills have solid collision geometry, and four invisible perimeter walls keep every dinosaur inside the valley. The live minimap beneath the main-menu button shows the map boundary and the dinosaur's current position and facing direction. Its fog of war hides terrain and landmarks until the dinosaur explores the surrounding area; explored cells remain visible for the rest of that game.
 
 Every dinosaur has its own scream, walking, running, jumping, ducking, attacking, and hurt sounds. Movement audio follows the dinosaur's pace, while action and vocal effects use independent 3D channels so important sounds are not cut off by footsteps.
 
@@ -66,6 +68,7 @@ Use `Terminal > Run Task`:
 - `Godot: Open editor` opens the visual scene/asset editor.
 - `Godot: Run game` runs the game on the desktop.
 - `Godot: Gameplay smoke test` verifies movement and actions without opening a window.
+- `Godot: Procedural world test` verifies six-digit seed reproducibility and variation.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.
 - `Android: Connected devices` lists USB-connected Android devices.

@@ -3,7 +3,7 @@ extends Node3D
 const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
 const MINIMAP_SCRIPT := preload("res://scripts/minimap.gd")
 const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
-const MAP_HALF_SIZE := 55.0
+const MAP_HALF_SIZE := 200.0
 
 var player: CharacterBody3D
 var status_label: Label
@@ -13,6 +13,12 @@ var menu_layer: CanvasLayer
 var selected_dino_name := "T-Rex"
 var selected_dino_id := "trex"
 var dinosaur_config := ConfigFile.new()
+var seed_input: LineEdit
+var map_seed := 0
+var generated_ponds: Array = []
+var generated_hills: Array = []
+var generated_trees: Array = []
+var generated_rocks: Array = []
 
 
 func _ready() -> void:
@@ -23,12 +29,14 @@ func _ready() -> void:
 
 
 func _start_game(dino_id: String) -> void:
+	_commit_world_seed()
 	selected_dino_id = dino_id
 	selected_dino_name = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
 	menu_layer.hide()
 	world_root = Node3D.new()
 	world_root.name = "PrehistoricWorld"
 	add_child(world_root)
+	_generate_world_layout()
 	_build_environment()
 	_build_ambient_audio()
 	_build_landscape()
@@ -44,6 +52,33 @@ func _return_to_main_menu() -> void:
 	player = null
 	status_label = null
 	menu_layer.show()
+
+
+func _set_random_world_seed() -> void:
+	var randomizer := RandomNumberGenerator.new()
+	randomizer.randomize()
+	var next_seed := randomizer.randi_range(100000, 999999)
+	if next_seed == map_seed:
+		next_seed = 100000 if next_seed == 999999 else next_seed + 1
+	map_seed = next_seed
+	if is_instance_valid(seed_input):
+		seed_input.text = "%06d" % map_seed
+
+
+func _on_seed_text_changed(new_text: String) -> void:
+	var digits := ""
+	for character in new_text:
+		if character >= "0" and character <= "9":
+			digits += character
+	if digits != new_text:
+		seed_input.text = digits.left(6)
+		seed_input.caret_column = seed_input.text.length()
+
+
+func _commit_world_seed() -> void:
+	if not is_instance_valid(seed_input) or seed_input.text.length() != 6 or int(seed_input.text) < 100000:
+		_set_random_world_seed()
+	map_seed = int(seed_input.text)
 
 
 func _build_main_menu() -> void:
@@ -105,10 +140,46 @@ func _build_main_menu() -> void:
 	prompt.add_theme_color_override("font_color", Color.WHITE)
 	root.add_child(prompt)
 
+	var seed_row := HBoxContainer.new()
+	seed_row.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	seed_row.position = Vector2(-225, 210)
+	seed_row.size = Vector2(450, 40)
+	seed_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	seed_row.add_theme_constant_override("separation", 10)
+	root.add_child(seed_row)
+
+	var seed_label := Label.new()
+	seed_label.text = "WORLD SEED"
+	seed_label.add_theme_font_size_override("font_size", 16)
+	seed_label.add_theme_color_override("font_color", Color("fff2c2"))
+	seed_row.add_child(seed_label)
+
+	seed_input = LineEdit.new()
+	seed_input.name = "WorldSeed"
+	seed_input.custom_minimum_size = Vector2(112, 36)
+	seed_input.max_length = 6
+	seed_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	seed_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	seed_input.add_theme_font_size_override("font_size", 18)
+	seed_input.tooltip_text = "Enter any six-digit number to replay the same world"
+	seed_input.text_changed.connect(_on_seed_text_changed)
+	seed_row.add_child(seed_input)
+
+	var random_seed_button := Button.new()
+	random_seed_button.text = "NEW RANDOM SEED"
+	random_seed_button.custom_minimum_size = Vector2(176, 36)
+	random_seed_button.focus_mode = Control.FOCUS_NONE
+	random_seed_button.add_theme_font_size_override("font_size", 14)
+	random_seed_button.add_theme_stylebox_override("normal", _button_style(Color(0.12, 0.25, 0.16, 0.92), Color(0.72, 0.83, 0.42, 0.8)))
+	random_seed_button.add_theme_stylebox_override("hover", _button_style(Color(0.24, 0.43, 0.22, 0.96), Color("f7f2d0")))
+	random_seed_button.pressed.connect(_set_random_world_seed)
+	seed_row.add_child(random_seed_button)
+	_set_random_world_seed()
+
 	var cards := HBoxContainer.new()
 	cards.name = "DinosaurCards"
 	cards.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	cards.position = Vector2(-590, 220)
+	cards.position = Vector2(-590, 258)
 	cards.size = Vector2(1180, 360)
 	cards.alignment = BoxContainer.ALIGNMENT_CENTER
 	cards.add_theme_constant_override("separation", 12)
@@ -254,6 +325,64 @@ func _build_ambient_audio() -> void:
 		audio.play()
 
 
+func _generate_world_layout() -> void:
+	generated_ponds.clear()
+	generated_hills.clear()
+	generated_trees.clear()
+	generated_rocks.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = map_seed
+	var occupied: Array = []
+
+	for index in rng.randi_range(4, 7):
+		var pond_size := Vector2(rng.randf_range(14.0, 30.0), rng.randf_range(10.0, 22.0))
+		var pond_radius := maxf(pond_size.x, pond_size.y) * 0.6
+		var pond_position := _find_world_position(rng, pond_radius, occupied, 8.0)
+		generated_ponds.append({"position": Vector3(pond_position.x, 0.025, pond_position.y), "size": pond_size})
+		occupied.append({"position": pond_position, "radius": pond_radius})
+
+	for index in rng.randi_range(9, 14):
+		var hill_scale := Vector3(rng.randf_range(9.0, 20.0), rng.randf_range(3.5, 8.0), rng.randf_range(8.0, 18.0))
+		var hill_radius := maxf(hill_scale.x, hill_scale.z) * 0.82
+		var hill_position := _find_world_position(rng, hill_radius, occupied, 7.0)
+		generated_hills.append({"position": Vector3(hill_position.x, hill_scale.y * 0.48, hill_position.y), "scale": hill_scale})
+		occupied.append({"position": hill_position, "radius": hill_radius})
+
+	for index in rng.randi_range(75, 105):
+		var tree_scale := rng.randf_range(0.75, 1.45)
+		var tree_position := _find_world_position(rng, 1.6 * tree_scale, occupied, 2.5)
+		generated_trees.append({"position": Vector3(tree_position.x, 0.0, tree_position.y), "scale": tree_scale})
+		occupied.append({"position": tree_position, "radius": 0.55 * tree_scale})
+
+	for index in rng.randi_range(28, 45):
+		var rock_scale := rng.randf_range(0.65, 1.65)
+		var rock_position := _find_world_position(rng, 1.1 * rock_scale, occupied, 1.5)
+		generated_rocks.append({"position": Vector3(rock_position.x, 0.0, rock_position.y), "scale": rock_scale})
+		occupied.append({"position": rock_position, "radius": 0.9 * rock_scale})
+
+
+func _find_world_position(rng: RandomNumberGenerator, radius: float, occupied: Array, spacing: float) -> Vector2:
+	var edge_padding := radius + 8.0
+	for attempt in 100:
+		var candidate := Vector2(
+			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding),
+			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding)
+		)
+		if candidate.length() < 28.0 + radius:
+			continue
+		var available := true
+		for item in occupied:
+			if candidate.distance_to(item["position"]) < radius + float(item["radius"]) + spacing:
+				available = false
+				break
+		if available:
+			return candidate
+	return Vector2(
+		rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding),
+		rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding)
+	)
+
+
 func _build_landscape() -> void:
 	var ground := StaticBody3D.new()
 	ground.name = "Ground"
@@ -261,7 +390,7 @@ func _build_landscape() -> void:
 
 	var ground_mesh := MeshInstance3D.new()
 	var ground_box := BoxMesh.new()
-	ground_box.size = Vector3(110.0, 1.0, 110.0)
+	ground_box.size = Vector3(MAP_HALF_SIZE * 2.0, 1.0, MAP_HALF_SIZE * 2.0)
 	ground_mesh.mesh = ground_box
 	ground_mesh.position.y = -0.5
 	ground_mesh.material_override = _material(Color("668b49"), 0.95)
@@ -269,34 +398,20 @@ func _build_landscape() -> void:
 
 	var ground_collision := CollisionShape3D.new()
 	var ground_shape := BoxShape3D.new()
-	ground_shape.size = Vector3(110.0, 1.0, 110.0)
+	ground_shape.size = Vector3(MAP_HALF_SIZE * 2.0, 1.0, MAP_HALF_SIZE * 2.0)
 	ground_collision.shape = ground_shape
 	ground_collision.position.y = -0.5
 	ground.add_child(ground_collision)
 	_build_map_boundary()
 
-	_create_pond(Vector3(-17.0, 0.025, -15.0), Vector2(16.0, 11.0))
-	_create_hill(Vector3(-28.0, 2.2, -30.0), Vector3(13.0, 4.5, 11.0))
-	_create_hill(Vector3(25.0, 3.0, -34.0), Vector3(16.0, 6.0, 12.0))
-	_create_hill(Vector3(34.0, 1.6, 20.0), Vector3(10.0, 3.2, 13.0))
-	_create_hill(Vector3(-37.0, 1.3, 25.0), Vector3(12.0, 2.7, 10.0))
-
-	var tree_positions := [
-		Vector3(-8, 0, -11), Vector3(8, 0, -13), Vector3(15, 0, -22),
-		Vector3(-13, 0, -27), Vector3(-26, 0, -9), Vector3(27, 0, -8),
-		Vector3(21, 0, 10), Vector3(-18, 0, 13), Vector3(7, 0, 20),
-		Vector3(-31, 0, 30), Vector3(34, 0, 31), Vector3(40, 0, -20),
-		Vector3(-41, 0, -19), Vector3(1, 0, -35), Vector3(-5, 0, 31)
-	]
-	for index in tree_positions.size():
-		_create_tree(tree_positions[index], 0.8 + float(index % 4) * 0.12)
-
-	var rock_positions := [
-		Vector3(-4, 0, -18), Vector3(12, 0, 7), Vector3(-21, 0, 4),
-		Vector3(25, 0, 24), Vector3(-32, 0, -4), Vector3(5, 0, 30)
-	]
-	for index in rock_positions.size():
-		_create_rock(rock_positions[index], 0.7 + float(index % 3) * 0.35)
+	for pond in generated_ponds:
+		_create_pond(pond["position"], pond["size"])
+	for hill in generated_hills:
+		_create_hill(hill["position"], hill["scale"])
+	for tree in generated_trees:
+		_create_tree(tree["position"], tree["scale"])
+	for rock in generated_rocks:
+		_create_rock(rock["position"], rock["scale"])
 
 
 func _build_player(dino_id: String) -> void:
@@ -319,7 +434,7 @@ func _build_hud() -> void:
 	game_hud.add_child(root)
 
 	var title := Label.new()
-	title.text = "DINOS4HELENA  •  " + selected_dino_name.to_upper()
+	title.text = "DINOS4HELENA  •  %s  •  WORLD %06d" % [selected_dino_name.to_upper(), map_seed]
 	title.position = Vector2(18, 14)
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color("f4f0cf"))
@@ -405,7 +520,12 @@ func _build_hud() -> void:
 	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	minimap.clip_contents = true
 	root.add_child(minimap)
-	minimap.call("setup", player)
+	minimap.call("setup", player, MAP_HALF_SIZE, {
+		"ponds": generated_ponds,
+		"hills": generated_hills,
+		"trees": generated_trees,
+		"rocks": generated_rocks
+	})
 
 
 func _add_action_button(parent: Control, caption: String, action: StringName, button_position: Vector2, button_size: Vector2) -> Button:
