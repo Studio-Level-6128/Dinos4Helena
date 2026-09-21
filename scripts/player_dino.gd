@@ -2,6 +2,9 @@ extends CharacterBody3D
 
 signal screamed
 signal health_changed(current_health: int, maximum_health: int)
+signal energy_changed(current_energy: float, maximum_energy: float)
+signal died
+signal status_requested(message: String)
 
 var dino_id := "trex"
 var dino_config := ConfigFile.new()
@@ -15,6 +18,24 @@ var can_jump := true
 var jump_velocity := 7.0
 var max_health := 100
 var health := 100
+var diet := "herbivore"
+var max_energy := 100.0
+var energy := 100.0
+var walk_energy_cost := 0.18
+var run_energy_cost := 0.70
+var duck_energy_cost := 0.10
+var jump_energy_cost := 5.0
+var attack_energy_cost := 9.0
+var scream_energy_cost := 3.0
+var starvation_damage_per_second := 2.5
+var plant_energy_per_second := 7.0
+var meat_energy_per_second := 22.0
+var food_reach := 4.5
+var starvation_damage_accumulator := 0.0
+var eating_target: Node3D
+var eating_active := false
+var eating_pose_time := 0.0
+var dead := false
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var model_root: Node3D
 var animation_player: AnimationPlayer
@@ -29,6 +50,7 @@ var scream_time := 0.0
 var footstep_time := 0.0
 var jump_was_pressed := false
 var duck_was_pressed := false
+var eat_was_pressed := false
 
 
 func _ready() -> void:
@@ -44,6 +66,19 @@ func _ready() -> void:
 	jump_velocity = dino_config.get_value(dino_id, "jump_velocity", 7.0)
 	max_health = dino_config.get_value(dino_id, "max_health", 100)
 	health = max_health
+	diet = dino_config.get_value(dino_id, "diet", "herbivore")
+	max_energy = dino_config.get_value("energy", "max_energy", 100.0)
+	energy = max_energy
+	walk_energy_cost = dino_config.get_value("energy", "walk_cost_per_second", 0.18)
+	run_energy_cost = dino_config.get_value("energy", "run_cost_per_second", 0.70)
+	duck_energy_cost = dino_config.get_value("energy", "duck_cost_per_second", 0.10)
+	jump_energy_cost = dino_config.get_value("energy", "jump_cost", 5.0)
+	attack_energy_cost = dino_config.get_value("energy", "attack_cost", 9.0)
+	scream_energy_cost = dino_config.get_value("energy", "scream_cost", 3.0)
+	starvation_damage_per_second = dino_config.get_value("energy", "starvation_damage_per_second", 2.5)
+	plant_energy_per_second = dino_config.get_value("energy", "plant_energy_per_second", 7.0)
+	meat_energy_per_second = dino_config.get_value("energy", "meat_energy_per_second", 22.0)
+	food_reach = dino_config.get_value("energy", "food_reach", 4.5)
 	_build_collision()
 	_build_model()
 	_build_follow_camera()
@@ -51,6 +86,9 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if dead:
+		velocity = Vector3.ZERO
+		return
 	attack_time = maxf(attack_time - delta, 0.0)
 	scream_time = maxf(scream_time - delta, 0.0)
 	footstep_time = maxf(footstep_time - delta, 0.0)
@@ -61,6 +99,7 @@ func _physics_process(delta: float) -> void:
 	var wants_jump := _action_pressed("jump")
 	if wants_jump and not jump_was_pressed and can_jump and is_on_floor() and attack_time <= 0.0:
 		velocity.y = jump_velocity
+		_spend_energy(jump_energy_cost)
 		_play_action_sound("jump")
 	jump_was_pressed = wants_jump
 
@@ -83,6 +122,14 @@ func _physics_process(delta: float) -> void:
 	duck_was_pressed = ducking
 	var running := _action_pressed("run") and not ducking
 	var speed := duck_speed if ducking else (run_speed if running else walk_speed)
+	var wants_eat := _action_pressed("eat")
+	_update_eating(delta, wants_eat)
+	eat_was_pressed = wants_eat
+	if eating_active:
+		throttle = 0.0
+		eating_pose_time += delta
+	else:
+		eating_pose_time = 0.0
 
 	if attack_time <= 0.0 and scream_time <= 0.0:
 		rotation.y += steering * turn_speed * delta
@@ -96,13 +143,21 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, speed * 14.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, speed * 14.0 * delta)
 
-	var target_y_scale := model_scale * (0.68 if ducking else 1.0)
+	var target_y_scale := model_scale * (0.68 if ducking else (0.88 if eating_active else 1.0))
 	model_root.scale.y = lerpf(model_root.scale.y, target_y_scale, 10.0 * delta)
-	var roar_tilt := deg_to_rad(-10.0 + sin(scream_time * 20.0) * 2.0) if scream_time > 0.0 else 0.0
-	model_root.rotation.x = lerpf(model_root.rotation.x, roar_tilt, 9.0 * delta)
-	model_root.position.y = lerpf(model_root.position.y, 0.18 if scream_time > 0.0 else 0.0, 8.0 * delta)
+	var pose_tilt := 0.0
+	var pose_height := 0.0
+	if scream_time > 0.0:
+		pose_tilt = deg_to_rad(-10.0 + sin(scream_time * 20.0) * 2.0)
+		pose_height = 0.18
+	elif eating_active:
+		pose_tilt = deg_to_rad(-18.0 + sin(eating_pose_time * 8.0) * 3.5)
+		pose_height = -0.08 + sin(eating_pose_time * 8.0) * 0.025
+	model_root.rotation.x = lerpf(model_root.rotation.x, pose_tilt, 9.0 * delta)
+	model_root.position.y = lerpf(model_root.position.y, pose_height, 8.0 * delta)
 	move_and_slide()
 	var moving := not is_zero_approx(throttle) and attack_time <= 0.0 and scream_time <= 0.0
+	_update_energy(delta, moving, running, ducking)
 	_update_footsteps(moving and is_on_floor(), running, ducking)
 	_update_animation(moving, running, ducking)
 
@@ -141,6 +196,9 @@ func _build_model() -> void:
 			var animation_name := _find_animation(key)
 			if animation_name != "":
 				animation_player.get_animation(animation_name).loop_mode = Animation.LOOP_LINEAR
+		var death_animation := _find_animation("death")
+		if death_animation != "":
+			animation_player.get_animation(death_animation).loop_mode = Animation.LOOP_NONE
 		_play_animation("idle", true)
 
 
@@ -212,6 +270,7 @@ func _update_footsteps(moving: bool, running: bool, ducking: bool) -> void:
 
 func _start_attack() -> void:
 	attack_time = 0.85
+	_spend_energy(attack_energy_cost)
 	_play_animation("attack", true)
 	_play_action_sound("attack")
 
@@ -219,29 +278,131 @@ func _start_attack() -> void:
 func _update_animation(moving: bool, running: bool, ducking: bool) -> void:
 	if animation_player == null or attack_time > 0.0 or scream_time > 0.0:
 		return
-	if not is_on_floor():
+	if eating_active:
+		_play_animation("idle")
+	elif not is_on_floor():
 		_play_animation("jump")
 	elif moving:
 		_play_animation("walk" if ducking else ("run" if running else "walk"))
 	else:
 		_play_animation("idle")
-	animation_player.speed_scale = 0.65 if ducking else (0.75 if scream_time > 0.0 else 1.0)
+	animation_player.speed_scale = 0.58 if eating_active else (0.65 if ducking else (0.75 if scream_time > 0.0 else 1.0))
 
 
 func _start_scream() -> void:
 	scream_time = 1.2
+	_spend_energy(scream_energy_cost)
 	_play_animation("idle", true)
 	_play_action_sound("scream")
 	_spawn_roar_wave()
 	screamed.emit()
 
 
-func take_damage(amount: int) -> void:
-	if amount <= 0 or health <= 0:
+func take_damage(amount: int, play_hurt_sound := true) -> void:
+	if amount <= 0 or health <= 0 or dead:
 		return
 	health = maxi(health - amount, 0)
-	_play_action_sound("hurt")
+	if play_hurt_sound:
+		_play_action_sound("hurt")
 	health_changed.emit(health, max_health)
+	if health <= 0:
+		_die()
+
+
+func _update_energy(delta: float, moving: bool, running: bool, ducking: bool) -> void:
+	if moving:
+		_spend_energy((run_energy_cost if running else walk_energy_cost) * delta)
+	if ducking:
+		_spend_energy(duck_energy_cost * delta)
+	if energy <= 0.0:
+		starvation_damage_accumulator += starvation_damage_per_second * delta
+		var damage := int(floor(starvation_damage_accumulator))
+		if damage > 0:
+			starvation_damage_accumulator -= float(damage)
+			take_damage(damage, false)
+	else:
+		starvation_damage_accumulator = 0.0
+
+
+func _spend_energy(amount: float) -> void:
+	if amount <= 0.0 or dead:
+		return
+	var previous := energy
+	energy = maxf(energy - amount, 0.0)
+	if not is_equal_approx(previous, energy):
+		energy_changed.emit(energy, max_energy)
+
+
+func restore_energy(amount: float) -> void:
+	if amount <= 0.0 or dead:
+		return
+	var previous := energy
+	energy = minf(energy + amount, max_energy)
+	if not is_equal_approx(previous, energy):
+		energy_changed.emit(energy, max_energy)
+
+
+func _update_eating(delta: float, wants_eat: bool) -> void:
+	eating_active = false
+	if not wants_eat:
+		eating_target = null
+		return
+	if energy >= max_energy:
+		if not eat_was_pressed:
+			status_requested.emit("Energy is already full")
+		return
+	var food_group := "edible_plant" if diet == "herbivore" else "edible_meat"
+	if not is_instance_valid(eating_target) or not eating_target.is_in_group(food_group) or global_position.distance_to(eating_target.global_position) > food_reach:
+		eating_target = _nearest_food(food_group)
+	if not is_instance_valid(eating_target):
+		if not eat_was_pressed:
+			status_requested.emit("Find a nearby plant to graze" if diet == "herbivore" else "Hunt prey for meat — coming later")
+		return
+	eating_active = true
+	var rate := plant_energy_per_second if diet == "herbivore" else meat_energy_per_second
+	restore_energy(rate * delta)
+	var food_remaining: float = eating_target.get_meta("energy_remaining", 18.0)
+	food_remaining -= rate * delta
+	eating_target.set_meta("energy_remaining", food_remaining)
+	if not eat_was_pressed:
+		status_requested.emit("Grazing..." if diet == "herbivore" else "Eating meat...")
+	if food_remaining <= 0.0:
+		eating_target.queue_free()
+		eating_target = null
+		eating_active = false
+
+
+func _nearest_food(food_group: StringName) -> Node3D:
+	var nearest: Node3D
+	var nearest_distance := food_reach
+	for candidate in get_tree().get_nodes_in_group(food_group):
+		if not candidate is Node3D:
+			continue
+		var candidate_node := candidate as Node3D
+		var candidate_distance := global_position.distance_to(candidate_node.global_position)
+		if candidate_distance <= nearest_distance:
+			nearest = candidate_node
+			nearest_distance = candidate_distance
+	return nearest
+
+
+func _die() -> void:
+	if dead:
+		return
+	dead = true
+	velocity = Vector3.ZERO
+	eating_active = false
+	var death_animation := _find_animation("death")
+	if death_animation != "":
+		current_animation = death_animation
+		animation_player.speed_scale = 0.85
+		animation_player.play(death_animation, 0.12)
+		var visible_duration := minf(animation_player.get_animation(death_animation).length / animation_player.speed_scale, 2.4)
+		get_tree().create_timer(maxf(visible_duration, 1.0)).timeout.connect(died.emit)
+	else:
+		var tween := create_tween()
+		tween.tween_property(model_root, "rotation:z", deg_to_rad(82.0), 0.9).set_trans(Tween.TRANS_QUAD)
+		tween.finished.connect(died.emit)
 
 
 func _spawn_roar_wave() -> void:

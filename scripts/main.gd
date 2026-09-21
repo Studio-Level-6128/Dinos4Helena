@@ -24,6 +24,10 @@ var status_label: Label
 var world_root: Node3D
 var game_hud: CanvasLayer
 var menu_layer: CanvasLayer
+var health_bar: ProgressBar
+var energy_bar: ProgressBar
+var health_label: Label
+var energy_label: Label
 var selected_dino_name := "T-Rex"
 var selected_dino_id := "trex"
 var dinosaur_config := ConfigFile.new()
@@ -73,6 +77,10 @@ func _return_to_main_menu() -> void:
 		world_root.queue_free()
 	player = null
 	status_label = null
+	health_bar = null
+	energy_bar = null
+	health_label = null
+	energy_label = null
 	menu_layer.show()
 
 
@@ -647,6 +655,10 @@ func _build_player(dino_id: String) -> void:
 	player.position = Vector3(0.0, 0.1, 5.0)
 	world_root.add_child(player)
 	player.screamed.connect(_on_dino_screamed)
+	player.health_changed.connect(_on_health_changed)
+	player.energy_changed.connect(_on_energy_changed)
+	player.died.connect(_on_player_died)
+	player.status_requested.connect(_show_status_message)
 
 
 func _build_hud() -> void:
@@ -664,6 +676,7 @@ func _build_hud() -> void:
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color("f4f0cf"))
 	root.add_child(title)
+	_build_vital_bars(root)
 
 	status_label = Label.new()
 	status_label.text = "Explore the valley"
@@ -686,8 +699,9 @@ func _build_hud() -> void:
 		jump_button.tooltip_text = selected_dino_name + " cannot jump"
 	_add_action_button(left_panel, "RUN", "run", Vector2(98, 58), Vector2(84, 54))
 	_add_action_button(left_panel, "DUCK", "duck", Vector2(188, 58), Vector2(84, 54))
-	_add_action_button(left_panel, "ATTACK", "attack", Vector2(46, 118), Vector2(110, 54))
-	_add_action_button(left_panel, "SCREAM", "scream", Vector2(162, 118), Vector2(110, 54))
+	_add_action_button(left_panel, "ATTACK", "attack", Vector2(0, 118), Vector2(110, 54))
+	_add_action_button(left_panel, "EAT", "eat", Vector2(116, 118), Vector2(92, 54))
+	_add_action_button(left_panel, "SCREAM", "scream", Vector2(214, 118), Vector2(116, 54))
 
 	var action_hint := Label.new()
 	action_hint.text = "LEFT HAND • ACTIONS"
@@ -714,7 +728,7 @@ func _build_hud() -> void:
 	right_panel.add_child(move_hint)
 
 	var keyboard_hint := Label.new()
-	keyboard_hint.text = "Keyboard: WASD / arrows • Space jump • Shift run • C duck • F attack • R scream"
+	keyboard_hint.text = "Keyboard: WASD / arrows • Space jump • Shift run • C duck • F attack • E eat • R scream"
 	keyboard_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	keyboard_hint.position = Vector2(-350, -30)
 	keyboard_hint.size = Vector2(700, 24)
@@ -755,6 +769,48 @@ func _build_hud() -> void:
 		"rocks": generated_rocks,
 		"logs": generated_logs
 	})
+	_on_health_changed(player.health, player.max_health)
+	_on_energy_changed(player.energy, player.max_energy)
+
+
+func _build_vital_bars(parent: Control) -> void:
+	health_bar = _create_vital_bar(parent, "HealthBar", Vector2(18, 43), Color("d7473f"))
+	energy_bar = _create_vital_bar(parent, "EnergyBar", Vector2(18, 69), Color("e4b83f"))
+	health_label = health_bar.get_node("Label") as Label
+	energy_label = energy_bar.get_node("Label") as Label
+
+
+func _create_vital_bar(parent: Control, bar_name: String, bar_position: Vector2, fill_color: Color) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.name = bar_name
+	bar.position = bar_position
+	bar.size = Vector2(278, 20)
+	bar.show_percentage = false
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var background := StyleBoxFlat.new()
+	background.bg_color = Color(0.025, 0.04, 0.03, 0.88)
+	background.border_color = Color(0.88, 0.85, 0.68, 0.68)
+	background.set_border_width_all(1)
+	background.set_corner_radius_all(5)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_color
+	fill.set_corner_radius_all(4)
+	bar.add_theme_stylebox_override("background", background)
+	bar.add_theme_stylebox_override("fill", fill)
+	parent.add_child(bar)
+	var label := Label.new()
+	label.name = "Label"
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
+	bar.add_child(label)
+	return bar
 
 
 func _add_action_button(parent: Control, caption: String, action: StringName, button_position: Vector2, button_size: Vector2) -> Button:
@@ -782,7 +838,7 @@ func _add_action_button(parent: Control, caption: String, action: StringName, bu
 func _icon_path(action: StringName) -> String:
 	var names := {
 		"move_forward": "up", "move_back": "down", "move_left": "left", "move_right": "right",
-		"jump": "jump", "run": "run", "duck": "duck", "attack": "attack", "scream": "scream"
+		"jump": "jump", "run": "run", "duck": "duck", "attack": "attack", "eat": "eat", "scream": "scream"
 	}
 	return "res://assets/ui/icons/%s.svg" % names.get(action, "up")
 
@@ -1042,6 +1098,8 @@ func _create_vegetation(vegetation: Dictionary) -> void:
 	plant.position = vegetation["position"]
 	plant.rotation.y = vegetation["rotation"]
 	plant.scale = Vector3.ONE * float(vegetation["scale"])
+	plant.add_to_group("edible_plant")
+	plant.set_meta("energy_remaining", 18.0)
 	world_root.add_child(plant)
 
 
@@ -1102,6 +1160,7 @@ func _create_input_actions() -> void:
 	_add_key_action("run", [KEY_SHIFT])
 	_add_key_action("duck", [KEY_C, KEY_CTRL])
 	_add_key_action("attack", [KEY_F])
+	_add_key_action("eat", [KEY_E])
 	_add_key_action("scream", [KEY_R])
 
 
@@ -1116,7 +1175,66 @@ func _add_key_action(action: StringName, keys: Array) -> void:
 
 
 func _on_dino_screamed() -> void:
-	status_label.text = "R O A R !"
+	_show_status_message("R O A R !")
+
+
+func _show_status_message(message: String) -> void:
+	if not is_instance_valid(status_label):
+		return
+	status_label.text = message
 	var tween := create_tween()
 	tween.tween_interval(1.0)
-	tween.tween_callback(func() -> void: status_label.text = "Explore the valley")
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(status_label) and status_label.text == message:
+			status_label.text = "Explore the valley"
+	)
+
+
+func _on_health_changed(current_health: int, maximum_health: int) -> void:
+	if not is_instance_valid(health_bar):
+		return
+	health_bar.max_value = maximum_health
+	health_bar.value = current_health
+	health_label.text = "HEALTH  %d / %d" % [current_health, maximum_health]
+
+
+func _on_energy_changed(current_energy: float, maximum_energy: float) -> void:
+	if not is_instance_valid(energy_bar):
+		return
+	energy_bar.max_value = maximum_energy
+	energy_bar.value = current_energy
+	energy_label.text = "ENERGY  %d%%" % int(round(current_energy / maximum_energy * 100.0))
+
+
+func _on_player_died() -> void:
+	_show_status_message("Your dinosaur has fallen")
+	var overlay := ColorRect.new()
+	overlay.name = "GameOver"
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.02, 0.01, 0.005, 0.78)
+	game_hud.add_child(overlay)
+	var panel := VBoxContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-210, -100)
+	panel.size = Vector2(420, 200)
+	panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_theme_constant_override("separation", 20)
+	overlay.add_child(panel)
+	var heading := Label.new()
+	heading.text = "GAME OVER"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 52)
+	heading.add_theme_color_override("font_color", Color("ef6655"))
+	panel.add_child(heading)
+	var detail := Label.new()
+	detail.text = "%s ran out of health" % selected_dino_name
+	detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	detail.add_theme_font_size_override("font_size", 20)
+	detail.add_theme_color_override("font_color", Color("fff2c2"))
+	panel.add_child(detail)
+	var return_button := Button.new()
+	return_button.text = "RETURN TO DINOSAUR SELECTION"
+	return_button.custom_minimum_size = Vector2(340, 52)
+	return_button.add_theme_font_size_override("font_size", 18)
+	return_button.pressed.connect(_return_to_main_menu)
+	panel.add_child(return_button)

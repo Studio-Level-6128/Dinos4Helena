@@ -15,7 +15,12 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 | Run | Hold `RUN` while moving | Hold `Shift` |
 | Duck | Hold `DUCK` | Hold `C` or `Ctrl` |
 | Attack | `ATTACK` | `F` |
+| Eat | `EAT` | `E` |
 | Scream | `SCREAM` (roar pose, sound, and shockwave) | `R` |
+
+Health and energy bars appear in the upper-left corner. Every dinosaur starts with its species-specific maximum health and 100% energy. Walking, running, ducking, jumping, attacking, and screaming consume energy at deliberately gradual rates. At zero energy, health silently falls without repeatedly playing the hurt sound; reaching zero health plays the species' death animation and ends the game.
+
+Herbivores regain energy slowly by holding `EAT` near grass or another plant. While grazing, the dinosaur stops, lowers its body and head, and makes a repeated chewing motion. T-Rex and Velociraptor are carnivores and require meat, which will come from the planned hunting system; until prey is implemented, the game explains that meat is unavailable rather than allowing them to graze.
 
 The game creates a 400×400 procedural prehistoric world. Each six-digit world seed deterministically controls its forest and grassland biomes, lakes, winding river, hills, dense mixed forests, grounded rocks, fallen trees, prehistoric understory, cloud cover, and object variation. Enter a seed on the dinosaur-selection screen to replay a world, or press `NEW RANDOM SEED` for a new one. The central spawn area is kept clear, solid landmarks avoid water, and generated features are spaced to avoid obvious overlaps.
 
@@ -53,7 +58,10 @@ All species characteristics and physical presentation values are centralized in 
 - Strength rating
 - Whether the species can jump and its jump velocity
 - Maximum health
+- Herbivore or carnivore diet
 - Model scale, collision size, and follow-camera framing
+
+The same configuration file contains the maximum energy, action costs, starvation damage, eating rates, and food-interaction distance under its `[energy]` section.
 
 The selection cards read directly from this file, so displayed speed, strength, jump capability, and health always match the gameplay values. Heavy adult dinosaurs cannot jump; Velociraptor is currently the agile jumping species. Apatosaurus is deliberately much larger, slower, and healthier than the other playable dinosaurs.
 
@@ -77,6 +85,7 @@ Use `Terminal > Run Task`:
 - `Godot: Run game` runs the game on the desktop.
 - `Godot: Gameplay smoke test` verifies movement and actions without opening a window.
 - `Godot: Procedural world test` verifies six-digit seed reproducibility and variation.
+- `Godot: Health and energy test` verifies energy drain, starvation damage, grazing, HUD updates, and game over.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.
 - `Assets: Download environment models` restores the CC0 environment model library if needed.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.

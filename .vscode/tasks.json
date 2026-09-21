@@ -41,6 +41,14 @@
       "group": "test"
     },
     {
+      "label": "Godot: Health and energy test",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--script", "res://tests/health_energy_smoke.gd"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Audio: Generate missing sounds",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/generate-sounds.sh",
