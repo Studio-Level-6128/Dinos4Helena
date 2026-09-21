@@ -2,42 +2,18 @@ extends CharacterBody3D
 
 signal screamed
 
-const WALK_SPEED := 4.0
-const RUN_SPEED := 8.0
-const DUCK_SPEED := 2.2
-const JUMP_VELOCITY := 7.0
-const TURN_SPEED := 2.4
-const DINO_CONFIGS := {
-	"trex": {
-		"path": "res://assets/models/trex/Trex.fbx", "scale": 0.20,
-		"radius": 0.95, "height": 3.8, "camera_y": 3.4, "camera_length": 9.0, "speed": 1.0
-	},
-	"triceratops": {
-		"path": "res://assets/models/dinosaurs/Triceratops.fbx", "scale": 0.20,
-		"radius": 1.0, "height": 2.8, "camera_y": 2.8, "camera_length": 9.0, "speed": 0.9
-	},
-	"stegosaurus": {
-		"path": "res://assets/models/dinosaurs/Stegosaurus.fbx", "scale": 0.20,
-		"radius": 1.0, "height": 2.8, "camera_y": 2.9, "camera_length": 9.5, "speed": 0.86
-	},
-	"velociraptor": {
-		"path": "res://assets/models/dinosaurs/Velociraptor.fbx", "scale": 0.22,
-		"radius": 0.55, "height": 2.2, "camera_y": 2.3, "camera_length": 7.0, "speed": 1.28
-	},
-	"parasaurolophus": {
-		"path": "res://assets/models/dinosaurs/Parasaurolophus.fbx", "scale": 0.20,
-		"radius": 0.8, "height": 3.2, "camera_y": 3.1, "camera_length": 8.5, "speed": 1.0
-	},
-	"apatosaurus": {
-		"path": "res://assets/models/dinosaurs/Apatosaurus.fbx", "scale": 0.14,
-		"radius": 1.25, "height": 5.0, "camera_y": 4.8, "camera_length": 12.0, "speed": 0.72
-	}
-}
-
 var dino_id := "trex"
-var dino_config: Dictionary
+var dino_config := ConfigFile.new()
 var model_scale := 0.20
-var movement_scale := 1.0
+var walk_speed := 4.0
+var run_speed := 8.0
+var duck_speed := 2.2
+var turn_speed := 2.4
+var strength := 1
+var can_jump := true
+var jump_velocity := 7.0
+var max_health := 100
+var health := 100
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var model_root: Node3D
 var animation_player: AnimationPlayer
@@ -50,9 +26,18 @@ var jump_was_pressed := false
 
 
 func _ready() -> void:
-	dino_config = DINO_CONFIGS.get(dino_id, DINO_CONFIGS.trex)
-	model_scale = dino_config.scale
-	movement_scale = dino_config.speed
+	var config_error := dino_config.load("res://config/dinosaurs.cfg")
+	assert(config_error == OK, "Could not load dinosaur configuration")
+	model_scale = dino_config.get_value(dino_id, "model_scale", 0.20)
+	walk_speed = dino_config.get_value(dino_id, "walk_speed", 4.0)
+	run_speed = dino_config.get_value(dino_id, "run_speed", 8.0)
+	duck_speed = dino_config.get_value(dino_id, "duck_speed", 2.2)
+	turn_speed = dino_config.get_value(dino_id, "turn_speed", 2.4)
+	strength = dino_config.get_value(dino_id, "strength", 1)
+	can_jump = dino_config.get_value(dino_id, "can_jump", true)
+	jump_velocity = dino_config.get_value(dino_id, "jump_velocity", 7.0)
+	max_health = dino_config.get_value(dino_id, "max_health", 100)
+	health = max_health
 	_build_collision()
 	_build_model()
 	_build_follow_camera()
@@ -67,8 +52,8 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= gravity * delta
 
 	var wants_jump := _action_pressed("jump")
-	if wants_jump and not jump_was_pressed and is_on_floor() and attack_time <= 0.0:
-		velocity.y = JUMP_VELOCITY
+	if wants_jump and not jump_was_pressed and can_jump and is_on_floor() and attack_time <= 0.0:
+		velocity.y = jump_velocity
 	jump_was_pressed = wants_jump
 
 	if _action_just_pressed("attack") and attack_time <= 0.0:
@@ -87,10 +72,10 @@ func _physics_process(delta: float) -> void:
 
 	var ducking := _action_pressed("duck")
 	var running := _action_pressed("run") and not ducking
-	var speed := (DUCK_SPEED if ducking else (RUN_SPEED if running else WALK_SPEED)) * movement_scale
+	var speed := duck_speed if ducking else (run_speed if running else walk_speed)
 
 	if attack_time <= 0.0 and scream_time <= 0.0:
-		rotation.y += steering * TURN_SPEED * delta
+		rotation.y += steering * turn_speed * delta
 
 	if not is_zero_approx(throttle) and attack_time <= 0.0 and scream_time <= 0.0:
 		var forward := -global_transform.basis.z.normalized()
@@ -123,15 +108,16 @@ func set_mobile_action(action: StringName, pressed: bool) -> void:
 func _build_collision() -> void:
 	var collision := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
-	shape.radius = dino_config.radius
-	shape.height = dino_config.height
+	shape.radius = dino_config.get_value(dino_id, "collision_radius", 0.95)
+	shape.height = dino_config.get_value(dino_id, "collision_height", 3.8)
 	collision.shape = shape
-	collision.position.y = float(dino_config.height) * 0.5
+	collision.position.y = shape.height * 0.5
 	add_child(collision)
 
 
 func _build_model() -> void:
-	var model_scene := load(dino_config.path) as PackedScene
+	var model_path: String = dino_config.get_value(dino_id, "model_path", "res://assets/models/trex/Trex.fbx")
+	var model_scene := load(model_path) as PackedScene
 	model_root = model_scene.instantiate()
 	model_root.name = "DinosaurModel"
 	model_root.scale = Vector3.ONE * model_scale
@@ -150,12 +136,12 @@ func _build_model() -> void:
 func _build_follow_camera() -> void:
 	var pivot := Node3D.new()
 	pivot.name = "CameraPivot"
-	pivot.position = Vector3(0.0, dino_config.camera_y, 0.0)
+	pivot.position = Vector3(0.0, dino_config.get_value(dino_id, "camera_height", 3.4), 0.0)
 	pivot.rotation_degrees.x = -16.0
 	add_child(pivot)
 
 	var spring_arm := SpringArm3D.new()
-	spring_arm.spring_length = dino_config.camera_length
+	spring_arm.spring_length = dino_config.get_value(dino_id, "camera_distance", 9.0)
 	spring_arm.margin = 0.25
 	spring_arm.collision_mask = 1
 	pivot.add_child(spring_arm)

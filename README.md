@@ -19,6 +19,18 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 
 The landscape currently includes a lake, wooded areas, rocks, distant hills, atmospheric fog, and mobile-friendly lighting.
 
+## Dinosaur balancing
+
+All species characteristics and physical presentation values are centralized in `config/dinosaurs.cfg`. Each section controls:
+
+- Walking, running, ducking, and turning speed
+- Strength rating
+- Whether the species can jump and its jump velocity
+- Maximum health
+- Model scale, collision size, and follow-camera framing
+
+The selection cards read directly from this file, so displayed speed, strength, jump capability, and health always match the gameplay values. Heavy adult dinosaurs cannot jump; Velociraptor is currently the agile jumping species. Apatosaurus is deliberately much larger, slower, and healthier than the other playable dinosaurs.
+
 ## Installed development stack
 
 - Godot 4.7.2 (standard/GDScript edition)

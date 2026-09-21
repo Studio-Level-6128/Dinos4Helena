@@ -1,14 +1,7 @@
 extends Node3D
 
 const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
-const DINOSAURS := [
-	{"id": "trex", "name": "T-Rex"},
-	{"id": "triceratops", "name": "Triceratops"},
-	{"id": "stegosaurus", "name": "Stegosaurus"},
-	{"id": "velociraptor", "name": "Velociraptor"},
-	{"id": "parasaurolophus", "name": "Parasaurolophus"},
-	{"id": "apatosaurus", "name": "Apatosaurus"}
-]
+const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 
 var player: CharacterBody3D
 var status_label: Label
@@ -16,18 +9,20 @@ var world_root: Node3D
 var game_hud: CanvasLayer
 var menu_layer: CanvasLayer
 var selected_dino_name := "T-Rex"
+var selected_dino_id := "trex"
+var dinosaur_config := ConfigFile.new()
 
 
 func _ready() -> void:
+	var config_error := dinosaur_config.load("res://config/dinosaurs.cfg")
+	assert(config_error == OK, "Could not load dinosaur configuration")
 	_create_input_actions()
 	_build_main_menu()
 
 
 func _start_game(dino_id: String) -> void:
-	for dinosaur in DINOSAURS:
-		if dinosaur.id == dino_id:
-			selected_dino_name = dinosaur.name
-			break
+	selected_dino_id = dino_id
+	selected_dino_name = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
 	menu_layer.hide()
 	world_root = Node3D.new()
 	world_root.name = "PrehistoricWorld"
@@ -116,8 +111,9 @@ func _build_main_menu() -> void:
 	cards.add_theme_constant_override("separation", 12)
 	root.add_child(cards)
 
-	for dinosaur in DINOSAURS:
-		cards.add_child(_create_dino_card(dinosaur.id, dinosaur.name))
+	for dino_id in DINO_IDS:
+		var display_name: String = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
+		cards.add_child(_create_dino_card(dino_id, display_name))
 
 	var footer := Label.new()
 	footer.text = "Select a dinosaur to begin your prehistoric adventure"
@@ -132,7 +128,7 @@ func _build_main_menu() -> void:
 
 func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(184, 320)
+	panel.custom_minimum_size = Vector2(184, 338)
 	panel.add_theme_stylebox_override("panel", _card_style())
 
 	var column := VBoxContainer.new()
@@ -140,7 +136,7 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	panel.add_child(column)
 
 	var portrait := TextureButton.new()
-	portrait.custom_minimum_size = Vector2(168, 205)
+	portrait.custom_minimum_size = Vector2(168, 158)
 	portrait.texture_normal = load("res://assets/ui/menu/%s.png" % dino_id)
 	portrait.ignore_texture_size = true
 	portrait.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_COVERED
@@ -155,6 +151,16 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	name_label.add_theme_color_override("font_color", Color("fff2c2"))
 	column.add_child(name_label)
 
+	var stats := GridContainer.new()
+	stats.columns = 2
+	stats.add_theme_constant_override("h_separation", 8)
+	stats.add_theme_constant_override("v_separation", 2)
+	column.add_child(stats)
+	_add_stat(stats, "SPEED", "%.1f" % float(dinosaur_config.get_value(dino_id, "run_speed", 0.0)))
+	_add_stat(stats, "STRENGTH", "%d/10" % int(dinosaur_config.get_value(dino_id, "strength", 0)))
+	_add_stat(stats, "CAN JUMP", "YES" if dinosaur_config.get_value(dino_id, "can_jump", false) else "NO")
+	_add_stat(stats, "HEALTH", str(int(dinosaur_config.get_value(dino_id, "max_health", 0))))
+
 	var play := Button.new()
 	play.text = "PLAY"
 	play.focus_mode = Control.FOCUS_NONE
@@ -166,6 +172,20 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	play.pressed.connect(_start_game.bind(dino_id))
 	column.add_child(play)
 	return panel
+
+
+func _add_stat(parent: GridContainer, stat_name: String, stat_value: String) -> void:
+	var name_label := Label.new()
+	name_label.text = stat_name
+	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.68))
+	parent.add_child(name_label)
+	var value_label := Label.new()
+	value_label.text = stat_value
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.add_theme_font_size_override("font_size", 12)
+	value_label.add_theme_color_override("font_color", Color("f5dc9d"))
+	parent.add_child(value_label)
 
 
 func _card_style() -> StyleBoxFlat:
@@ -296,7 +316,10 @@ func _build_hud() -> void:
 	left_panel.position = Vector2(18, -208)
 	left_panel.size = Vector2(370, 190)
 	root.add_child(left_panel)
-	_add_action_button(left_panel, "JUMP", "jump", Vector2(0, 58), Vector2(92, 54))
+	var jump_button := _add_action_button(left_panel, "JUMP", "jump", Vector2(0, 58), Vector2(92, 54))
+	jump_button.disabled = not bool(dinosaur_config.get_value(selected_dino_id, "can_jump", false))
+	if jump_button.disabled:
+		jump_button.tooltip_text = selected_dino_name + " cannot jump"
 	_add_action_button(left_panel, "RUN", "run", Vector2(98, 58), Vector2(84, 54))
 	_add_action_button(left_panel, "DUCK", "duck", Vector2(188, 58), Vector2(84, 54))
 	_add_action_button(left_panel, "ATTACK", "attack", Vector2(46, 118), Vector2(110, 54))
@@ -351,7 +374,7 @@ func _build_hud() -> void:
 	root.add_child(menu_button)
 
 
-func _add_action_button(parent: Control, caption: String, action: StringName, button_position: Vector2, button_size: Vector2) -> void:
+func _add_action_button(parent: Control, caption: String, action: StringName, button_position: Vector2, button_size: Vector2) -> Button:
 	var button := Button.new()
 	button.text = caption
 	button.position = button_position
@@ -366,9 +389,11 @@ func _add_action_button(parent: Control, caption: String, action: StringName, bu
 	button.add_theme_stylebox_override("normal", _button_style(Color(0.12, 0.25, 0.16, 0.78), Color(0.65, 0.78, 0.43, 0.7)))
 	button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.36, 0.22, 0.9), Color(0.78, 0.9, 0.55, 0.9)))
 	button.add_theme_stylebox_override("pressed", _button_style(Color(0.45, 0.62, 0.25, 0.95), Color("f7f2d0")))
+	button.add_theme_stylebox_override("disabled", _button_style(Color(0.09, 0.1, 0.09, 0.58), Color(0.42, 0.44, 0.38, 0.55)))
 	button.button_down.connect(player.set_mobile_action.bind(action, true))
 	button.button_up.connect(player.set_mobile_action.bind(action, false))
 	parent.add_child(button)
+	return button
 
 
 func _icon_path(action: StringName) -> String:

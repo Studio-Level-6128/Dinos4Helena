@@ -11,7 +11,7 @@ func _run() -> void:
 	root.add_child(world)
 	await process_frame
 	assert(world.menu_layer.visible, "Main menu was not shown on launch")
-	world._start_game("trex")
+	world._start_game("velociraptor")
 	await physics_frame
 
 	var player := world.get_node("PrehistoricWorld/PlayerDinosaur") as CharacterBody3D

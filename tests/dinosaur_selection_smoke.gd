@@ -10,6 +10,8 @@ func _initialize() -> void:
 func _run() -> void:
 	var scene := load("res://scenes/main.tscn") as PackedScene
 	var app := scene.instantiate()
+	var config := ConfigFile.new()
+	assert(config.load("res://config/dinosaurs.cfg") == OK, "Could not load dinosaur stats")
 	root.add_child(app)
 	await process_frame
 	assert(app.menu_layer.visible, "Main menu is not visible at startup")
@@ -22,6 +24,13 @@ func _run() -> void:
 		assert(player.dino_id == dino_id, "Wrong dinosaur selected: " + dino_id)
 		assert(player.animation_player != null, "Missing animations for: " + dino_id)
 		assert(player.animation_player.get_animation_list().size() >= 5, "Incomplete animation set for: " + dino_id)
+		assert(is_equal_approx(player.run_speed, float(config.get_value(dino_id, "run_speed"))), "Wrong speed for: " + dino_id)
+		assert(player.strength == int(config.get_value(dino_id, "strength")), "Wrong strength for: " + dino_id)
+		assert(player.max_health == int(config.get_value(dino_id, "max_health")), "Wrong health for: " + dino_id)
+		assert(player.can_jump == bool(config.get_value(dino_id, "can_jump")), "Wrong jump ability for: " + dino_id)
+		if dino_id == "apatosaurus":
+			assert(player.model_scale >= 0.38, "Apatosaurus is not scaled as a giant")
+			assert(not player.can_jump, "Apatosaurus should not be able to jump")
 		app._return_to_main_menu()
 		await process_frame
 		assert(app.menu_layer.visible, "Could not return to menu after: " + dino_id)
@@ -30,4 +39,3 @@ func _run() -> void:
 	app.queue_free()
 	await process_frame
 	quit()
-
