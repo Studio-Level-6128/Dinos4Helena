@@ -1,0 +1,17 @@
+{
+  "godotTools.editorPath.godot4": "${workspaceFolder}/.tools/godot/godot",
+  "godotTools.lsp.headless": true,
+  "files.exclude": {
+    "**/.godot": true,
+    "**/.tools": true,
+    "**/.local": true,
+    "**/.cache": true
+  },
+  "files.watcherExclude": {
+    "**/.godot/**": true,
+    "**/.tools/**": true,
+    "**/.local/**": true,
+    "**/.cache/**": true
+  }
+}
+

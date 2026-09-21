@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Godot: Run game",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--path", "${workspaceFolder}"],
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "Godot: Open editor",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--editor", "--path", "${workspaceFolder}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Android: Build debug APK",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/build-android.sh",
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "Android: Connected devices",
+      "type": "shell",
+      "command": "${workspaceFolder}/.tools/android-sdk/platform-tools/adb",
+      "args": ["devices", "-l"],
+      "problemMatcher": []
+    }
+  ]
+}
+
