@@ -18,6 +18,7 @@ var can_jump := true
 var jump_velocity := 7.0
 var max_health := 100
 var health := 100
+var collision_radius := 0.95
 var diet := "herbivore"
 var max_energy := 100.0
 var energy := 100.0
@@ -67,6 +68,8 @@ func _ready() -> void:
 	max_health = dino_config.get_value(dino_id, "max_health", 100)
 	health = max_health
 	diet = dino_config.get_value(dino_id, "diet", "herbivore")
+	if diet == "carnivore":
+		add_to_group("player_hunter")
 	max_energy = dino_config.get_value("energy", "max_energy", 100.0)
 	energy = max_energy
 	walk_energy_cost = dino_config.get_value("energy", "walk_cost_per_second", 0.18)
@@ -79,6 +82,8 @@ func _ready() -> void:
 	plant_energy_per_second = dino_config.get_value("energy", "plant_energy_per_second", 7.0)
 	meat_energy_per_second = dino_config.get_value("energy", "meat_energy_per_second", 22.0)
 	food_reach = dino_config.get_value("energy", "food_reach", 4.5)
+	collision_radius = dino_config.get_value(dino_id, "collision_radius", 0.95)
+	add_to_group("player_dinosaur")
 	_build_collision()
 	_build_model()
 	_build_follow_camera()
@@ -174,7 +179,7 @@ func set_mobile_action(action: StringName, pressed: bool) -> void:
 func _build_collision() -> void:
 	var collision := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
-	shape.radius = dino_config.get_value(dino_id, "collision_radius", 0.95)
+	shape.radius = collision_radius
 	shape.height = dino_config.get_value(dino_id, "collision_height", 3.8)
 	collision.shape = shape
 	collision.position.y = shape.height * 0.5
@@ -273,6 +278,30 @@ func _start_attack() -> void:
 	_spend_energy(attack_energy_cost)
 	_play_animation("attack", true)
 	_play_action_sound("attack")
+	get_tree().create_timer(0.24).timeout.connect(_perform_attack_hit)
+
+
+func _perform_attack_hit() -> void:
+	if dead:
+		return
+	var forward := -global_transform.basis.z.normalized()
+	var closest_target: Node3D
+	var closest_distance := collision_radius + 3.8
+	for candidate in get_tree().get_nodes_in_group("npc_dinosaur"):
+		if not candidate is Node3D or bool(candidate.get("dead")):
+			continue
+		var target := candidate as Node3D
+		var offset := target.global_position - global_position
+		var flat_offset := Vector3(offset.x, 0.0, offset.z)
+		var distance := flat_offset.length()
+		if distance <= 0.001 or distance > closest_distance:
+			continue
+		if forward.dot(flat_offset.normalized()) < 0.2:
+			continue
+		closest_target = target
+		closest_distance = distance
+	if is_instance_valid(closest_target):
+		closest_target.call("take_damage", maxi(strength * 4, 1), self)
 
 
 func _update_animation(moving: bool, running: bool, ducking: bool) -> void:

@@ -1,9 +1,12 @@
 extends Node3D
 
 const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
+const NPC_DINO_SCRIPT := preload("res://scripts/npc_dino.gd")
 const MINIMAP_SCRIPT := preload("res://scripts/minimap.gd")
 const CLOUD_SCRIPT := preload("res://scripts/cloud.gd")
 const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
+const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
+const CARNIVORE_IDS := ["trex", "velociraptor"]
 const MAP_HALF_SIZE := 200.0
 const ENVIRONMENT_MODEL_PATHS := {
 	"tree": "res://assets/models/environment/araucaria_conifer.glb",
@@ -43,6 +46,7 @@ var generated_biomes: Array = []
 var generated_clouds: Array = []
 var generated_high_ground: Array = []
 var generated_logs: Array = []
+var generated_dinosaurs: Array = []
 var environment_models: Dictionary = {}
 
 
@@ -67,6 +71,7 @@ func _start_game(dino_id: String) -> void:
 	_build_ambient_audio()
 	_build_landscape()
 	_build_player(dino_id)
+	_build_wild_dinosaurs()
 	_build_hud()
 
 
@@ -401,6 +406,7 @@ func _generate_world_layout() -> void:
 	generated_clouds.clear()
 	generated_high_ground.clear()
 	generated_logs.clear()
+	generated_dinosaurs.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = map_seed
 	var occupied: Array = []
@@ -490,6 +496,36 @@ func _generate_world_layout() -> void:
 		var grass_scale := rng.randf_range(0.7, 1.4)
 		var grass_position := _find_biome_position(rng, "grassland", 0.45 * grass_scale, [], 0.0)
 		generated_vegetation.append({"type": "grass", "position": Vector3(grass_position.x, 0.015, grass_position.y), "scale": grass_scale, "rotation": rng.randf_range(0.0, TAU)})
+
+	for pack_index in rng.randi_range(3, 5):
+		var species: String = HERBIVORE_IDS[rng.randi_range(0, HERBIVORE_IDS.size() - 1)]
+		var member_count := rng.randi_range(2, 3) if species == "apatosaurus" else rng.randi_range(3, 5)
+		var pack_radius := 10.0 if species == "apatosaurus" else 7.0
+		var pack_center := _find_world_position(rng, pack_radius, occupied, 5.0)
+		occupied.append({"position": pack_center, "radius": pack_radius})
+		for member_index in member_count:
+			var angle := TAU * float(member_index) / float(member_count) + rng.randf_range(-0.35, 0.35)
+			var distance := rng.randf_range(1.8, pack_radius * 0.55)
+			var member_position := pack_center + Vector2(cos(angle), sin(angle)) * distance
+			generated_dinosaurs.append({
+				"species": species,
+				"position": Vector3(member_position.x, 0.1, member_position.y),
+				"pack_id": pack_index,
+				"patrol_center": Vector3(pack_center.x, 0.0, pack_center.y),
+				"rng_seed": rng.randi()
+			})
+
+	for hunter_index in rng.randi_range(4, 6):
+		var hunter_species: String = CARNIVORE_IDS[rng.randi_range(0, CARNIVORE_IDS.size() - 1)]
+		var hunter_position := _find_world_position(rng, 4.0, occupied, 12.0)
+		occupied.append({"position": hunter_position, "radius": 4.0})
+		generated_dinosaurs.append({
+			"species": hunter_species,
+			"position": Vector3(hunter_position.x, 0.1, hunter_position.y),
+			"pack_id": -1,
+			"patrol_center": Vector3(hunter_position.x, 0.0, hunter_position.y),
+			"rng_seed": rng.randi()
+		})
 
 	for index in rng.randi_range(8, 13):
 		var wind_angle := rng.randf_range(-0.25, 0.25)
@@ -659,6 +695,23 @@ func _build_player(dino_id: String) -> void:
 	player.energy_changed.connect(_on_energy_changed)
 	player.died.connect(_on_player_died)
 	player.status_requested.connect(_show_status_message)
+
+
+func _build_wild_dinosaurs() -> void:
+	var wildlife := Node3D.new()
+	wildlife.name = "WildDinosaurs"
+	world_root.add_child(wildlife)
+	for index in generated_dinosaurs.size():
+		var data: Dictionary = generated_dinosaurs[index]
+		var npc := CharacterBody3D.new()
+		npc.name = "WildDino_%02d_%s" % [index, data["species"]]
+		npc.set_script(NPC_DINO_SCRIPT)
+		npc.set("dino_id", data["species"])
+		npc.set("pack_id", data["pack_id"])
+		npc.set("patrol_center", data["patrol_center"])
+		npc.set("rng_seed", data["rng_seed"])
+		npc.position = data["position"]
+		wildlife.add_child(npc)
 
 
 func _build_hud() -> void:

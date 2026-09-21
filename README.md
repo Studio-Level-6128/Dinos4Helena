@@ -28,6 +28,12 @@ Trees, fallen logs, rocks, hills, and tiered high-ground formations have solid c
 
 The world uses animated shader water with earthy banks for seeded lakes and rivers, a visible directional sun with mobile-friendly shadows, and a seeded layer of slowly moving clouds. Dense Araucaria forests contain ferns, cycads, and undergrowth, while open grasslands contain lightweight grass clusters.
 
+## Wildlife and combat
+
+Every seeded world also contains AI-controlled dinosaurs. Herbivores spawn in small same-species packs, wander around a shared home area, stay close to their herd, detect nearby carnivores, and run away. T-Rex and Velociraptor hunters spawn alone, search for nearby herbivores or the player, pursue their chosen prey, and attack at close range.
+
+Wild dinosaurs use the same configured health, strength, speed, scale, collision, and animation data as the playable species. The player's `ATTACK` action can hit a dinosaur in front of it, hunters can damage both wildlife and the player, and damaged NPCs briefly show their health. A defeated wild dinosaur plays its native death animation and leaves edible meat for carnivorous players.
+
 ## Environment model library
 
 Eleven locally stored GLB assets provide multiple living and dead tree forms, ferns, cycads, horsetails, fiddleheads, undergrowth, grass, fallen logs, and mossy basalt rocks. They are CC0 models from 3DAssets.dev; exact source pages, dimensions, licensing, and conversion notes are recorded in `assets/models/environment/SOURCE.md`.
@@ -86,6 +92,7 @@ Use `Terminal > Run Task`:
 - `Godot: Gameplay smoke test` verifies movement and actions without opening a window.
 - `Godot: Procedural world test` verifies six-digit seed reproducibility and variation.
 - `Godot: Health and energy test` verifies energy drain, starvation damage, grazing, HUD updates, and game over.
+- `Godot: Wildlife AI test` verifies packs, fleeing, pursuit, NPC/player combat, death, and meat drops.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.
 - `Assets: Download environment models` restores the CC0 environment model library if needed.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.

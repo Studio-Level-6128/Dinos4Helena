@@ -25,6 +25,7 @@ func _run() -> void:
 	assert(app.generated_vegetation.size() >= 580, "Procedural world has too little ground vegetation")
 	assert(app.generated_logs.size() >= 18, "Procedural world has too few fallen logs")
 	assert(app.generated_high_ground.size() >= 10, "Procedural world has too little jumpable high ground")
+	assert(app.generated_dinosaurs.size() >= 10, "Procedural world has too little wildlife")
 	assert(app.generated_clouds.size() >= 8, "Procedural world has too few clouds")
 	assert(app.environment_models.size() == 11, "CC0 environment model library did not load")
 	assert(app.get_node_or_null("PrehistoricWorld/Sun") != null, "World has no sun")
@@ -59,7 +60,7 @@ func _run() -> void:
 
 
 func _layout_signature(app: Node) -> String:
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [
 		str(app.generated_ponds),
 		str(app.generated_rivers),
 		str(app.generated_biomes),
@@ -69,5 +70,6 @@ func _layout_signature(app: Node) -> String:
 		str(app.generated_rocks),
 		str(app.generated_logs),
 		str(app.generated_vegetation),
+		str(app.generated_dinosaurs),
 		str(app.generated_clouds)
 	]
