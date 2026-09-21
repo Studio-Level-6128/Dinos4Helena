@@ -29,6 +29,7 @@ var status_label: Label
 var world_root: Node3D
 var game_hud: CanvasLayer
 var menu_layer: CanvasLayer
+var credits_overlay: Control
 var health_bar: ProgressBar
 var energy_bar: ProgressBar
 var health_label: Label
@@ -66,6 +67,8 @@ func _start_game(dino_id: String) -> void:
 	_commit_world_seed()
 	selected_dino_id = dino_id
 	selected_dino_name = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
+	if is_instance_valid(credits_overlay):
+		credits_overlay.hide()
 	menu_layer.hide()
 	world_root = Node3D.new()
 	world_root.name = "PrehistoricWorld"
@@ -240,6 +243,130 @@ func _build_main_menu() -> void:
 	footer.add_theme_font_size_override("font_size", 17)
 	footer.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
 	root.add_child(footer)
+
+	var credits_button := Button.new()
+	credits_button.name = "CreditsButton"
+	credits_button.text = "CREDITS"
+	credits_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	credits_button.position = Vector2(-170, -66)
+	credits_button.size = Vector2(150, 44)
+	credits_button.focus_mode = Control.FOCUS_NONE
+	credits_button.add_theme_font_size_override("font_size", 16)
+	credits_button.add_theme_color_override("font_color", Color("f7f2d0"))
+	credits_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
+	credits_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
+	credits_button.pressed.connect(_open_credits)
+	root.add_child(credits_button)
+	_build_credits_overlay(root)
+
+
+func _build_credits_overlay(parent: Control) -> void:
+	credits_overlay = Control.new()
+	credits_overlay.name = "CreditsOverlay"
+	credits_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	credits_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(credits_overlay)
+
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.005, 0.015, 0.01, 0.84)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	credits_overlay.add_child(shade)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-340, -180)
+	panel.size = Vector2(680, 360)
+	panel.add_theme_stylebox_override("panel", _credits_style())
+	credits_overlay.add_child(panel)
+
+	var column := VBoxContainer.new()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", 18)
+	panel.add_child(column)
+
+	var heading := Label.new()
+	heading.text = "CREDITS"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 38)
+	heading.add_theme_color_override("font_color", Color("fff2c2"))
+	column.add_child(heading)
+
+	var dedication := Label.new()
+	dedication.name = "Dedication"
+	dedication.text = "For Helena - have fun. Dad."
+	dedication.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dedication.add_theme_font_size_override("font_size", 23)
+	dedication.add_theme_color_override("font_color", Color.WHITE)
+	column.add_child(dedication)
+
+	var author := Label.new()
+	author.name = "AuthorCredit"
+	author.text = "Open Souce Game by Janis Keuper."
+	author.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	author.add_theme_font_size_override("font_size", 19)
+	author.add_theme_color_override("font_color", Color("f5dc9d"))
+	column.add_child(author)
+
+	var license := Label.new()
+	license.name = "LicenseCredit"
+	license.text = "License: GPL v3"
+	license.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	license.add_theme_font_size_override("font_size", 18)
+	license.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
+	column.add_child(license)
+
+	var github := LinkButton.new()
+	github.name = "GithubLink"
+	github.text = "Github: https://github.com/keuperj/Dinos4Helena"
+	github.set_meta("uri", "https://github.com/keuperj/Dinos4Helena")
+	github.custom_minimum_size = Vector2(600, 34)
+	github.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	github.add_theme_font_size_override("font_size", 18)
+	github.add_theme_color_override("font_color", Color("77d7ff"))
+	github.add_theme_color_override("font_hover_color", Color("bcecff"))
+	github.pressed.connect(_open_credits_github)
+	column.add_child(github)
+
+	var close_button := Button.new()
+	close_button.name = "CloseCreditsButton"
+	close_button.text = "BACK"
+	close_button.custom_minimum_size = Vector2(210, 48)
+	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_button.focus_mode = Control.FOCUS_NONE
+	close_button.add_theme_font_size_override("font_size", 17)
+	close_button.add_theme_stylebox_override("normal", _button_style(Color(0.12, 0.25, 0.16, 0.95), Color(0.72, 0.83, 0.42, 0.8)))
+	close_button.add_theme_stylebox_override("hover", _button_style(Color(0.24, 0.43, 0.22, 0.98), Color("f7f2d0")))
+	close_button.pressed.connect(_close_credits)
+	column.add_child(close_button)
+	credits_overlay.hide()
+
+
+func _open_credits() -> void:
+	if is_instance_valid(credits_overlay):
+		credits_overlay.show()
+
+
+func _close_credits() -> void:
+	if is_instance_valid(credits_overlay):
+		credits_overlay.hide()
+
+
+func _open_credits_github() -> void:
+	OS.shell_open("https://github.com/keuperj/Dinos4Helena")
+
+
+func _credits_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.025, 0.075, 0.045, 0.97)
+	style.border_color = Color(0.82, 0.72, 0.35, 0.9)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(18)
+	style.content_margin_left = 34
+	style.content_margin_right = 34
+	style.content_margin_top = 28
+	style.content_margin_bottom = 28
+	return style
 
 
 func _create_dino_card(dino_id: String, display_name: String) -> Control:

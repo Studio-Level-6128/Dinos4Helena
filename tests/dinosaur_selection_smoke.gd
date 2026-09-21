@@ -15,6 +15,21 @@ func _run() -> void:
 	root.add_child(app)
 	await process_frame
 	assert(app.menu_layer.visible, "Main menu is not visible at startup")
+	var credits_button := app.menu_layer.find_child("CreditsButton", true, false) as Button
+	assert(credits_button != null, "Credits button is missing from the main menu")
+	assert(app.credits_overlay != null and not app.credits_overlay.visible, "Credits overlay should start hidden")
+	credits_button.pressed.emit()
+	assert(app.credits_overlay.visible, "Credits button did not open the credits page")
+	var dedication := app.credits_overlay.find_child("Dedication", true, false) as Label
+	var author := app.credits_overlay.find_child("AuthorCredit", true, false) as Label
+	var license := app.credits_overlay.find_child("LicenseCredit", true, false) as Label
+	var github := app.credits_overlay.find_child("GithubLink", true, false) as LinkButton
+	assert(dedication.text == "For Helena - have fun. Dad.", "Credits dedication is incorrect")
+	assert(author.text == "Open Souce Game by Janis Keuper.", "Credits author line is incorrect")
+	assert(license.text == "License: GPL v3", "Credits license line is incorrect")
+	assert(github.get_meta("uri") == "https://github.com/keuperj/Dinos4Helena", "Credits GitHub link is incorrect")
+	app._close_credits()
+	assert(not app.credits_overlay.visible, "Credits page did not close")
 
 	for dino_id in DINO_IDS:
 		app._start_game(dino_id)
