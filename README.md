@@ -17,7 +17,9 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 | Attack | `ATTACK` | `F` |
 | Scream | `SCREAM` (roar pose, sound, and shockwave) | `R` |
 
-The landscape currently includes a lake, wooded areas, rocks, distant hills, atmospheric fog, mobile-friendly lighting, and layered looping prehistoric ambience. Every dinosaur has its own scream, walking, running, jumping, ducking, attacking, and hurt sounds. Movement audio follows the dinosaur's pace, while action and vocal effects use independent 3D channels so important sounds are not cut off by footsteps.
+The landscape currently includes a lake, wooded areas, rocks, distant hills, atmospheric fog, mobile-friendly lighting, and layered looping prehistoric ambience. Trees, rocks, and hills have solid collision geometry, and four invisible perimeter walls keep every dinosaur inside the valley. The live minimap beneath the main-menu button shows the map boundary, pond, hills, trees, rocks, and the dinosaur's current position and facing direction.
+
+Every dinosaur has its own scream, walking, running, jumping, ducking, attacking, and hurt sounds. Movement audio follows the dinosaur's pace, while action and vocal effects use independent 3D channels so important sounds are not cut off by footsteps.
 
 ## Sound library
 

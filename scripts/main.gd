@@ -1,7 +1,9 @@
 extends Node3D
 
 const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
+const MINIMAP_SCRIPT := preload("res://scripts/minimap.gd")
 const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
+const MAP_HALF_SIZE := 55.0
 
 var player: CharacterBody3D
 var status_label: Label
@@ -271,6 +273,7 @@ func _build_landscape() -> void:
 	ground_collision.shape = ground_shape
 	ground_collision.position.y = -0.5
 	ground.add_child(ground_collision)
+	_build_map_boundary()
 
 	_create_pond(Vector3(-17.0, 0.025, -15.0), Vector2(16.0, 11.0))
 	_create_hill(Vector3(-28.0, 2.2, -30.0), Vector3(13.0, 4.5, 11.0))
@@ -394,6 +397,16 @@ func _build_hud() -> void:
 	menu_button.pressed.connect(_return_to_main_menu)
 	root.add_child(menu_button)
 
+	var minimap: Control = MINIMAP_SCRIPT.new()
+	minimap.name = "MiniMap"
+	minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	minimap.position = Vector2(-204, 72)
+	minimap.size = Vector2(184, 184)
+	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	minimap.clip_contents = true
+	root.add_child(minimap)
+	minimap.call("setup", player)
+
 
 func _add_action_button(parent: Control, caption: String, action: StringName, button_position: Vector2, button_size: Vector2) -> Button:
 	var button := Button.new()
@@ -452,6 +465,12 @@ func _create_pond(pond_position: Vector3, pond_size: Vector2) -> void:
 
 
 func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
+	var hill_body := StaticBody3D.new()
+	hill_body.name = "HillObstacle"
+	hill_body.position = hill_position
+	hill_body.add_to_group("world_obstacle")
+	world_root.add_child(hill_body)
+
 	var hill := MeshInstance3D.new()
 	var mesh := SphereMesh.new()
 	mesh.radius = 1.0
@@ -459,17 +478,33 @@ func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
 	mesh.radial_segments = 20
 	mesh.rings = 10
 	hill.mesh = mesh
-	hill.position = hill_position
 	hill.scale = hill_scale
 	hill.material_override = _material(Color("58763e"), 1.0)
-	world_root.add_child(hill)
+	hill_body.add_child(hill)
+
+	var collision := CollisionShape3D.new()
+	collision.shape = _ellipsoid_shape(hill_scale)
+	hill_body.add_child(collision)
 
 
 func _create_tree(tree_position: Vector3, tree_scale: float) -> void:
 	var tree := Node3D.new()
+	tree.name = "Tree"
 	tree.position = tree_position
 	tree.scale = Vector3.ONE * tree_scale
 	world_root.add_child(tree)
+
+	var tree_body := StaticBody3D.new()
+	tree_body.name = "TreeObstacle"
+	tree_body.add_to_group("world_obstacle")
+	tree.add_child(tree_body)
+	var tree_collision := CollisionShape3D.new()
+	var tree_shape := CylinderShape3D.new()
+	tree_shape.radius = 0.43
+	tree_shape.height = 3.8
+	tree_collision.shape = tree_shape
+	tree_collision.position.y = 1.9
+	tree_body.add_child(tree_collision)
 
 	var trunk := MeshInstance3D.new()
 	var trunk_mesh := CylinderMesh.new()
@@ -494,6 +529,13 @@ func _create_tree(tree_position: Vector3, tree_scale: float) -> void:
 
 
 func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
+	var rock_body := StaticBody3D.new()
+	rock_body.name = "RockObstacle"
+	rock_body.position = rock_position + Vector3(0, 0.35 * rock_scale, 0)
+	rock_body.rotation_degrees.y = rock_position.x * 7.0
+	rock_body.add_to_group("world_obstacle")
+	world_root.add_child(rock_body)
+
 	var rock := MeshInstance3D.new()
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.8
@@ -501,11 +543,55 @@ func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
 	mesh.radial_segments = 10
 	mesh.rings = 6
 	rock.mesh = mesh
-	rock.position = rock_position + Vector3(0, 0.35 * rock_scale, 0)
-	rock.scale = Vector3(1.25, 0.65, 0.9) * rock_scale
-	rock.rotation_degrees.y = rock_position.x * 7.0
+	var rock_visual_scale := Vector3(1.25, 0.65, 0.9) * rock_scale
+	rock.scale = rock_visual_scale
 	rock.material_override = _material(Color("77796e"), 1.0)
-	world_root.add_child(rock)
+	rock_body.add_child(rock)
+
+	var collision := CollisionShape3D.new()
+	collision.shape = _ellipsoid_shape(Vector3(0.8 * rock_visual_scale.x, 0.6 * rock_visual_scale.y, 0.8 * rock_visual_scale.z))
+	rock_body.add_child(collision)
+
+
+func _build_map_boundary() -> void:
+	var boundary := StaticBody3D.new()
+	boundary.name = "MapBoundary"
+	world_root.add_child(boundary)
+	var wall_height := 20.0
+	var wall_thickness := 2.0
+	var wall_length := MAP_HALF_SIZE * 2.0 + wall_thickness * 2.0
+	_add_boundary_wall(boundary, Vector3(0, wall_height * 0.5, -MAP_HALF_SIZE - wall_thickness * 0.5), Vector3(wall_length, wall_height, wall_thickness))
+	_add_boundary_wall(boundary, Vector3(0, wall_height * 0.5, MAP_HALF_SIZE + wall_thickness * 0.5), Vector3(wall_length, wall_height, wall_thickness))
+	_add_boundary_wall(boundary, Vector3(-MAP_HALF_SIZE - wall_thickness * 0.5, wall_height * 0.5, 0), Vector3(wall_thickness, wall_height, wall_length))
+	_add_boundary_wall(boundary, Vector3(MAP_HALF_SIZE + wall_thickness * 0.5, wall_height * 0.5, 0), Vector3(wall_thickness, wall_height, wall_length))
+
+
+func _add_boundary_wall(parent: StaticBody3D, wall_position: Vector3, wall_size: Vector3) -> void:
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = wall_size
+	collision.shape = shape
+	collision.position = wall_position
+	parent.add_child(collision)
+
+
+func _ellipsoid_shape(radii: Vector3) -> ConvexPolygonShape3D:
+	var points := PackedVector3Array()
+	var rings := 8
+	var segments := 16
+	for ring_index in rings + 1:
+		var latitude := -PI * 0.5 + PI * float(ring_index) / float(rings)
+		var ring_radius := cos(latitude)
+		for segment_index in segments:
+			var longitude := TAU * float(segment_index) / float(segments)
+			points.append(Vector3(
+				cos(longitude) * ring_radius * radii.x,
+				sin(latitude) * radii.y,
+				sin(longitude) * ring_radius * radii.z
+			))
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = points
+	return shape
 
 
 func _material(color: Color, roughness: float) -> StandardMaterial3D:

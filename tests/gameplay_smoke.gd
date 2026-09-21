@@ -18,6 +18,15 @@ func _run() -> void:
 	assert(player.audio_streams.size() == 7, "Velociraptor sound library did not load")
 	assert(world.get_node_or_null("PrehistoricWorld/PrehistoricJungle") != null, "Jungle ambience did not start")
 	assert(world.get_node_or_null("PrehistoricWorld/DistantDinosaurs") != null, "Distant dinosaur ambience did not start")
+	var boundary := world.get_node_or_null("PrehistoricWorld/MapBoundary")
+	assert(boundary != null and boundary.get_child_count() == 4, "Map boundary is incomplete")
+	var obstacles := world.get_tree().get_nodes_in_group("world_obstacle")
+	assert(obstacles.size() == 25, "Landscape obstacles are missing collision bodies")
+	for obstacle in obstacles:
+		assert(not obstacle.find_children("*", "CollisionShape3D", true, false).is_empty(), "An obstacle has no collision shape")
+	var minimap: Control = world.game_hud.find_child("MiniMap", true, false) as Control
+	assert(minimap != null and minimap.get("player") == player, "Minimap is not tracking the player")
+	assert(minimap.call("_world_to_map", Vector2.ZERO).is_equal_approx(minimap.size * 0.5), "Minimap world coordinates are misaligned")
 	var initial_z := player.position.z
 	player.set_mobile_action("move_forward", true)
 	player.set_mobile_action("run", true)
@@ -65,7 +74,31 @@ func _run() -> void:
 	assert(player.health == health_before_hit - 12, "Damage did not reduce dinosaur health")
 	assert(player.vocal_audio.playing, "Hurt sound did not play")
 
-	print("Gameplay smoke test passed: movement, actions, health, species audio, and ambience")
+	player.attack_time = 0.0
+	player.scream_time = 0.0
+	player.global_position = Vector3(0.0, 0.1, -52.0)
+	player.rotation.y = 0.0
+	player.velocity = Vector3.ZERO
+	await physics_frame
+	player.set_mobile_action("move_forward", true)
+	player.set_mobile_action("run", true)
+	for frame in 90:
+		await physics_frame
+	player.set_mobile_action("move_forward", false)
+	player.set_mobile_action("run", false)
+	assert(player.global_position.z > -54.5, "Dinosaur escaped through the north map boundary")
+
+	player.global_position = Vector3(-8.0, 0.1, -7.0)
+	player.rotation.y = 0.0
+	player.velocity = Vector3.ZERO
+	await physics_frame
+	player.set_mobile_action("move_forward", true)
+	for frame in 90:
+		await physics_frame
+	player.set_mobile_action("move_forward", false)
+	assert(player.global_position.z > -10.6, "Dinosaur walked through a tree")
+
+	print("Gameplay smoke test passed: movement, actions, audio, collisions, boundary, and minimap")
 	world.queue_free()
 	await process_frame
 	quit()
