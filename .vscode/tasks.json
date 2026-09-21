@@ -17,6 +17,14 @@
       "problemMatcher": []
     },
     {
+      "label": "Godot: Gameplay smoke test",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--script", "res://tests/gameplay_smoke.gd"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Android: Build debug APK",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/build-android.sh",
@@ -32,4 +40,3 @@
     }
   ]
 }
-

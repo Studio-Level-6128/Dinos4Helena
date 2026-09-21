@@ -1,6 +1,21 @@
 # Dinos4Helena
 
-A mobile-first 3D Android game starter built with Godot 4 and GDScript. The repository includes a project-local development toolchain, VS Code integration, a small 3D test scene, and a verified Android debug export.
+A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has an animated T-Rex, a third-person follow camera, two-handed touch controls, and a procedural prehistoric valley.
+
+## Play the prototype
+
+The camera follows above and behind the player dinosaur. On Android, the action buttons are on the left and movement buttons are on the right.
+
+| Action | Touch control | Keyboard |
+| --- | --- | --- |
+| Move/steer | Right-hand pad: forward/back and smooth left/right steering | `WASD` or arrow keys |
+| Jump | `JUMP` | `Space` |
+| Run | Hold `RUN` while moving | Hold `Shift` |
+| Duck | Hold `DUCK` | Hold `C` or `Ctrl` |
+| Attack | `ATTACK` | `F` |
+| Scream | `SCREAM` (roar pose, sound, and shockwave) | `R` |
+
+The landscape currently includes a lake, wooded areas, rocks, distant hills, atmospheric fog, and mobile-friendly lighting.
 
 ## Installed development stack
 
@@ -20,6 +35,7 @@ Use `Terminal > Run Task`:
 
 - `Godot: Open editor` opens the visual scene/asset editor.
 - `Godot: Run game` runs the game on the desktop.
+- `Godot: Gameplay smoke test` verifies movement and actions without opening a window.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.
 - `Android: Connected devices` lists USB-connected Android devices.
 
@@ -65,4 +81,6 @@ Google Play requires Android App Bundles for new apps. Keep release signing cred
 
 ## Project choices
 
-The starter uses Godot's Compatibility renderer for broad Android GPU support. The placeholder dinosaur is assembled from primitives in `scripts/main.gd`, which proves the complete 3D render path without committing a large model. Replace it with a `.glb` model when art production begins.
+The game uses Godot's Compatibility renderer for broad Android GPU support. The current T-Rex comes from Quaternius' [Animated Dinosaur Pack](https://quaternius.com/packs/animateddinosaurs.html), is dedicated to the public domain under CC0 1.0, and includes idle, walk, run, jump, attack, and death animations. The original license and precise provenance are stored beside the model in `assets/models/trex/`.
+
+The landscape is assembled from inexpensive procedural primitives so it runs well on mobile and can later be replaced incrementally with authored terrain and foliage.
