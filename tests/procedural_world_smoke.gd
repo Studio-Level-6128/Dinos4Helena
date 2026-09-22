@@ -27,6 +27,7 @@ func _run() -> void:
 	assert(app.generated_high_ground.size() >= 10, "Procedural world has too little jumpable high ground")
 	assert(app.generated_dinosaurs.size() >= 16, "Procedural world has too little wildlife")
 	assert(app.generated_tokens.size() == 30, "Procedural world has the wrong number of power-up tokens")
+	assert(app.generated_eggs.size() == 6, "Procedural world has the wrong number of hidden egg nests")
 	var texture_variants := {}
 	for dinosaur in app.generated_dinosaurs:
 		texture_variants[dinosaur["texture_variant"]] = true
@@ -71,7 +72,7 @@ func _run() -> void:
 
 
 func _layout_signature(app: Node) -> String:
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [
 		str(app.generated_ponds),
 		str(app.generated_rivers),
 		str(app.generated_biomes),
@@ -83,5 +84,6 @@ func _layout_signature(app: Node) -> String:
 		str(app.generated_vegetation),
 		str(app.generated_dinosaurs),
 		str(app.generated_tokens),
+		str(app.generated_eggs),
 		str(app.generated_clouds)
 	]

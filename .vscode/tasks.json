@@ -73,6 +73,14 @@
       "group": "test"
     },
     {
+      "label": "Godot: Breeding test",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--script", "res://tests/breeding_smoke.gd"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Godot: Power-up token test",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/godot.sh",

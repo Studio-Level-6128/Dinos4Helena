@@ -36,6 +36,8 @@ Every seeded world also contains AI-controlled dinosaurs. Herbivores spawn in sm
 
 Wild dinosaurs use the same configured health, strength, speed, scale, collision, and animation data as the playable species. Dinosaurs never hunt, target, or damage their own species. The player's `ATTACK` action can hit a different-species dinosaur in front of it, hunters can damage both wildlife and the player, and damaged NPCs briefly show their health. Carnivores spend energy while walking, pursuing, and attacking; after a kill they claim the dropped meat, feed to recover energy, and only then resume hunting. A defeated wild dinosaur plays its native death animation and leaves edible meat, whose explored location remains marked on the minimap until the meat is consumed.
 
+Six egg nests are hidden at deterministic clear locations in every seeded world. Stand over an egg and hold `DUCK` for four seconds to hatch a baby of the player's species. The smaller, slightly slower baby follows beside its parent, has independent health but no energy meter, and can be hunted and killed by different-species predators. Breeding counts, incubation time, baby scale, and speed are configurable in `config/dinosaurs.cfg`.
+
 ## Environment model library
 
 Eleven locally stored GLB assets provide multiple living and dead tree forms, ferns, cycads, horsetails, fiddleheads, undergrowth, grass, fallen logs, and mossy basalt rocks. They are CC0 models from 3DAssets.dev; exact source pages, dimensions, licensing, and conversion notes are recorded in `assets/models/environment/SOURCE.md`.
@@ -96,6 +98,7 @@ Use `Terminal > Run Task`:
 - `Godot: Health and energy test` verifies energy drain, starvation damage, grazing, HUD updates, and game over.
 - `Godot: Wildlife AI test` verifies packs, fleeing, pursuit, NPC/player combat, death, and meat drops.
 - `Godot: Predator strategy test` verifies stalking, pack-risk avoidance, favorable attacks, and injury retreat.
+- `Godot: Breeding test` verifies egg placement, non-blocking nests, duck incubation, same-species hatching, following, baby health, and predator damage.
 - `Godot: Herd shelter test` verifies same-species peace, welcoming behavior, ally alerts, and defense of the player.
 - `Godot: Power-up token test` verifies placement, animation, healing, doubled stats, HUD timers, consumption, and same-type respawning.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.

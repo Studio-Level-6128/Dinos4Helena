@@ -6,6 +6,8 @@ const MINIMAP_SCRIPT := preload("res://scripts/minimap.gd")
 const CLOUD_SCRIPT := preload("res://scripts/cloud.gd")
 const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 const POWERUP_TOKEN_SCRIPT := preload("res://scripts/powerup_token.gd")
+const EGG_NEST_SCRIPT := preload("res://scripts/egg_nest.gd")
+const BABY_DINO_SCRIPT := preload("res://scripts/baby_dino.gd")
 const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
 const CARNIVORE_IDS := ["trex", "velociraptor"]
@@ -52,8 +54,10 @@ var generated_high_ground: Array = []
 var generated_logs: Array = []
 var generated_dinosaurs: Array = []
 var generated_tokens: Array = []
+var generated_eggs: Array = []
 var environment_models: Dictionary = {}
 var token_rng := RandomNumberGenerator.new()
+var companions_spawned := 0
 
 
 func _ready() -> void:
@@ -80,6 +84,7 @@ func _start_game(dino_id: String) -> void:
 	_build_landscape()
 	_build_powerup_tokens()
 	_build_player(dino_id)
+	_build_egg_nests()
 	_build_wild_dinosaurs()
 	_build_hud()
 
@@ -96,6 +101,7 @@ func _return_to_main_menu() -> void:
 	health_label = null
 	energy_label = null
 	bonus_label = null
+	companions_spawned = 0
 	menu_layer.show()
 
 
@@ -542,6 +548,7 @@ func _generate_world_layout() -> void:
 	generated_logs.clear()
 	generated_dinosaurs.clear()
 	generated_tokens.clear()
+	generated_eggs.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = map_seed
 	var occupied: Array = []
@@ -674,6 +681,15 @@ func _generate_world_layout() -> void:
 			var token_position := _find_world_position(rng, 1.4, occupied, 2.5)
 			generated_tokens.append({"type": token_type, "position": Vector3(token_position.x, 0.0, token_position.y)})
 			occupied.append({"position": token_position, "radius": 1.4})
+
+	var egg_count := int(dinosaur_config.get_value("breeding", "egg_nest_count", 6))
+	for egg_index in egg_count:
+		var egg_position := _find_world_position(rng, 2.0, occupied, 4.0)
+		generated_eggs.append({
+			"position": Vector3(egg_position.x, 0.0, egg_position.y),
+			"rotation": rng.randf_range(0.0, TAU)
+		})
+		occupied.append({"position": egg_position, "radius": 2.0})
 
 	for index in rng.randi_range(8, 13):
 		var wind_angle := rng.randf_range(-0.25, 0.25)
@@ -869,6 +885,35 @@ func _build_powerup_tokens() -> void:
 	token_rng.seed = map_seed ^ 0x51C0FFEE
 	for token_data in generated_tokens:
 		_spawn_powerup_token(token_data["type"], token_data["position"])
+
+
+func _build_egg_nests() -> void:
+	for index in generated_eggs.size():
+		var egg_data: Dictionary = generated_eggs[index]
+		var nest := Area3D.new()
+		nest.set_script(EGG_NEST_SCRIPT)
+		nest.set("incubation_seconds", float(dinosaur_config.get_value("breeding", "incubation_seconds", 4.0)))
+		nest.position = egg_data["position"]
+		nest.rotation.y = egg_data["rotation"]
+		nest.connect("hatched", _on_egg_hatched)
+		nest.connect("status_changed", _show_status_message)
+		world_root.add_child(nest)
+
+
+func _on_egg_hatched(parent_dino: CharacterBody3D, hatch_position: Vector3) -> void:
+	if not is_instance_valid(world_root) or not is_instance_valid(parent_dino) or not parent_dino.is_in_group("player_dinosaur"):
+		return
+	var baby := CharacterBody3D.new()
+	baby.name = "BabyDinosaur_%02d" % companions_spawned
+	baby.set_script(BABY_DINO_SCRIPT)
+	baby.set("dino_id", str(parent_dino.get("dino_id")))
+	baby.set("parent_dino", parent_dino)
+	baby.set("companion_index", companions_spawned)
+	baby.set("texture_variant", posmod(map_seed + companions_spawned + 1, GENERATED_MATERIALS.dino_variant_count()))
+	baby.position = hatch_position + Vector3(0.0, 0.1, 0.0)
+	world_root.add_child(baby)
+	companions_spawned += 1
+	_show_status_message("A baby %s hatched and joined you!" % selected_dino_name)
 
 
 func _spawn_powerup_token(token_type: String, token_position: Vector3) -> void:

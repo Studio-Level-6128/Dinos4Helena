@@ -197,6 +197,10 @@ func set_mobile_action(action: StringName, pressed: bool) -> void:
 		_start_scream()
 
 
+func is_ducking() -> bool:
+	return not dead and _action_pressed("duck")
+
+
 func _build_collision() -> void:
 	var collision := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
