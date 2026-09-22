@@ -40,11 +40,30 @@ func _run() -> void:
 	for candidate in herbivores:
 		if candidate != leader and candidate != follower:
 			candidate.global_position = Vector3(170.0, 0.1, 170.0)
-	leader.global_position = Vector3(80.0, 0.1, 80.0)
+	var clear_origin := Vector3(0.0, 0.1, 0.0)
+	leader.global_position = clear_origin
+	follower.global_position = leader.global_position + Vector3(0.0, 0.0, 14.0)
+
+	# The leader chooses one world-scale destination and keeps it until arrival;
+	# elapsed time alone must not replace it.
+	leader.pack_goal_initialized = false
+	var goal_direction: Vector3 = leader._pack_goal_direction(0.1)
+	var first_goal: Vector3 = leader.pack_goal
+	var first_goal_distance := first_goal.distance_to(leader.global_position)
+	assert(first_goal_distance >= 39.0 and first_goal_distance <= 106.0, "Pack goal is not a long-distance destination")
+	assert(world.is_pack_destination_clear(first_goal), "Pack selected an unreachable destination")
+	assert(goal_direction.length() > 0.9, "Leader did not pursue its long-distance goal")
+	leader._pack_goal_direction(30.0)
+	assert(leader.pack_goal.is_equal_approx(first_goal), "Pack goal reset before it was reached")
+	leader.global_position = first_goal
+	leader._pack_goal_direction(0.1)
+	assert(leader.pack_goal_resets == 1 and not leader.pack_goal.is_equal_approx(first_goal), "Leader did not choose a new goal after arrival")
+
+	# Overlap recovery remains independent from destination selection.
+	leader.global_position = clear_origin
 	follower.global_position = leader.global_position
-	leader.patrol_center = leader.global_position
-	leader.wander_target = leader.global_position + Vector3(18.0, 0.0, 0.0)
-	leader.wander_time = 10.0
+	leader.pack_goal = leader.global_position + Vector3(70.0, 0.0, 0.0)
+	leader.pack_goal_initialized = true
 	var leader_separation: Vector3 = leader._pack_separation()
 	var follower_separation: Vector3 = follower._pack_separation()
 	assert(leader_separation.length() > 0.1 and follower_separation.length() > 0.1, "Overlapping packmates did not generate separation steering")
@@ -69,20 +88,24 @@ func _run() -> void:
 	# Simulate the former worst case: two members spawned in the same spot.
 	# They must both move and spread out instead of remaining collision-locked.
 	follower.straggler_time = 0.0
-	leader.global_position = Vector3(80.0, 0.1, 80.0)
+	leader.global_position = clear_origin
 	follower.global_position = leader.global_position
+	leader.pack_goal_initialized = false
+	leader._pack_goal_direction(0.0)
+	var movement_goal: Vector3 = leader.pack_goal
 	var starting_position: Vector3 = leader.global_position
 	leader.set_physics_process(true)
 	follower.set_physics_process(true)
-	for frame in 45:
+	for frame in 180:
 		await physics_frame
 	leader.set_physics_process(false)
 	follower.set_physics_process(false)
-	assert(leader.global_position.distance_to(starting_position) > 1.0, "Pack leader remained stationary")
-	assert(follower.global_position.distance_to(starting_position) > 1.0, "Follower remained stationary")
+	assert(leader.global_position.distance_to(starting_position) > 5.0, "Pack leader failed to travel toward its distant goal")
+	assert(follower.global_position.distance_to(starting_position) > 3.0, "Follower did not travel with the pack")
 	assert(leader.global_position.distance_to(follower.global_position) > 1.0, "Overlapping packmates did not separate")
+	assert(leader.pack_goal.is_equal_approx(movement_goal), "Leader abandoned an unreached movement goal")
 
-	print("Pack movement smoke test passed: leaders roam, followers form up, stragglers trail, and overlaps dissolve")
+	print("Pack movement smoke test passed: persistent goals, formation, stragglers, avoidance, and deadlock recovery")
 	world.queue_free()
 	await process_frame
 	quit()

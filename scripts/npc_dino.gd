@@ -23,6 +23,10 @@ const PACK_SUPPORT_RADIUS := 24.0
 const AVOID_DANGER_RANGE := 26.0
 const PACK_FORMATION_GAP := 1.4
 const PACK_STRAGGLER_DISTANCE := 34.0
+const PACK_GOAL_MIN_DISTANCE := 55.0
+const PACK_GOAL_MAX_DISTANCE := 105.0
+const PACK_GOAL_REACHED_DISTANCE := 6.0
+const PACK_GOAL_WORLD_LIMIT := 184.0
 
 var dino_id := "triceratops"
 var texture_variant := 0
@@ -56,6 +60,11 @@ var wander_time := 0.0
 var wander_target := Vector3.ZERO
 var straggler_time := 0.0
 var straggler_cooldown := 0.0
+var pack_goal := Vector3.ZERO
+var pack_goal_initialized := false
+var pack_goal_resets := 0
+var pack_avoid_direction := Vector3.ZERO
+var pack_avoid_time := 0.0
 var forced_target: Node3D
 var retaliation_target: Node3D
 var retaliation_time := 0.0
@@ -235,6 +244,10 @@ func _choose_prey() -> Node3D:
 		if odds < MINIMUM_STALK_ODDS:
 			continue
 		var score := odds - distance / HUNTER_SIGHT_RANGE * 0.35
+		# Babies are easier prey, but only after the normal risk gate above has
+		# accounted for their parent and any nearby herd defenders.
+		if candidate_node.is_in_group("baby_dinosaur"):
+			score += 0.45
 		if score > best_score:
 			nearest = candidate_node
 			best_score = score
@@ -263,6 +276,12 @@ func _combat_odds(opponent: Node3D) -> float:
 		return 0.0
 	var hunter_power := _body_power(self) * 1.2
 	var opposition_power := _body_power(opponent)
+	var baby_parent: Node3D
+	if opponent.is_in_group("baby_dinosaur"):
+		var parent_value = opponent.get("parent_dino")
+		if parent_value is Node3D and is_instance_valid(parent_value) and not bool(parent_value.get("dead")):
+			baby_parent = parent_value
+	var parent_counted := false
 	if str(opponent.get("diet")) == "herbivore":
 		for ally in get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur"):
 			if not ally is Node3D or ally == opponent or bool(ally.get("dead")):
@@ -270,7 +289,11 @@ func _combat_odds(opponent: Node3D) -> float:
 			if str(ally.get("dino_id")) != str(opponent.get("dino_id")):
 				continue
 			if ally.global_position.distance_to(opponent.global_position) <= PACK_SUPPORT_RADIUS:
-				opposition_power += _body_power(ally) * 0.55
+				var support_factor := 0.70 if ally == baby_parent else 0.55
+				opposition_power += _body_power(ally) * support_factor
+				parent_counted = parent_counted or ally == baby_parent
+	if is_instance_valid(baby_parent) and not parent_counted and baby_parent.global_position.distance_to(opponent.global_position) <= PACK_SUPPORT_RADIUS:
+		opposition_power += _body_power(baby_parent) * 0.70
 	return hunter_power / maxf(opposition_power, 1.0)
 
 
@@ -337,7 +360,7 @@ func _pack_direction(delta: float) -> Vector3:
 	var leader := _pack_leader()
 	if not is_instance_valid(leader) or leader == self:
 		state = "leading"
-		return (_wander_direction(delta) + separation * 1.45).normalized()
+		return (_pack_goal_direction(delta) + separation * 1.45).normalized()
 
 	var follow_target := _pack_follow_target(leader)
 	var follow_offset := follow_target - global_position
@@ -371,6 +394,51 @@ func _pack_leader() -> Node3D:
 			leader = candidate
 			lowest_slot = candidate_slot
 	return leader
+
+
+func _pack_goal_direction(delta: float) -> Vector3:
+	# Unlike individual wandering, a pack goal has no short timer. The leader
+	# holds it until arrival, while temporary avoidance only bends the route.
+	if not pack_goal_initialized:
+		_choose_pack_goal()
+	var offset := pack_goal - global_position
+	offset.y = 0.0
+	if offset.length() <= PACK_GOAL_REACHED_DISTANCE:
+		pack_goal_resets += 1
+		_choose_pack_goal()
+		offset = pack_goal - global_position
+		offset.y = 0.0
+	var goal_direction := offset.normalized()
+	pack_avoid_time = maxf(pack_avoid_time - delta, 0.0)
+	if pack_avoid_time > 0.0:
+		return (goal_direction * 0.45 + pack_avoid_direction * 1.25).normalized()
+	return goal_direction
+
+
+func _choose_pack_goal() -> void:
+	var origin := Vector2(global_position.x, global_position.z)
+	for attempt in 16:
+		var angle := rng.randf_range(0.0, TAU)
+		var distance := rng.randf_range(PACK_GOAL_MIN_DISTANCE, PACK_GOAL_MAX_DISTANCE)
+		var candidate := origin + Vector2(cos(angle), sin(angle)) * distance
+		candidate.x = clampf(candidate.x, -PACK_GOAL_WORLD_LIMIT, PACK_GOAL_WORLD_LIMIT)
+		candidate.y = clampf(candidate.y, -PACK_GOAL_WORLD_LIMIT, PACK_GOAL_WORLD_LIMIT)
+		var proposed_goal := Vector3(candidate.x, 0.1, candidate.y)
+		if candidate.distance_to(origin) >= PACK_GOAL_MIN_DISTANCE * 0.72 and _pack_goal_is_clear(proposed_goal):
+			pack_goal = proposed_goal
+			pack_goal_initialized = true
+			return
+	# Near a corner, clamping can reject every random candidate. Moving toward
+	# the opposite side still provides a valid long traversal.
+	pack_goal = Vector3(-global_position.x * 0.75, 0.1, -global_position.z * 0.75)
+	pack_goal_initialized = true
+
+
+func _pack_goal_is_clear(proposed_goal: Vector3) -> bool:
+	var controllers := get_tree().get_nodes_in_group("world_controller")
+	if controllers.is_empty() or not controllers[0].has_method("is_pack_destination_clear"):
+		return true
+	return bool(controllers[0].call("is_pack_destination_clear", proposed_goal))
 
 
 func _pack_follow_target(leader: Node3D) -> Vector3:
@@ -502,11 +570,30 @@ func _apply_movement(direction: Vector3, speed: float, delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, walk_speed * 8.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, walk_speed * 8.0 * delta)
 	move_and_slide()
+	if state == "leading":
+		_update_pack_obstacle_avoidance()
 	if state != "eating" and is_instance_valid(model_root):
 		model_root.rotation.x = lerpf(model_root.rotation.x, 0.0, 7.0 * delta)
 	if get_slide_collision_count() > 0 and state in ["wandering", "leading", "packing", "regrouping", "trailing"]:
 		wander_time = 0.0
 	_update_animation(direction.length_squared() > 0.01 and state != "attacking", is_equal_approx(speed, run_speed))
+
+
+func _update_pack_obstacle_avoidance() -> void:
+	# Preserve the long-distance goal when scenery blocks the direct path. The
+	# collision normal selects whichever tangent still points most toward it.
+	for collision_index in get_slide_collision_count():
+		var normal := get_slide_collision(collision_index).get_normal()
+		if absf(normal.y) > 0.55:
+			continue
+		var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
+		var to_goal := pack_goal - global_position
+		to_goal.y = 0.0
+		if tangent.dot(to_goal) < 0.0:
+			tangent = -tangent
+		pack_avoid_direction = (tangent + normal * 0.22).normalized()
+		pack_avoid_time = 1.4
+		return
 
 
 func _face_direction(direction: Vector3, delta: float) -> void:

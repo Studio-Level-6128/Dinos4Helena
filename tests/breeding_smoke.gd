@@ -58,6 +58,25 @@ func _run() -> void:
 	var hunters := world.get_tree().get_nodes_in_group("hunter_dinosaur")
 	assert(not hunters.is_empty(), "Test world has no predator")
 	var hunter = hunters[0]
+	# A healthy nearby parent contributes to risk, but a strong hunter should
+	# still prefer the baby over a comparable adult target.
+	var parked_index := 0
+	for prey in world.get_tree().get_nodes_in_group("prey_dinosaur"):
+		if prey == baby:
+			continue
+		prey.global_position = Vector3(-175.0 + parked_index * 2.0, 0.1, -175.0)
+		parked_index += 1
+	player.global_position = Vector3(82.0, 0.1, 80.0)
+	baby.global_position = Vector3(80.0, 0.1, 80.0)
+	hunter.global_position = Vector3(80.0, 0.1, 91.0)
+	hunter.max_health = 300
+	hunter.health = 300
+	hunter.strength = 20
+	hunter.energy = hunter.max_energy
+	hunter.forced_target = null
+	hunter.food_target = null
+	assert(hunter._combat_odds(baby) >= hunter.MINIMUM_STALK_ODDS, "Baby encounter was incorrectly considered too risky")
+	assert(hunter._choose_prey() == baby, "Predator did not prefer a viable baby target")
 	var baby_health_before: int = baby.health
 	hunter.strength = 1
 	hunter.attack_cooldown = 0.0

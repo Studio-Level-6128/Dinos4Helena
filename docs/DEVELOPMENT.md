@@ -78,11 +78,11 @@ The wildlife controller uses explicit states rather than a behavior-tree plugin.
 - Carnivores prioritize injury retreat, feeding, risk assessment, stalking and attacking in that order.
 - Combat odds combine current/max health, strength, size and energy, plus partial power from nearby defenders.
 - Herbivores prioritize pack defense, direct retaliation/fleeing and formation movement.
-- Every pack has a slot-zero leader. Followers use staggered formation targets and local separation.
+- Every pack has a slot-zero leader. It retains a 55–105 unit world goal until arrival and uses temporary collision-tangent steering rather than discarding a blocked goal. Followers use staggered formation targets and local separation.
 - Same-pack collision exceptions prevent physical deadlocks. Slot one periodically trails beyond the pack-support radius, then regroups.
 - Same-species checks exist both during target selection and damage application; preserve both layers.
 
-Babies join the prey and NPC groups so predators can target them, but use a separate script with no energy or hunting logic.
+Babies join the prey and NPC groups so predators can target them, but use a separate script with no energy or hunting logic. Hunters give viable baby targets a selection bonus, while the combat-risk calculation counts the nearby parent and herd before permitting an attack.
 
 ## UI and controls
 

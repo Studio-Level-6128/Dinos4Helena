@@ -85,6 +85,7 @@ var companions_spawned := 0
 
 
 func _ready() -> void:
+	add_to_group("world_controller")
 	var config_error := dinosaur_config.load("res://config/dinosaurs.cfg")
 	assert(config_error == OK, "Could not load dinosaur configuration")
 	_create_input_actions()
@@ -1173,6 +1174,14 @@ func _is_token_position_clear(candidate: Vector2) -> bool:
 		if candidate.distance_to(Vector2(formation_position.x, formation_position.z)) < 11.0:
 			return false
 	return true
+
+
+func is_pack_destination_clear(destination: Vector3) -> bool:
+	# Pack leaders choose goals at runtime rather than during layout generation.
+	# Reuse the generated layout data so those goals never land in water or
+	# inside a solid landmark that the leader could not actually reach.
+	var candidate := Vector2(destination.x, destination.z)
+	return not _is_position_in_water(candidate, 4.0) and _is_token_position_clear(candidate)
 
 
 func _build_hud() -> void:
