@@ -15,9 +15,11 @@ const PACK_DEFENSE_RANGE := 42.0
 const PACK_DEFENSE_SECONDS := 10.0
 const RETALIATION_SECONDS := 7.0
 const HUNGER_THRESHOLD := 45.0
-const HEAVY_INJURY_RATIO := 0.30
+const HEAVY_INJURY_RATIO := 0.50
 const MINIMUM_STALK_ODDS := 0.78
 const STRIKE_ODDS := 1.0
+const BABY_MINIMUM_HUNT_ODDS := 0.55
+const BABY_STRIKE_ODDS := 0.68
 const STALK_DISTANCE := 9.0
 const PACK_SUPPORT_RADIUS := 24.0
 const AVOID_DANGER_RANGE := 26.0
@@ -204,14 +206,17 @@ func _hunt_direction(delta: float) -> Vector3:
 		var distance := Vector2(offset.x, offset.z).length()
 		_face_direction(offset, delta)
 		var odds := _combat_odds(prey)
-		if odds < MINIMUM_STALK_ODDS:
+		var is_baby := prey.is_in_group("baby_dinosaur")
+		var minimum_odds := BABY_MINIMUM_HUNT_ODDS if is_baby else MINIMUM_STALK_ODDS
+		var strike_odds := BABY_STRIKE_ODDS if is_baby else STRIKE_ODDS
+		if odds < minimum_odds:
 			state = "avoiding"
 			return -Vector3(offset.x, 0.0, offset.z).normalized() if distance < AVOID_DANGER_RANGE else Vector3.ZERO
-		if odds >= STRIKE_ODDS and distance <= collision_radius + _body_radius(prey) + 1.6:
+		if odds >= strike_odds and distance <= collision_radius + _body_radius(prey) + 1.6:
 			state = "attacking"
 			_attack(prey)
 			return Vector3.ZERO
-		if odds >= STRIKE_ODDS:
+		if odds >= strike_odds:
 			state = "hunting"
 			return Vector3(offset.x, 0.0, offset.z).normalized()
 		state = "stalking"
@@ -227,7 +232,8 @@ func _hunt_direction(delta: float) -> Vector3:
 
 func _choose_prey() -> Node3D:
 	if is_instance_valid(forced_target) and not bool(forced_target.get("dead")) and not _is_same_species(forced_target):
-		if global_position.distance_to(forced_target.global_position) <= HUNTER_SIGHT_RANGE * 1.35 and _combat_odds(forced_target) >= MINIMUM_STALK_ODDS:
+		var forced_minimum := BABY_MINIMUM_HUNT_ODDS if forced_target.is_in_group("baby_dinosaur") else MINIMUM_STALK_ODDS
+		if global_position.distance_to(forced_target.global_position) <= HUNTER_SIGHT_RANGE * 1.35 and _combat_odds(forced_target) >= forced_minimum:
 			return forced_target
 	forced_target = null
 	var nearest: Node3D
@@ -241,13 +247,14 @@ func _choose_prey() -> Node3D:
 		if distance > HUNTER_SIGHT_RANGE:
 			continue
 		var odds := _combat_odds(candidate_node)
-		if odds < MINIMUM_STALK_ODDS:
+		var minimum_odds := BABY_MINIMUM_HUNT_ODDS if candidate_node.is_in_group("baby_dinosaur") else MINIMUM_STALK_ODDS
+		if odds < minimum_odds:
 			continue
 		var score := odds - distance / HUNTER_SIGHT_RANGE * 0.35
 		# Babies are easier prey, but only after the normal risk gate above has
 		# accounted for their parent and any nearby herd defenders.
 		if candidate_node.is_in_group("baby_dinosaur"):
-			score += 0.45
+			score += 1.0
 		if score > best_score:
 			nearest = candidate_node
 			best_score = score
@@ -341,7 +348,7 @@ func _nearest_overwhelming_opponent(maximum_distance: float) -> Node3D:
 
 
 func _is_heavily_injured() -> bool:
-	return float(health) / maxf(float(max_health), 1.0) <= HEAVY_INJURY_RATIO
+	return float(health) / maxf(float(max_health), 1.0) < HEAVY_INJURY_RATIO
 
 
 func _pack_direction(delta: float) -> Vector3:

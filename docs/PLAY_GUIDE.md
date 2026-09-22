@@ -33,7 +33,7 @@ At zero health, the dinosaur dies and the game ends.
 
 Herbivores move in packs, flee hunters and fight back when attacked. Packs protect members of their own species, including a matching player. Their moving formation sometimes leaves one animal trailing behind.
 
-Carnivores hunt alone. They stalk possible prey, prefer vulnerable babies when their parent or pack does not make the attack too dangerous, attack when the odds are favorable, avoid powerful packs, feed after a kill and retreat when badly injured. Dinosaurs do not attack their own species.
+Carnivores hunt alone. Healthy hunters strongly prefer babies and accept riskier baby attacks, although a powerful nearby parent or pack can still deter them. They avoid hopeless adult fights, feed after a kill, and retreat once their health falls below half. Dinosaurs do not attack their own species.
 
 ## Breed a baby
 

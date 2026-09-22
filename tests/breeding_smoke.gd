@@ -69,14 +69,35 @@ func _run() -> void:
 	player.global_position = Vector3(82.0, 0.1, 80.0)
 	baby.global_position = Vector3(80.0, 0.1, 80.0)
 	hunter.global_position = Vector3(80.0, 0.1, 91.0)
-	hunter.max_health = 300
-	hunter.health = 300
-	hunter.strength = 20
+	hunter.max_health = 100
+	hunter.health = 100
 	hunter.energy = hunter.max_energy
 	hunter.forced_target = null
 	hunter.food_target = null
-	assert(hunter._combat_odds(baby) >= hunter.MINIMUM_STALK_ODDS, "Baby encounter was incorrectly considered too risky")
+	var aggressive_baby_odds := 0.0
+	for test_strength in range(1, 31):
+		hunter.strength = test_strength
+		aggressive_baby_odds = hunter._combat_odds(baby)
+		if aggressive_baby_odds >= hunter.BABY_STRIKE_ODDS and aggressive_baby_odds < hunter.MINIMUM_STALK_ODDS:
+			break
+	assert(aggressive_baby_odds >= hunter.BABY_STRIKE_ODDS and aggressive_baby_odds < hunter.MINIMUM_STALK_ODDS, "Could not create a riskier baby-hunt scenario")
 	assert(hunter._choose_prey() == baby, "Predator did not prefer a viable baby target")
+	hunter.global_position = baby.global_position + Vector3(0.0, 0.0, 1.2)
+	hunter.attack_cooldown = 0.0
+	var health_before_aggressive_hunt: int = baby.health
+	hunter._hunt_direction(0.1)
+	assert(hunter.state == "attacking" and baby.health < health_before_aggressive_hunt, "Healthy predator would not commit to a riskier baby attack")
+
+	# Exactly half health is still willing to hunt; falling below half triggers
+	# the survival override and makes the predator retreat from the family.
+	hunter.health = 50
+	assert(not hunter._is_heavily_injured(), "Hunter retreated at exactly half health")
+	hunter.health = 49
+	assert(hunter._is_heavily_injured(), "Hunter did not retreat below half health")
+	hunter.set_physics_process(true)
+	await physics_frame
+	hunter.set_physics_process(false)
+	assert(hunter.state == "retreating", "Injured baby hunter did not abandon the attack")
 	var baby_health_before: int = baby.health
 	hunter.strength = 1
 	hunter.attack_cooldown = 0.0
