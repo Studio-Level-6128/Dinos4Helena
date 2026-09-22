@@ -57,6 +57,22 @@
       "group": "test"
     },
     {
+      "label": "Godot: Herd shelter test",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--script", "res://tests/herd_shelter_smoke.gd"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "Godot: Predator strategy test",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--script", "res://tests/predator_strategy_smoke.gd"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Godot: Power-up token test",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/godot.sh",

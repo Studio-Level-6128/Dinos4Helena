@@ -31,6 +31,7 @@ var jump_velocity := 7.0
 var max_health := 100
 var health := 100
 var collision_radius := 0.95
+var collision_height := 3.8
 var diet := "herbivore"
 var max_energy := 100.0
 var energy := 100.0
@@ -85,6 +86,8 @@ func _ready() -> void:
 	jump_velocity = dino_config.get_value(dino_id, "jump_velocity", 7.0)
 	max_health = dino_config.get_value(dino_id, "max_health", 100)
 	health = max_health
+	collision_radius = dino_config.get_value(dino_id, "collision_radius", 0.95)
+	collision_height = dino_config.get_value(dino_id, "collision_height", 3.8)
 	diet = dino_config.get_value(dino_id, "diet", "herbivore")
 	if diet == "carnivore":
 		add_to_group("player_hunter")
@@ -100,7 +103,6 @@ func _ready() -> void:
 	plant_energy_per_second = dino_config.get_value("energy", "plant_energy_per_second", 7.0)
 	meat_energy_per_second = dino_config.get_value("energy", "meat_energy_per_second", 22.0)
 	food_reach = dino_config.get_value("energy", "food_reach", 4.5)
-	collision_radius = dino_config.get_value(dino_id, "collision_radius", 0.95)
 	add_to_group("player_dinosaur")
 	_build_collision()
 	_build_model()
@@ -199,7 +201,7 @@ func _build_collision() -> void:
 	var collision := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
 	shape.radius = collision_radius
-	shape.height = dino_config.get_value(dino_id, "collision_height", 3.8)
+	shape.height = collision_height
 	collision.shape = shape
 	collision.position.y = shape.height * 0.5
 	add_child(collision)
@@ -308,7 +310,7 @@ func _perform_attack_hit() -> void:
 	var closest_target: Node3D
 	var closest_distance := collision_radius + 3.8
 	for candidate in get_tree().get_nodes_in_group("npc_dinosaur"):
-		if not candidate is Node3D or bool(candidate.get("dead")):
+		if not candidate is Node3D or bool(candidate.get("dead")) or str(candidate.get("dino_id")) == dino_id:
 			continue
 		var target := candidate as Node3D
 		var offset := target.global_position - global_position
@@ -347,15 +349,25 @@ func _start_scream() -> void:
 	screamed.emit()
 
 
-func take_damage(amount: int, play_hurt_sound := true) -> void:
+func take_damage(amount: int, play_hurt_sound := true, attacker: Node3D = null) -> void:
 	if amount <= 0 or health <= 0 or dead:
+		return
+	if is_instance_valid(attacker) and str(attacker.get("dino_id")) == dino_id:
 		return
 	health = maxi(health - amount, 0)
 	if play_hurt_sound:
 		_play_action_sound("hurt")
 	health_changed.emit(health, max_health)
+	if is_instance_valid(attacker) and diet == "herbivore":
+		_alert_same_species_pack(attacker)
 	if health <= 0:
 		_die()
+
+
+func _alert_same_species_pack(attacker: Node3D) -> void:
+	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+		if candidate.has_method("receive_ally_alert"):
+			candidate.call("receive_ally_alert", self, attacker)
 
 
 func _update_energy(delta: float, moving: bool, running: bool, ducking: bool) -> void:

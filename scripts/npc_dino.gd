@@ -7,8 +7,17 @@ const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 const HUNTER_SIGHT_RANGE := 58.0
 const HERBIVORE_DANGER_RANGE := 34.0
 const PACK_COHESION_RANGE := 11.0
+const PACK_WELCOME_RANGE := 30.0
+const PACK_DEFENSE_RANGE := 42.0
+const PACK_DEFENSE_SECONDS := 10.0
 const RETALIATION_SECONDS := 7.0
 const HUNGER_THRESHOLD := 45.0
+const HEAVY_INJURY_RATIO := 0.30
+const MINIMUM_STALK_ODDS := 0.78
+const STRIKE_ODDS := 1.0
+const STALK_DISTANCE := 9.0
+const PACK_SUPPORT_RADIUS := 24.0
+const AVOID_DANGER_RANGE := 26.0
 
 var dino_id := "triceratops"
 var texture_variant := 0
@@ -42,6 +51,8 @@ var wander_target := Vector3.ZERO
 var forced_target: Node3D
 var retaliation_target: Node3D
 var retaliation_time := 0.0
+var ally_defense_target: Node3D
+var ally_defense_time := 0.0
 var food_target: Node3D
 var model_root: Node3D
 var animation_player: AnimationPlayer
@@ -93,12 +104,21 @@ func _physics_process(delta: float) -> void:
 	retaliation_time = maxf(retaliation_time - delta, 0.0)
 	if retaliation_time <= 0.0 or (is_instance_valid(retaliation_target) and bool(retaliation_target.get("dead"))):
 		retaliation_target = null
+	ally_defense_time = maxf(ally_defense_time - delta, 0.0)
+	if ally_defense_time <= 0.0 or (is_instance_valid(ally_defense_target) and bool(ally_defense_target.get("dead"))):
+		ally_defense_target = null
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	var move_direction := Vector3.ZERO
 	var move_speed := walk_speed
 	if diet == "carnivore":
-		if _should_feed():
+		var retreat_threat := _nearest_opponent(AVOID_DANGER_RANGE * 1.6) if _is_heavily_injured() else null
+		if is_instance_valid(retreat_threat):
+			state = "retreating"
+			var retreat_offset := global_position - retreat_threat.global_position
+			move_direction = Vector3(retreat_offset.x, 0.0, retreat_offset.z).normalized()
+			move_speed = run_speed
+		elif _should_feed():
 			if not is_instance_valid(food_target):
 				food_target = _nearest_meat(global_position, HUNTER_SIGHT_RANGE)
 			if is_instance_valid(food_target):
@@ -113,31 +133,43 @@ func _physics_process(delta: float) -> void:
 					move_direction = Vector3(food_offset.x, 0.0, food_offset.z).normalized()
 			else:
 				move_direction = _hunt_direction(delta)
-				if state == "hunting":
+				if state in ["hunting", "avoiding"]:
 					move_speed = run_speed
 		else:
 			move_direction = _hunt_direction(delta)
-			if state == "hunting":
+			if state in ["hunting", "avoiding"]:
 				move_speed = run_speed
 	else:
-		var threat: Node3D = retaliation_target if is_instance_valid(retaliation_target) else _nearest_hunter()
-		if is_instance_valid(threat):
-			var danger_distance := global_position.distance_to(threat.global_position)
-			if threat == retaliation_target and danger_distance <= collision_radius + _body_radius(threat) + 1.8:
-				state = "defending"
-				_face_direction(threat.global_position - global_position, delta)
-				_attack(threat)
+		if is_instance_valid(ally_defense_target):
+			var defense_offset := ally_defense_target.global_position - global_position
+			var defense_distance := Vector2(defense_offset.x, defense_offset.z).length()
+			_face_direction(defense_offset, delta)
+			if defense_distance <= collision_radius + _body_radius(ally_defense_target) + 1.8:
+				state = "defending_pack"
+				_attack(ally_defense_target)
 			else:
-				state = "fleeing"
-				var escape := global_position - threat.global_position
-				move_direction = Vector3(escape.x, 0.0, escape.z).normalized()
+				state = "protecting_pack"
+				move_direction = Vector3(defense_offset.x, 0.0, defense_offset.z).normalized()
 				move_speed = run_speed
 		else:
-			state = "packing"
-			move_direction = _pack_direction(delta)
+			var threat: Node3D = retaliation_target if is_instance_valid(retaliation_target) else _nearest_hunter()
+			if is_instance_valid(threat):
+				var danger_distance := global_position.distance_to(threat.global_position)
+				if threat == retaliation_target and danger_distance <= collision_radius + _body_radius(threat) + 1.8:
+					state = "defending"
+					_face_direction(threat.global_position - global_position, delta)
+					_attack(threat)
+				else:
+					state = "fleeing"
+					var escape := global_position - threat.global_position
+					move_direction = Vector3(escape.x, 0.0, escape.z).normalized()
+					move_speed = run_speed
+			else:
+				state = "packing"
+				move_direction = _pack_direction(delta)
 	_apply_movement(move_direction, move_speed, delta)
 	if diet == "carnivore":
-		_update_energy(delta, move_direction.length_squared() > 0.01, state == "hunting")
+		_update_energy(delta, move_direction.length_squared() > 0.01, state in ["hunting", "avoiding", "retreating"])
 
 
 func _hunt_direction(delta: float) -> Vector3:
@@ -146,26 +178,104 @@ func _hunt_direction(delta: float) -> Vector3:
 		var offset := prey.global_position - global_position
 		var distance := Vector2(offset.x, offset.z).length()
 		_face_direction(offset, delta)
-		if distance <= collision_radius + _body_radius(prey) + 1.6:
+		var odds := _combat_odds(prey)
+		if odds < MINIMUM_STALK_ODDS:
+			state = "avoiding"
+			return -Vector3(offset.x, 0.0, offset.z).normalized() if distance < AVOID_DANGER_RANGE else Vector3.ZERO
+		if odds >= STRIKE_ODDS and distance <= collision_radius + _body_radius(prey) + 1.6:
 			state = "attacking"
 			_attack(prey)
 			return Vector3.ZERO
-		state = "hunting"
-		return Vector3(offset.x, 0.0, offset.z).normalized()
+		if odds >= STRIKE_ODDS:
+			state = "hunting"
+			return Vector3(offset.x, 0.0, offset.z).normalized()
+		state = "stalking"
+		return _stalk_direction(prey, offset, distance)
+	var danger := _nearest_overwhelming_opponent(AVOID_DANGER_RANGE)
+	if is_instance_valid(danger):
+		state = "avoiding"
+		var escape := global_position - danger.global_position
+		return Vector3(escape.x, 0.0, escape.z).normalized()
 	state = "wandering"
 	return _wander_direction(delta)
 
 
 func _choose_prey() -> Node3D:
-	if is_instance_valid(forced_target) and not bool(forced_target.get("dead")):
-		if global_position.distance_to(forced_target.global_position) <= HUNTER_SIGHT_RANGE * 1.35:
+	if is_instance_valid(forced_target) and not bool(forced_target.get("dead")) and not _is_same_species(forced_target):
+		if global_position.distance_to(forced_target.global_position) <= HUNTER_SIGHT_RANGE * 1.35 and _combat_odds(forced_target) >= MINIMUM_STALK_ODDS:
 			return forced_target
 	forced_target = null
 	var nearest: Node3D
-	var nearest_distance := HUNTER_SIGHT_RANGE
+	var best_score := -INF
 	var candidates := get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur")
 	for candidate in candidates:
-		if not candidate is Node3D or candidate == self or bool(candidate.get("dead")):
+		if not candidate is Node3D or candidate == self or bool(candidate.get("dead")) or _is_same_species(candidate):
+			continue
+		var candidate_node := candidate as Node3D
+		var distance := global_position.distance_to(candidate_node.global_position)
+		if distance > HUNTER_SIGHT_RANGE:
+			continue
+		var odds := _combat_odds(candidate_node)
+		if odds < MINIMUM_STALK_ODDS:
+			continue
+		var score := odds - distance / HUNTER_SIGHT_RANGE * 0.35
+		if score > best_score:
+			nearest = candidate_node
+			best_score = score
+	return nearest
+
+
+func _stalk_direction(prey: Node3D, offset: Vector3, distance: float) -> Vector3:
+	var direction := Vector3(offset.x, 0.0, offset.z).normalized()
+	var desired_distance := STALK_DISTANCE + collision_radius + _body_radius(prey)
+	if distance > desired_distance + 1.5:
+		return direction
+	if distance < desired_distance - 1.5:
+		return -direction
+	var side := Vector3(-direction.z, 0.0, direction.x)
+	var prey_velocity_value = prey.get("velocity")
+	if prey_velocity_value is Vector3 and Vector2(prey_velocity_value.x, prey_velocity_value.z).length_squared() > 0.1:
+		var follow := Vector3(prey_velocity_value.x, 0.0, prey_velocity_value.z).normalized()
+		return (follow * 0.7 + side * 0.3).normalized()
+	return side
+
+
+func _combat_odds(opponent: Node3D) -> float:
+	if not is_instance_valid(opponent) or _is_same_species(opponent):
+		return 0.0
+	var hunter_power := _body_power(self) * 1.2
+	var opposition_power := _body_power(opponent)
+	if str(opponent.get("diet")) == "herbivore":
+		for ally in get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur"):
+			if not ally is Node3D or ally == opponent or bool(ally.get("dead")):
+				continue
+			if str(ally.get("dino_id")) != str(opponent.get("dino_id")):
+				continue
+			if ally.global_position.distance_to(opponent.global_position) <= PACK_SUPPORT_RADIUS:
+				opposition_power += _body_power(ally) * 0.55
+	return hunter_power / maxf(opposition_power, 1.0)
+
+
+func _body_power(body: Node) -> float:
+	var current_health := float(body.get("health"))
+	var maximum_health := maxf(float(body.get("max_health")), 1.0)
+	var body_strength := float(body.get("strength"))
+	var body_radius := float(body.get("collision_radius"))
+	var body_height := float(body.get("collision_height"))
+	var energy_factor := 1.0
+	var body_energy = body.get("energy")
+	var body_max_energy = body.get("max_energy")
+	if body_energy != null and body_max_energy != null:
+		energy_factor = lerpf(0.62, 1.0, clampf(float(body_energy) / maxf(float(body_max_energy), 1.0), 0.0, 1.0))
+	var size_power := body_radius * 18.0 + body_height * 4.0
+	return (current_health * 0.65 + maximum_health * 0.15 + body_strength * 12.0 + size_power) * energy_factor
+
+
+func _nearest_opponent(maximum_distance: float) -> Node3D:
+	var nearest: Node3D
+	var nearest_distance := maximum_distance
+	for candidate in get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur"):
+		if not candidate is Node3D or candidate == self or bool(candidate.get("dead")) or _is_same_species(candidate):
 			continue
 		var candidate_node := candidate as Node3D
 		var distance := global_position.distance_to(candidate_node.global_position)
@@ -175,19 +285,63 @@ func _choose_prey() -> Node3D:
 	return nearest
 
 
+func _nearest_overwhelming_opponent(maximum_distance: float) -> Node3D:
+	var nearest: Node3D
+	var nearest_distance := maximum_distance
+	for candidate in get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur"):
+		if not candidate is Node3D or candidate == self or bool(candidate.get("dead")) or _is_same_species(candidate):
+			continue
+		var candidate_node := candidate as Node3D
+		var distance := global_position.distance_to(candidate_node.global_position)
+		if distance < nearest_distance and _combat_odds(candidate_node) < MINIMUM_STALK_ODDS:
+			nearest = candidate_node
+			nearest_distance = distance
+	return nearest
+
+
+func _is_heavily_injured() -> bool:
+	return float(health) / maxf(float(max_health), 1.0) <= HEAVY_INJURY_RATIO
+
+
 func _pack_direction(delta: float) -> Vector3:
+	var welcomed_player := _nearby_same_species_player()
+	if is_instance_valid(welcomed_player):
+		var welcome_offset := welcomed_player.global_position - global_position
+		if Vector2(welcome_offset.x, welcome_offset.z).length() > PACK_COHESION_RANGE:
+			state = "welcoming"
+			return Vector3(welcome_offset.x, 0.0, welcome_offset.z).normalized()
 	var center := Vector3.ZERO
 	var members := 0
 	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
 		if candidate is CharacterBody3D and candidate.get("pack_id") == pack_id and not bool(candidate.get("dead")):
 			center += candidate.global_position
 			members += 1
+	for candidate in get_tree().get_nodes_in_group("player_dinosaur"):
+		if candidate is CharacterBody3D and not bool(candidate.get("dead")) and _is_same_species(candidate) and str(candidate.get("diet")) == "herbivore":
+			if global_position.distance_to(candidate.global_position) <= PACK_WELCOME_RANGE:
+				center += candidate.global_position
+				members += 1
 	if members > 0:
 		center /= float(members)
 		var to_pack := center - global_position
 		if Vector2(to_pack.x, to_pack.z).length() > PACK_COHESION_RANGE:
 			return Vector3(to_pack.x, 0.0, to_pack.z).normalized()
 	return _wander_direction(delta)
+
+
+func _nearby_same_species_player() -> Node3D:
+	var nearest: Node3D
+	var nearest_distance := PACK_WELCOME_RANGE
+	for candidate in get_tree().get_nodes_in_group("player_dinosaur"):
+		if not candidate is Node3D or bool(candidate.get("dead")) or not _is_same_species(candidate):
+			continue
+		if str(candidate.get("diet")) != "herbivore":
+			continue
+		var distance := global_position.distance_to(candidate.global_position)
+		if distance < nearest_distance:
+			nearest = candidate
+			nearest_distance = distance
+	return nearest
 
 
 func _wander_direction(delta: float) -> Vector3:
@@ -254,14 +408,14 @@ func _face_direction(direction: Vector3, delta: float) -> void:
 
 
 func _attack(target: Node3D) -> void:
-	if attack_cooldown > 0.0 or not is_instance_valid(target):
+	if attack_cooldown > 0.0 or not is_instance_valid(target) or _is_same_species(target):
 		return
 	attack_cooldown = 1.35
 	_spend_energy(attack_energy_cost)
 	_play_animation("attack", true)
 	var damage := maxi(strength * 3, 1)
 	if target.is_in_group("player_dinosaur"):
-		target.call("take_damage", damage)
+		target.call("take_damage", damage, true, self)
 	else:
 		target.call("take_damage", damage, self)
 	if bool(target.get("dead")):
@@ -269,7 +423,7 @@ func _attack(target: Node3D) -> void:
 
 
 func take_damage(amount: int, attacker: Node3D = null) -> void:
-	if amount <= 0 or dead:
+	if amount <= 0 or dead or (is_instance_valid(attacker) and _is_same_species(attacker)):
 		return
 	health = maxi(health - amount, 0)
 	_show_health()
@@ -278,8 +432,30 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	elif is_instance_valid(attacker) and diet == "herbivore":
 		retaliation_target = attacker
 		retaliation_time = RETALIATION_SECONDS
+		_alert_same_species_pack(attacker)
 	if health <= 0:
 		_die(attacker)
+
+
+func receive_ally_alert(ally: Node3D, attacker: Node3D) -> void:
+	if dead or diet != "herbivore" or not is_instance_valid(ally) or not is_instance_valid(attacker):
+		return
+	if not _is_same_species(ally) or _is_same_species(attacker):
+		return
+	if global_position.distance_to(ally.global_position) > PACK_DEFENSE_RANGE:
+		return
+	ally_defense_target = attacker
+	ally_defense_time = PACK_DEFENSE_SECONDS
+
+
+func _alert_same_species_pack(attacker: Node3D) -> void:
+	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+		if candidate != self and candidate.has_method("receive_ally_alert"):
+			candidate.call("receive_ally_alert", self, attacker)
+
+
+func _is_same_species(other: Node) -> bool:
+	return is_instance_valid(other) and str(other.get("dino_id")) == dino_id
 
 
 func _die(attacker: Node3D = null) -> void:

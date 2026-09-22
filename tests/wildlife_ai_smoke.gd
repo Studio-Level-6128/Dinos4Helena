@@ -31,6 +31,18 @@ func _run() -> void:
 
 	var prey = herbivores[0]
 	var hunter = hunters[0]
+	# Isolate one encounter so this general combat test is not intentionally
+	# rejected by the hunter's pack-risk assessment.
+	var parked_index := 0
+	for herbivore in herbivores:
+		if herbivore == prey:
+			continue
+		herbivore.set_physics_process(false)
+		herbivore.global_position = Vector3(-180.0 + parked_index * 3.0, 0.1, -180.0)
+		parked_index += 1
+	hunter.max_health = 250
+	hunter.health = hunter.max_health
+	hunter.strength = 18
 	prey.global_position = Vector3(90.0, 0.1, 90.0)
 	hunter.global_position = Vector3(90.0, 0.1, 108.0)
 	var hunter_energy_before_chase: float = hunter.energy
@@ -68,6 +80,9 @@ func _run() -> void:
 	assert(hunter.energy > energy_before_feeding, "Carnivore did not feed before hunting again")
 
 	var player = world.player
+	# Use a different carnivore species so the non-aggression rule does not
+	# intentionally prevent this cross-species player combat check.
+	player.dino_id = "trex" if hunter.dino_id == "velociraptor" else "velociraptor"
 	var player_health_before: int = player.health
 	hunter.food_target = null
 	hunter.energy = hunter.max_energy
