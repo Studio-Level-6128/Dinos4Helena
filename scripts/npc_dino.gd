@@ -18,10 +18,13 @@ const STRIKE_ODDS := 1.0
 const STALK_DISTANCE := 9.0
 const PACK_SUPPORT_RADIUS := 24.0
 const AVOID_DANGER_RANGE := 26.0
+const PACK_FORMATION_GAP := 1.4
+const PACK_STRAGGLER_DISTANCE := 34.0
 
 var dino_id := "triceratops"
 var texture_variant := 0
 var pack_id := -1
+var pack_slot := -1
 var rng_seed := 1
 var patrol_center := Vector3.ZERO
 var diet := "herbivore"
@@ -48,6 +51,8 @@ var state := "wandering"
 var attack_cooldown := 0.0
 var wander_time := 0.0
 var wander_target := Vector3.ZERO
+var straggler_time := 0.0
+var straggler_cooldown := 0.0
 var forced_target: Node3D
 var retaliation_target: Node3D
 var retaliation_time := 0.0
@@ -94,6 +99,9 @@ func _ready() -> void:
 	_build_model(config.get_value(dino_id, "model_path", ""))
 	_build_health_label()
 	_choose_wander_target()
+	if diet == "herbivore":
+		straggler_cooldown = rng.randf_range(12.0, 26.0)
+		call_deferred("_configure_friendly_collision_exceptions")
 
 
 func _physics_process(delta: float) -> void:
@@ -165,8 +173,9 @@ func _physics_process(delta: float) -> void:
 					move_direction = Vector3(escape.x, 0.0, escape.z).normalized()
 					move_speed = run_speed
 			else:
-				state = "packing"
 				move_direction = _pack_direction(delta)
+				if state == "regrouping":
+					move_speed = run_speed
 	_apply_movement(move_direction, move_speed, delta)
 	if diet == "carnivore":
 		_update_energy(delta, move_direction.length_squared() > 0.01, state in ["hunting", "avoiding", "retreating"])
@@ -309,24 +318,113 @@ func _pack_direction(delta: float) -> Vector3:
 		var welcome_offset := welcomed_player.global_position - global_position
 		if Vector2(welcome_offset.x, welcome_offset.z).length() > PACK_COHESION_RANGE:
 			state = "welcoming"
-			return Vector3(welcome_offset.x, 0.0, welcome_offset.z).normalized()
-	var center := Vector3.ZERO
-	var members := 0
+			var welcome_direction := Vector3(welcome_offset.x, 0.0, welcome_offset.z).normalized()
+			return (welcome_direction + _pack_separation() * 1.35).normalized()
+	_update_straggler_schedule(delta)
+	var separation := _pack_separation()
+	var leader := _pack_leader()
+	if not is_instance_valid(leader) or leader == self:
+		state = "leading"
+		return (_wander_direction(delta) + separation * 1.45).normalized()
+
+	var follow_target := _pack_follow_target(leader)
+	var follow_offset := follow_target - global_position
+	var follow_distance := Vector2(follow_offset.x, follow_offset.z).length()
+	var formation_direction := Vector3.ZERO
+	if follow_distance > 1.1:
+		formation_direction = Vector3(follow_offset.x, 0.0, follow_offset.z).normalized()
+	else:
+		var leader_velocity_value = leader.get("velocity")
+		if leader_velocity_value is Vector3:
+			formation_direction = Vector3(leader_velocity_value.x, 0.0, leader_velocity_value.z).normalized()
+	if straggler_time > 0.0:
+		state = "trailing"
+	elif follow_distance > 12.0:
+		state = "regrouping"
+	else:
+		state = "packing"
+	return (formation_direction + separation * 1.7).normalized()
+
+
+func _pack_leader() -> Node3D:
+	var leader: Node3D
+	var lowest_slot := 1000000
 	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
-		if candidate is CharacterBody3D and candidate.get("pack_id") == pack_id and not bool(candidate.get("dead")):
-			center += candidate.global_position
-			members += 1
-	for candidate in get_tree().get_nodes_in_group("player_dinosaur"):
-		if candidate is CharacterBody3D and not bool(candidate.get("dead")) and _is_same_species(candidate) and str(candidate.get("diet")) == "herbivore":
-			if global_position.distance_to(candidate.global_position) <= PACK_WELCOME_RANGE:
-				center += candidate.global_position
-				members += 1
-	if members > 0:
-		center /= float(members)
-		var to_pack := center - global_position
-		if Vector2(to_pack.x, to_pack.z).length() > PACK_COHESION_RANGE:
-			return Vector3(to_pack.x, 0.0, to_pack.z).normalized()
-	return _wander_direction(delta)
+		if not candidate is Node3D or bool(candidate.get("dead")):
+			continue
+		if candidate.get("pack_id") != pack_id or str(candidate.get("dino_id")) != dino_id:
+			continue
+		var candidate_slot := int(candidate.get("pack_slot"))
+		if candidate_slot < lowest_slot:
+			leader = candidate
+			lowest_slot = candidate_slot
+	return leader
+
+
+func _pack_follow_target(leader: Node3D) -> Vector3:
+	var side_sign := 1.0 if pack_slot % 2 == 1 else -1.0
+	var rank := floorf(float(maxi(pack_slot - 1, 0)) / 2.0)
+	var leader_radius := float(leader.get("collision_radius"))
+	var lateral_gap := leader_radius + collision_radius + PACK_FORMATION_GAP + rank * 0.75
+	var distance_behind := 4.0 + rank * 4.0
+	if straggler_time > 0.0:
+		distance_behind = PACK_STRAGGLER_DISTANCE + rank * 2.0
+		lateral_gap *= 0.45
+	return leader.global_position \
+		+ leader.global_transform.basis.z.normalized() * distance_behind \
+		+ leader.global_transform.basis.x.normalized() * lateral_gap * side_sign
+
+
+func _update_straggler_schedule(delta: float) -> void:
+	# Slot one is the occasional straggler, ensuring only one animal per pack
+	# creates a hunting opportunity at a time.
+	if pack_slot != 1:
+		return
+	if straggler_time > 0.0:
+		straggler_time = maxf(straggler_time - delta, 0.0)
+		if straggler_time <= 0.0:
+			straggler_cooldown = rng.randf_range(24.0, 42.0)
+		return
+	straggler_cooldown = maxf(straggler_cooldown - delta, 0.0)
+	if straggler_cooldown <= 0.0:
+		straggler_time = rng.randf_range(7.0, 11.0)
+
+
+func _pack_separation() -> Vector3:
+	var separation := Vector3.ZERO
+	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+		if not candidate is Node3D or candidate == self or bool(candidate.get("dead")):
+			continue
+		if candidate.get("pack_id") != pack_id or str(candidate.get("dino_id")) != dino_id:
+			continue
+		var packmate := candidate as Node3D
+		var away := global_position - packmate.global_position
+		away.y = 0.0
+		var distance := away.length()
+		var desired_gap := collision_radius + float(packmate.get("collision_radius")) + PACK_FORMATION_GAP
+		if distance >= desired_gap:
+			continue
+		if distance <= 0.05:
+			var low_slot := mini(pack_slot, int(packmate.get("pack_slot")))
+			var angle := TAU * float(posmod(pack_id * 3 + low_slot * 5, 13)) / 13.0
+			away = Vector3(cos(angle), 0.0, sin(angle))
+			if pack_slot < int(packmate.get("pack_slot")):
+				away = -away
+		else:
+			away /= distance
+		separation += away * (1.0 - distance / desired_gap)
+	return separation
+
+
+func _configure_friendly_collision_exceptions() -> void:
+	for candidate in get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur"):
+		if not candidate is PhysicsBody3D or candidate == self or bool(candidate.get("dead")):
+			continue
+		var same_pack: bool = candidate.is_in_group("prey_dinosaur") and candidate.get("pack_id") == pack_id and str(candidate.get("dino_id")) == dino_id
+		var welcomed_player: bool = candidate.is_in_group("player_dinosaur") and _is_same_species(candidate) and str(candidate.get("diet")) == "herbivore"
+		if same_pack or welcomed_player:
+			add_collision_exception_with(candidate)
+			candidate.add_collision_exception_with(self)
 
 
 func _nearby_same_species_player() -> Node3D:
@@ -394,7 +492,7 @@ func _apply_movement(direction: Vector3, speed: float, delta: float) -> void:
 	move_and_slide()
 	if state != "eating" and is_instance_valid(model_root):
 		model_root.rotation.x = lerpf(model_root.rotation.x, 0.0, 7.0 * delta)
-	if get_slide_collision_count() > 0 and state in ["wandering", "packing"]:
+	if get_slide_collision_count() > 0 and state in ["wandering", "leading", "packing", "regrouping", "trailing"]:
 		wander_time = 0.0
 	_update_animation(direction.length_squared() > 0.01 and state != "attacking", is_equal_approx(speed, run_speed))
 

@@ -81,6 +81,14 @@
       "group": "test"
     },
     {
+      "label": "Godot: Pack movement test",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--script", "res://tests/pack_movement_smoke.gd"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Godot: Power-up token test",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/godot.sh",

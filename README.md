@@ -32,7 +32,7 @@ The world uses animated shader water with earthy banks for seeded lakes and rive
 
 ## Wildlife and combat
 
-Every seeded world also contains AI-controlled dinosaurs. Herbivores spawn in small same-species packs, wander around a shared home area, stay close to their herd, detect nearby carnivores, and run away. Packs welcome nearby herbivore players of their own species into the herd. If one of those players or another pack member is attacked, nearby herd members converge on the attacker and fight in its defense. T-Rex and Velociraptor hunters spawn alone and weigh their health, energy, strength, and size against a potential target plus its nearby same-species defenders. They stalk marginal prey from a safe distance, strike only with favorable odds, avoid overpowering animals or packs, and retreat from opponents when heavily injured.
+Every seeded world also contains AI-controlled dinosaurs. Herbivores spawn in small same-species packs led by a roaming individual. Other members keep staggered side and trail positions, steer apart locally, and cannot physically deadlock one another. One animal periodically lags behind the moving herd, briefly creating an isolated hunting opportunity before it regroups. Packs welcome nearby herbivore players of their own species into the herd. If one of those players or another pack member is attacked, nearby herd members converge on the attacker and fight in its defense. T-Rex and Velociraptor hunters spawn alone and weigh their health, energy, strength, and size against a potential target plus its nearby same-species defenders. They stalk marginal prey from a safe distance, strike only with favorable odds, avoid overpowering animals or packs, and retreat from opponents when heavily injured.
 
 Wild dinosaurs use the same configured health, strength, speed, scale, collision, and animation data as the playable species. Dinosaurs never hunt, target, or damage their own species. The player's `ATTACK` action can hit a different-species dinosaur in front of it, hunters can damage both wildlife and the player, and damaged NPCs briefly show their health. Carnivores spend energy while walking, pursuing, and attacking; after a kill they claim the dropped meat, feed to recover energy, and only then resume hunting. A defeated wild dinosaur plays its native death animation and leaves edible meat, whose explored location remains marked on the minimap until the meat is consumed.
 
@@ -99,6 +99,7 @@ Use `Terminal > Run Task`:
 - `Godot: Wildlife AI test` verifies packs, fleeing, pursuit, NPC/player combat, death, and meat drops.
 - `Godot: Predator strategy test` verifies stalking, pack-risk avoidance, favorable attacks, and injury retreat.
 - `Godot: Breeding test` verifies egg placement, non-blocking nests, duck incubation, same-species hatching, following, baby health, and predator damage.
+- `Godot: Pack movement test` verifies roaming leaders, staggered formations, trailing individuals, collision exceptions, and deadlock recovery.
 - `Godot: Herd shelter test` verifies same-species peace, welcoming behavior, ally alerts, and defense of the player.
 - `Godot: Power-up token test` verifies placement, animation, healing, doubled stats, HUD timers, consumption, and same-type respawning.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.

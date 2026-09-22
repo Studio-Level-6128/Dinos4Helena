@@ -8,6 +8,8 @@ const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 var dino_id := "triceratops"
 var texture_variant := 0
 var companion_index := 0
+var pack_id := -2
+var pack_slot := -1
 var parent_dino: CharacterBody3D
 var diet := "herbivore"
 var display_name := "Baby Dinosaur"

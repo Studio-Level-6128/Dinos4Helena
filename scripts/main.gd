@@ -653,6 +653,7 @@ func _generate_world_layout() -> void:
 				"species": species,
 				"position": Vector3(member_position.x, 0.1, member_position.y),
 				"pack_id": pack_index,
+				"pack_slot": member_index,
 				"patrol_center": Vector3(pack_center.x, 0.0, pack_center.y),
 				"rng_seed": rng.randi(),
 				"texture_variant": rng.randi_range(0, GENERATED_MATERIALS.dino_variant_count() - 1)
@@ -666,6 +667,7 @@ func _generate_world_layout() -> void:
 			"species": hunter_species,
 			"position": Vector3(hunter_position.x, 0.1, hunter_position.y),
 			"pack_id": -1,
+			"pack_slot": -1,
 			"patrol_center": Vector3(hunter_position.x, 0.0, hunter_position.y),
 			"rng_seed": rng.randi(),
 			"texture_variant": rng.randi_range(0, GENERATED_MATERIALS.dino_variant_count() - 1)
@@ -874,6 +876,7 @@ func _build_wild_dinosaurs() -> void:
 		npc.set_script(NPC_DINO_SCRIPT)
 		npc.set("dino_id", data["species"])
 		npc.set("pack_id", data["pack_id"])
+		npc.set("pack_slot", data.get("pack_slot", -1))
 		npc.set("patrol_center", data["patrol_center"])
 		npc.set("rng_seed", data["rng_seed"])
 		npc.set("texture_variant", data.get("texture_variant", index))
