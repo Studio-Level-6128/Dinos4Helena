@@ -1,5 +1,7 @@
 extends Control
 
+# Runtime-drawn minimap. World coordinates map into a fixed square and a small
+# byte grid stores persistent fog-of-war discovery without allocating textures.
 const FOG_GRID_SIZE := 40
 const REVEAL_RADIUS := 34.0
 const DRAW_INTERVAL := 0.12

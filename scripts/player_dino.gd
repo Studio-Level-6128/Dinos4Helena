@@ -1,5 +1,8 @@
 extends CharacterBody3D
 
+# Player-controlled dinosaur. Input from keyboard and touch is normalized into
+# the same named actions; this keeps movement, energy, animation, and audio
+# behavior identical on desktop and Android.
 const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 
 signal screamed
@@ -135,6 +138,8 @@ func _physics_process(delta: float) -> void:
 	if _action_just_pressed("scream") and scream_time <= 0.0:
 		_start_scream()
 
+	# Touch buttons store their state in mobile_actions. Combining those values
+	# with InputMap actions allows simultaneous movement and action presses.
 	var throttle := Input.get_action_strength("move_forward") - Input.get_action_strength("move_back")
 	throttle += _float_action("move_forward") - _float_action("move_back")
 	throttle = clampf(throttle, -1.0, 1.0)
@@ -308,6 +313,8 @@ func _start_attack() -> void:
 
 
 func _perform_attack_hit() -> void:
+	# Damage is delayed until the visual attack reaches its impact pose. A cone
+	# test prevents targets behind the player from being struck.
 	if dead:
 		return
 	var forward := -global_transform.basis.z.normalized()

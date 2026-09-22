@@ -1,5 +1,7 @@
 extends Node3D
 
+# Moves one procedural cloud across the square world and wraps it at the edge,
+# avoiding continuous cloud creation and deletion on mobile devices.
 var travel_direction := Vector3.RIGHT
 var travel_speed := 1.0
 var world_limit := 230.0

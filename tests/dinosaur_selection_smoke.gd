@@ -14,6 +14,9 @@ func _run() -> void:
 	assert(config.load("res://config/dinosaurs.cfg") == OK, "Could not load dinosaur stats")
 	root.add_child(app)
 	await process_frame
+	assert(is_instance_valid(app.splash_layer), "Startup splash is missing")
+	assert(not app.menu_layer.visible, "Selection menu should wait behind the splash")
+	app._dismiss_splash(true)
 	assert(app.menu_layer.visible, "Main menu is not visible at startup")
 	var credits_button := app.menu_layer.find_child("CreditsButton", true, false) as Button
 	assert(credits_button != null, "Credits button is missing from the main menu")

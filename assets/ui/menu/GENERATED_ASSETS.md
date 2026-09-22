@@ -21,3 +21,10 @@ Species-specific subjects:
 
 The project copies were resized to 1280×720 for the background and 640×640 for portraits to reduce Android package size and GPU memory use.
 
+## Startup splash prompt
+
+Generated on 2026-09-22 with Codex's built-in image-generation tool, then resized to 1280×720 for the Android splash screen.
+
+> Cinematic confrontation between a roaring Tyrannosaurus rex and a defensive Triceratops in a lush prehistoric fern-forest valley, with distant volcanic mountains, mist, dramatic clouds, rocks and cycads. Polished photorealistic game key art with realistic skin and environment textures, wide 16:9 landscape composition, low dramatic camera, dinosaurs in the middle and lower two thirds, darker uncluttered upper sky for native title text, golden dawn backlight, adventurous family-friendly mood, deep jungle greens and amber sunlight. No embedded text, logos, watermark, blood, injury or humans; exactly two prominent dinosaurs.
+
+The generated file is `dino-fight-splash.png`. The title is rendered by Godot rather than embedded in the image so it remains sharp and adaptable across displays.

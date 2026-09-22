@@ -1,5 +1,7 @@
 extends RefCounted
 
+# Central material factory for generated textures. Triplanar projection lets a
+# small texture library cover unrelated source meshes without editing their UVs.
 const DINO_TEXTURES: Array[Texture2D] = [
 	preload("res://assets/textures/generated/dino_skin_olive.png"),
 	preload("res://assets/textures/generated/dino_skin_russet.png"),

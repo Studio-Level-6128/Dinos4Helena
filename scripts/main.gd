@@ -1,5 +1,8 @@
 extends Node3D
 
+# Main application controller. This script owns the menu/HUD, seeded world
+# generation, and the creation of runtime actors. Individual actor behavior
+# lives in the smaller scripts preloaded below.
 const PLAYER_SCRIPT := preload("res://scripts/player_dino.gd")
 const NPC_DINO_SCRIPT := preload("res://scripts/npc_dino.gd")
 const MINIMAP_SCRIPT := preload("res://scripts/minimap.gd")
@@ -12,6 +15,23 @@ const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasa
 const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
 const CARNIVORE_IDS := ["trex", "velociraptor"]
 const MAP_HALF_SIZE := 200.0
+const PLAY_GUIDE_TEXT := """[b]MOVEMENT AND ACTIONS[/b]
+Use the right-hand arrows to move forward or backward and steer. Use the left-hand buttons to jump, run, duck, attack, eat, or scream. Keyboard controls are WASD/arrows, Space, Shift, C/Ctrl, F, E, and R.
+
+[b]HEALTH, ENERGY, AND FOOD[/b]
+Every action costs energy; running, jumping, and fighting cost more. At zero energy, health starts to fall. Herbivores regain energy by holding EAT near plants. Carnivores eat meat left by defeated dinosaurs. Red tokens restore health; blue and orange tokens temporarily double speed or strength.
+
+[b]WILDLIFE[/b]
+Herbivores travel in moving packs. They flee hunters, but fight back and defend members of their own species. A matching herbivore player can shelter with a pack. Carnivores stalk prey, avoid fights they are unlikely to win, feed after a kill, and retreat when badly injured. Dinosaurs never attack their own species.
+
+[b]EGGS AND BABIES[/b]
+Egg nests are hidden throughout the valley. Stand over an egg and hold DUCK until it hatches. The baby matches your species, follows beside you, and has its own health. Protect it from predators.
+
+[b]EXPLORING THE WORLD[/b]
+Trees, rocks, fallen logs, hills, and raised ledges are solid. Rivers and lakes divide the forest and grassland areas. Invisible walls keep dinosaurs inside the valley. The minimap reveals terrain as you explore and marks meat from defeated dinosaurs.
+
+[b]WORLD SEEDS[/b]
+The six-digit seed on the selection screen controls the complete map layout. Reuse a seed to replay the same valley or generate a new random one."""
 const ENVIRONMENT_MODEL_PATHS := {
 	"tree": "res://assets/models/environment/araucaria_conifer.glb",
 	"fern": "res://assets/models/environment/forest_fern.glb",
@@ -32,6 +52,10 @@ var world_root: Node3D
 var game_hud: CanvasLayer
 var menu_layer: CanvasLayer
 var credits_overlay: Control
+var play_guide_overlay: Control
+var splash_layer: CanvasLayer
+var splash_root: Control
+var splash_dismissed := false
 var health_bar: ProgressBar
 var energy_bar: ProgressBar
 var health_label: Label
@@ -65,14 +89,20 @@ func _ready() -> void:
 	assert(config_error == OK, "Could not load dinosaur configuration")
 	_create_input_actions()
 	_build_main_menu()
+	_build_splash_screen()
 
 
 func _start_game(dino_id: String) -> void:
+	# Tests and keyboard users may start directly, so make sure the splash can
+	# never remain above a running world.
+	_dismiss_splash(true)
 	_commit_world_seed()
 	selected_dino_id = dino_id
 	selected_dino_name = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
+	if is_instance_valid(play_guide_overlay):
+		play_guide_overlay.hide()
 	menu_layer.hide()
 	world_root = Node3D.new()
 	world_root.name = "PrehistoricWorld"
@@ -263,7 +293,111 @@ func _build_main_menu() -> void:
 	credits_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
 	credits_button.pressed.connect(_open_credits)
 	root.add_child(credits_button)
+
+	var guide_button := Button.new()
+	guide_button.name = "PlayGuideButton"
+	guide_button.text = "HOW TO PLAY"
+	guide_button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	guide_button.position = Vector2(20, -66)
+	guide_button.size = Vector2(170, 44)
+	guide_button.focus_mode = Control.FOCUS_NONE
+	guide_button.add_theme_font_size_override("font_size", 16)
+	guide_button.add_theme_color_override("font_color", Color("f7f2d0"))
+	guide_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
+	guide_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
+	guide_button.pressed.connect(_open_play_guide)
+	root.add_child(guide_button)
 	_build_credits_overlay(root)
+	_build_play_guide_overlay(root)
+
+
+func _build_splash_screen() -> void:
+	# CanvasLayer keeps the startup art above the menu while Godot finishes
+	# importing and preparing the first interactive screen.
+	splash_dismissed = false
+	menu_layer.hide()
+	splash_layer = CanvasLayer.new()
+	splash_layer.name = "StartupSplash"
+	splash_layer.layer = 20
+	add_child(splash_layer)
+	splash_root = Control.new()
+	splash_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	splash_layer.add_child(splash_root)
+
+	var artwork := TextureRect.new()
+	artwork.name = "DinoFightArtwork"
+	artwork.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	artwork.texture = load("res://assets/ui/menu/dino-fight-splash.png")
+	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	splash_root.add_child(artwork)
+
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.01, 0.018, 0.012, 0.24)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	splash_root.add_child(shade)
+
+	var title := Label.new()
+	title.text = "DINOS4HELENA"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	title.position = Vector2(-480, 38)
+	title.size = Vector2(960, 86)
+	title.add_theme_font_size_override("font_size", 66)
+	title.add_theme_color_override("font_color", Color("fff1bc"))
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	title.add_theme_constant_override("shadow_offset_x", 4)
+	title.add_theme_constant_override("shadow_offset_y", 5)
+	splash_root.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "A PREHISTORIC ADVENTURE"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	subtitle.position = Vector2(-350, 116)
+	subtitle.size = Vector2(700, 38)
+	subtitle.add_theme_font_size_override("font_size", 22)
+	subtitle.add_theme_color_override("font_color", Color("f1d690"))
+	subtitle.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	subtitle.add_theme_constant_override("shadow_offset_x", 2)
+	subtitle.add_theme_constant_override("shadow_offset_y", 2)
+	splash_root.add_child(subtitle)
+
+	var continue_button := Button.new()
+	continue_button.name = "ContinueButton"
+	continue_button.text = "TAP TO CONTINUE"
+	continue_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	continue_button.position = Vector2(-150, -78)
+	continue_button.size = Vector2(300, 52)
+	continue_button.focus_mode = Control.FOCUS_NONE
+	continue_button.add_theme_font_size_override("font_size", 18)
+	continue_button.add_theme_color_override("font_color", Color("fff2c2"))
+	continue_button.add_theme_stylebox_override("normal", _button_style(Color(0.025, 0.075, 0.045, 0.86), Color(0.9, 0.76, 0.34, 0.9)))
+	continue_button.add_theme_stylebox_override("hover", _button_style(Color(0.12, 0.28, 0.13, 0.94), Color("fff2c2")))
+	continue_button.pressed.connect(_dismiss_splash)
+	splash_root.add_child(continue_button)
+	get_tree().create_timer(4.0).timeout.connect(_dismiss_splash)
+
+
+func _dismiss_splash(immediate := false) -> void:
+	if splash_dismissed:
+		return
+	splash_dismissed = true
+	if immediate or not is_instance_valid(splash_root):
+		if is_instance_valid(splash_layer):
+			splash_layer.queue_free()
+		menu_layer.show()
+		return
+	var tween := create_tween()
+	tween.tween_property(splash_root, "modulate:a", 0.0, 0.35)
+	tween.finished.connect(func() -> void:
+		if is_instance_valid(splash_layer):
+			splash_layer.queue_free()
+		if is_instance_valid(menu_layer):
+			menu_layer.show()
+	)
 
 
 func _build_credits_overlay(parent: Control) -> void:
@@ -356,6 +490,72 @@ func _open_credits() -> void:
 func _close_credits() -> void:
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
+
+
+func _build_play_guide_overlay(parent: Control) -> void:
+	play_guide_overlay = Control.new()
+	play_guide_overlay.name = "PlayGuideOverlay"
+	play_guide_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	play_guide_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(play_guide_overlay)
+
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.005, 0.015, 0.01, 0.88)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	play_guide_overlay.add_child(shade)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-470, -310)
+	panel.size = Vector2(940, 620)
+	panel.add_theme_stylebox_override("panel", _credits_style())
+	play_guide_overlay.add_child(panel)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	panel.add_child(column)
+	var heading := Label.new()
+	heading.text = "HOW TO PLAY"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 36)
+	heading.add_theme_color_override("font_color", Color("fff2c2"))
+	column.add_child(heading)
+
+	var guide_text := RichTextLabel.new()
+	guide_text.name = "PlayGuideText"
+	guide_text.bbcode_enabled = true
+	guide_text.text = PLAY_GUIDE_TEXT
+	guide_text.custom_minimum_size = Vector2(850, 430)
+	guide_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	guide_text.scroll_active = true
+	guide_text.add_theme_font_size_override("normal_font_size", 16)
+	guide_text.add_theme_font_size_override("bold_font_size", 18)
+	guide_text.add_theme_color_override("default_color", Color("f4f0df"))
+	column.add_child(guide_text)
+
+	var close_button := Button.new()
+	close_button.name = "ClosePlayGuideButton"
+	close_button.text = "BACK"
+	close_button.custom_minimum_size = Vector2(210, 46)
+	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_button.focus_mode = Control.FOCUS_NONE
+	close_button.add_theme_font_size_override("font_size", 17)
+	close_button.add_theme_stylebox_override("normal", _button_style(Color(0.12, 0.25, 0.16, 0.95), Color(0.72, 0.83, 0.42, 0.8)))
+	close_button.add_theme_stylebox_override("hover", _button_style(Color(0.24, 0.43, 0.22, 0.98), Color("f7f2d0")))
+	close_button.pressed.connect(_close_play_guide)
+	column.add_child(close_button)
+	play_guide_overlay.hide()
+
+
+func _open_play_guide() -> void:
+	if is_instance_valid(play_guide_overlay):
+		play_guide_overlay.show()
+
+
+func _close_play_guide() -> void:
+	if is_instance_valid(play_guide_overlay):
+		play_guide_overlay.hide()
 
 
 func _open_credits_github() -> void:

@@ -1,5 +1,8 @@
 extends CharacterBody3D
 
+# Shared wildlife controller. Carnivores use risk-aware hunt/stalk/feed states;
+# herbivores use flee/retaliate/defend states and a leader-based pack formation.
+# State priority is deliberate: survival and combat always override roaming.
 signal died(npc: CharacterBody3D)
 
 const CONFIG_PATH := "res://config/dinosaurs.cfg"
@@ -119,6 +122,8 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= gravity * delta
 	var move_direction := Vector3.ZERO
 	var move_speed := walk_speed
+	# Carnivore priority: retreat when critically hurt, feed when hungry, then
+	# hunt only targets that pass the combat-odds calculation.
 	if diet == "carnivore":
 		var retreat_threat := _nearest_opponent(AVOID_DANGER_RANGE * 1.6) if _is_heavily_injured() else null
 		if is_instance_valid(retreat_threat):
@@ -148,6 +153,8 @@ func _physics_process(delta: float) -> void:
 			if state in ["hunting", "avoiding"]:
 				move_speed = run_speed
 	else:
+		# Herbivore priority: defend alerted allies, respond to a direct threat,
+		# then resume the moving pack formation.
 		if is_instance_valid(ally_defense_target):
 			var defense_offset := ally_defense_target.global_position - global_position
 			var defense_distance := Vector2(defense_offset.x, defense_offset.z).length()
@@ -250,6 +257,8 @@ func _stalk_direction(prey: Node3D, offset: Vector3, distance: float) -> Vector3
 
 
 func _combat_odds(opponent: Node3D) -> float:
+	# Nearby same-species herbivores contribute partial defensive power. This is
+	# why a protected pack is unattractive while a temporary straggler is viable.
 	if not is_instance_valid(opponent) or _is_same_species(opponent):
 		return 0.0
 	var hunter_power := _body_power(self) * 1.2
@@ -313,6 +322,9 @@ func _is_heavily_injured() -> bool:
 
 
 func _pack_direction(delta: float) -> Vector3:
+	# A single leader wanders; followers target staggered offsets behind it.
+	# Separation steering handles visual spacing while collision exceptions make
+	# it impossible for packmates to form a physics deadlock.
 	var welcomed_player := _nearby_same_species_player()
 	if is_instance_valid(welcomed_player):
 		var welcome_offset := welcomed_player.global_position - global_position

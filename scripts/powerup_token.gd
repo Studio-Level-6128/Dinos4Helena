@@ -1,5 +1,7 @@
 extends Area3D
 
+# Non-blocking collectible. Visual meshes are built procedurally so each token
+# stays cheap to render and needs no additional model asset.
 signal consumed(token_type: String)
 
 const COLORS := {

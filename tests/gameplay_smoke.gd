@@ -7,11 +7,25 @@ func _initialize() -> void:
 
 func _run() -> void:
 	assert(ProjectSettings.get_setting("display/window/handheld/orientation") == 4, "Android orientation is not locked to landscape")
+	assert(ProjectSettings.get_setting("application/boot_splash/image") == "res://assets/ui/menu/dino-fight-splash.png", "Native startup splash artwork is not configured")
 	var scene := load("res://scenes/main.tscn") as PackedScene
 	var world := scene.instantiate()
 	root.add_child(world)
 	await process_frame
-	assert(world.menu_layer.visible, "Main menu was not shown on launch")
+	assert(is_instance_valid(world.splash_layer) and world.splash_layer.visible, "Startup splash was not shown on launch")
+	assert(not world.menu_layer.visible, "Main menu appeared above the startup splash")
+	var splash_art := world.splash_layer.find_child("DinoFightArtwork", true, false) as TextureRect
+	assert(splash_art != null and splash_art.texture != null, "Generated dinosaur-fight splash artwork is missing")
+	world._dismiss_splash(true)
+	assert(world.menu_layer.visible, "Dismissing the splash did not reveal the main menu")
+	var guide_button := world.menu_layer.find_child("PlayGuideButton", true, false) as Button
+	assert(guide_button != null, "Landing page has no play-guide button")
+	world._open_play_guide()
+	assert(world.play_guide_overlay.visible, "Play guide did not open")
+	var guide_text := world.play_guide_overlay.find_child("PlayGuideText", true, false) as RichTextLabel
+	assert(guide_text != null and "EGGS AND BABIES" in guide_text.text and "WILDLIFE" in guide_text.text, "Play guide is incomplete")
+	world._close_play_guide()
+	assert(not world.play_guide_overlay.visible, "Play guide did not close")
 	world.seed_input.text = "123456"
 	world._start_game("velociraptor")
 	await physics_frame

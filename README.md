@@ -2,7 +2,9 @@
 
 A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has six selectable animated dinosaurs, a third-person follow camera, two-handed touch controls, species-specific sound design, and a procedural prehistoric valley.
 
-The game opens on a cinematic dinosaur-selection screen titled **DINOS4HELENA**, with the subtitle “Helena's Dino game - made by dad.” Choose T-Rex, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus. The top-right `MAIN MENU` button returns to the selection screen at any time.
+See the [player guide](docs/PLAY_GUIDE.md) for the complete game rules and the [development guide](docs/DEVELOPMENT.md) for architecture, setup, extension points, testing, and Android builds.
+
+The game opens with a generated cinematic dinosaur-fight splash, followed by the dinosaur-selection screen titled **DINOS4HELENA**, with the subtitle “Helena's Dino game - made by dad.” Choose T-Rex, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus. `HOW TO PLAY` opens the in-game guide, and the top-right `MAIN MENU` button returns to the selection screen at any time.
 
 ## Play the prototype
 

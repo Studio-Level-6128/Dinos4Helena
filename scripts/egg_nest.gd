@@ -1,5 +1,7 @@
 extends Area3D
 
+# Non-solid breeding interaction. The Area3D detects the player but uses
+# collision_layer 0, so the visible nest and egg never obstruct movement.
 signal hatched(parent_dino: CharacterBody3D, hatch_position: Vector3)
 signal status_changed(message: String)
 
@@ -26,6 +28,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Incubation requires one uninterrupted duck hold. Leaving the nest or
+	# standing up resets progress, making an accidental pass-over harmless.
 	if hatching or not is_instance_valid(nearby_player):
 		return
 	var ducking := nearby_player.has_method("is_ducking") and bool(nearby_player.call("is_ducking"))

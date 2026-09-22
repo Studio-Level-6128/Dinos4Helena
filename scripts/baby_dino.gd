@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+# Lightweight companion controller. Babies deliberately reuse adult models and
+# configuration at a reduced scale, but omit energy and combat objectives.
 signal died(baby: CharacterBody3D)
 
 const CONFIG_PATH := "res://config/dinosaurs.cfg"
@@ -71,6 +73,8 @@ func _physics_process(delta: float) -> void:
 	var direction := Vector3.ZERO
 	var speed := walk_speed
 	if is_instance_valid(parent_dino) and not bool(parent_dino.get("dead")):
+		# Alternate companions left/right and place later babies slightly farther
+		# back. A short catch-up boost prevents permanent loss behind obstacles.
 		var side_sign := 1.0 if companion_index % 2 == 0 else -1.0
 		var rank := float(companion_index / 2)
 		var lateral_distance := float(parent_dino.get("collision_radius")) + collision_radius + 1.1 + rank * 1.4
