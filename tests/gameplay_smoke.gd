@@ -47,6 +47,34 @@ func _run() -> void:
 	assert(minimap.call("is_world_position_explored", Vector2.ZERO), "Starting area was not revealed on the minimap")
 	assert(not minimap.call("is_world_position_explored", Vector2(180, 180)), "Unexplored minimap area was revealed")
 	assert(float(minimap.call("get_explored_fraction")) < 0.1, "Too much of the minimap starts revealed")
+	var movement_wheel: Control = world.game_hud.find_child("MovementWheel", true, false) as Control
+	assert(movement_wheel != null, "Touch HUD has no analog movement wheel")
+	movement_wheel.call("set_input_vector", Vector2(0.05, 0.04))
+	assert((movement_wheel.call("get_movement") as Vector2).is_zero_approx(), "Movement wheel dead zone allows unwanted drift")
+	var analog_start_position: Vector3 = player.position
+	var analog_start_rotation: float = player.rotation.y
+	var touch_position := movement_wheel.size * 0.5 + Vector2(-0.65, -0.75) * float(movement_wheel.call("_wheel_radius"))
+	var touch_press := InputEventScreenTouch.new()
+	touch_press.index = 3
+	touch_press.position = touch_position
+	touch_press.pressed = true
+	movement_wheel.call("_gui_input", touch_press)
+	var analog_input: Vector2 = movement_wheel.call("get_movement")
+	assert(analog_input.x > 0.35 and analog_input.y > 0.35, "Diagonal wheel position did not combine forward and left input")
+	for frame in 18:
+		await physics_frame
+	var touch_release := InputEventScreenTouch.new()
+	touch_release.index = 3
+	touch_release.position = touch_position
+	touch_release.pressed = false
+	movement_wheel.call("_gui_input", touch_release)
+	assert(player.position.distance_to(analog_start_position) > 0.35, "Analog wheel did not move the dinosaur")
+	assert(player.rotation.y > analog_start_rotation + 0.15, "Analog wheel did not steer while moving")
+	assert(player.mobile_movement.is_zero_approx(), "Movement wheel did not recenter on release")
+	player.rotation.y = 0.0
+	player.velocity = Vector3.ZERO
+	await physics_frame
+
 	var initial_z := player.position.z
 	player.set_mobile_action("move_forward", true)
 	player.set_mobile_action("run", true)

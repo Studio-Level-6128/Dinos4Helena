@@ -62,6 +62,7 @@ var vocal_audio: AudioStreamPlayer3D
 var audio_streams: Dictionary = {}
 var current_animation := ""
 var mobile_actions: Dictionary = {}
+var mobile_movement := Vector2.ZERO
 var attack_time := 0.0
 var scream_time := 0.0
 var footstep_time := 0.0
@@ -138,13 +139,16 @@ func _physics_process(delta: float) -> void:
 	if _action_just_pressed("scream") and scream_time <= 0.0:
 		_start_scream()
 
-	# Touch buttons store their state in mobile_actions. Combining those values
-	# with InputMap actions allows simultaneous movement and action presses.
+	# Keyboard input, legacy discrete test input, and the analog touch wheel all
+	# combine here. The wheel supplies proportional throttle and steering, so a
+	# diagonal drag naturally moves and turns at the same time.
 	var throttle := Input.get_action_strength("move_forward") - Input.get_action_strength("move_back")
 	throttle += _float_action("move_forward") - _float_action("move_back")
+	throttle += mobile_movement.y
 	throttle = clampf(throttle, -1.0, 1.0)
 	var steering := Input.get_action_strength("move_left") - Input.get_action_strength("move_right")
 	steering += _float_action("move_left") - _float_action("move_right")
+	steering += mobile_movement.x
 	steering = clampf(steering, -1.0, 1.0)
 
 	var ducking := _action_pressed("duck")
@@ -200,6 +204,10 @@ func set_mobile_action(action: StringName, pressed: bool) -> void:
 		_start_attack()
 	if pressed and not was_pressed and action == "scream" and scream_time <= 0.0:
 		_start_scream()
+
+
+func set_mobile_movement(throttle: float, steering: float) -> void:
+	mobile_movement = Vector2(clampf(steering, -1.0, 1.0), clampf(throttle, -1.0, 1.0))
 
 
 func is_ducking() -> bool:

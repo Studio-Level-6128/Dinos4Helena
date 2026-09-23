@@ -8,11 +8,11 @@ The game opens with a generated cinematic dinosaur-fight splash, followed by the
 
 ## Play the prototype
 
-The camera follows above and behind the player dinosaur. On Android, the action buttons are on the left and movement buttons are on the right.
+The camera follows above and behind the player dinosaur. On Android, the action buttons are on the left and an analog movement wheel is on the right.
 
 | Action | Touch control | Keyboard |
 | --- | --- | --- |
-| Move/steer | Right-hand pad: forward/back and smooth left/right steering | `WASD` or arrow keys |
+| Move/steer | Drag the right-hand wheel; diagonal positions combine movement and steering | `WASD` or arrow keys |
 | Jump | `JUMP` | `Space` |
 | Run | Hold `RUN` while moving | Hold `Shift` |
 | Duck | Hold `DUCK` | Hold `C` or `Ctrl` |

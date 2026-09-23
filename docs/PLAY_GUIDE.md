@@ -8,7 +8,7 @@ Choose one of the six dinosaurs on the landing page. Each species has different 
 
 | Action | Touch | Keyboard |
 | --- | --- | --- |
-| Move and steer | Right-hand direction pad | `WASD` or arrow keys |
+| Move and steer | Drag the right-hand wheel; every direction combines forward/backward movement with steering | `WASD` or arrow keys |
 | Jump | **Jump** | `Space` |
 | Run | Hold **Run** while moving | `Shift` |
 | Duck | Hold **Duck** | `C` or `Ctrl` |

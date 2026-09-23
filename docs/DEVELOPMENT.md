@@ -28,6 +28,7 @@ Run `./scripts/setup-dev.sh` if the ignored local Godot/Android toolchain under 
 | `scenes/main.tscn` | Minimal entry scene; most runtime nodes are built by code. |
 | `scripts/main.gd` | Application flow, splash/menu/HUD, procedural layout, landscape and actor spawning. |
 | `scripts/player_dino.gd` | Input, movement, camera, actions, audio, health, energy and player combat. |
+| `scripts/virtual_joystick.gd` | Analog multitouch movement wheel, dead zone and visual feedback. |
 | `scripts/npc_dino.gd` | Herbivore packs, carnivore strategy, wildlife movement and combat. |
 | `scripts/egg_nest.gd` | Non-solid duck-to-incubate interaction and egg visuals. |
 | `scripts/baby_dino.gd` | Baby companion following, health, death and meat drop. |
@@ -98,7 +99,7 @@ Babies join the prey and NPC groups so predators can target them, but use a sepa
 
 ## UI and controls
 
-The project uses a 1280×720 reference canvas with `canvas_items` stretching. Anchor controls before applying offsets so layouts scale correctly on Android. Touch buttons call `player.set_mobile_action()` and share the same action names as `InputMap` keyboard controls.
+The project uses a 1280×720 reference canvas with `canvas_items` stretching. Anchor controls before applying offsets so layouts scale correctly on Android. Action buttons call `player.set_mobile_action()` and share names with `InputMap`; the right-hand `virtual_joystick.gd` emits proportional throttle and steering through `player.set_mobile_movement()`.
 
 The splash and menu artwork are project assets under `assets/ui/menu/`. Keep generated-asset prompts and dates in `GENERATED_ASSETS.md`. Overlay important text in Godot rather than baking it into images.
 

@@ -11,6 +11,7 @@ const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 const POWERUP_TOKEN_SCRIPT := preload("res://scripts/powerup_token.gd")
 const EGG_NEST_SCRIPT := preload("res://scripts/egg_nest.gd")
 const BABY_DINO_SCRIPT := preload("res://scripts/baby_dino.gd")
+const VIRTUAL_JOYSTICK_SCRIPT := preload("res://scripts/virtual_joystick.gd")
 const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
 const CARNIVORE_IDS := ["trex", "velociraptor"]
@@ -27,7 +28,7 @@ const PERFORMANCE_DOWNGRADE_FPS := 42.0
 const PERFORMANCE_UPGRADE_FPS := 56.0
 const PERFORMANCE_CHANGE_COOLDOWN := 10.0
 const PLAY_GUIDE_TEXT := """[b]MOVEMENT AND ACTIONS[/b]
-Use the right-hand arrows to move forward or backward and steer. Use the left-hand buttons to jump, run, duck, attack, eat, or scream. Keyboard controls are WASD/arrows, Space, Shift, C/Ctrl, F, E, and R.
+Drag the right-hand movement wheel in any direction to combine forward/backward movement and steering. Use the left-hand buttons to jump, run, duck, attack, eat, or scream. Keyboard controls are WASD/arrows, Space, Shift, C/Ctrl, F, E, and R.
 
 [b]HEALTH, ENERGY, AND FOOD[/b]
 Every action costs energy; running, jumping, and fighting cost more. At zero energy, health starts to fall. Herbivores regain energy by holding EAT near plants. Carnivores eat meat left by defeated dinosaurs. Red tokens restore health; blue and orange tokens temporarily double speed or strength.
@@ -1301,17 +1302,21 @@ func _build_hud() -> void:
 
 	var right_panel := Control.new()
 	right_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	right_panel.position = Vector2(-286, -222)
-	right_panel.size = Vector2(268, 204)
+	right_panel.position = Vector2(-258, -258)
+	right_panel.size = Vector2(240, 240)
 	root.add_child(right_panel)
-	_add_action_button(right_panel, "", "move_forward", Vector2(94, 42), Vector2(72, 58))
-	_add_action_button(right_panel, "", "move_left", Vector2(18, 104), Vector2(72, 58))
-	_add_action_button(right_panel, "", "move_back", Vector2(94, 104), Vector2(72, 58))
-	_add_action_button(right_panel, "", "move_right", Vector2(170, 104), Vector2(72, 58))
+	var movement_wheel: Control = VIRTUAL_JOYSTICK_SCRIPT.new()
+	movement_wheel.name = "MovementWheel"
+	movement_wheel.position = Vector2(8, 24)
+	movement_wheel.size = Vector2(224, 208)
+	movement_wheel.connect("movement_changed", player.set_mobile_movement)
+	right_panel.add_child(movement_wheel)
 
 	var move_hint := Label.new()
-	move_hint.text = "RIGHT HAND • MOVE"
-	move_hint.position = Vector2(59, 8)
+	move_hint.text = "RIGHT HAND • MOVE + STEER"
+	move_hint.position = Vector2(22, 2)
+	move_hint.size = Vector2(200, 22)
+	move_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	move_hint.add_theme_font_size_override("font_size", 14)
 	move_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.72))
 	right_panel.add_child(move_hint)
