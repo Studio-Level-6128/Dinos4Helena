@@ -127,7 +127,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= gravity * delta
 
 	var wants_jump := _action_pressed("jump")
-	if wants_jump and not jump_was_pressed and can_jump and is_on_floor() and attack_time <= 0.0:
+	if wants_jump and not jump_was_pressed and can_jump and is_on_floor():
 		velocity.y = jump_velocity
 		_spend_energy(jump_energy_cost)
 		_play_action_sound("jump")
@@ -166,10 +166,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		eating_pose_time = 0.0
 
-	if attack_time <= 0.0 and scream_time <= 0.0:
+	if scream_time <= 0.0:
 		rotation.y += steering * turn_speed * delta
 
-	if not is_zero_approx(throttle) and attack_time <= 0.0 and scream_time <= 0.0:
+	if not is_zero_approx(throttle) and scream_time <= 0.0:
 		var forward := -global_transform.basis.z.normalized()
 		var reverse_factor := 0.62 if throttle < 0.0 else 1.0
 		velocity.x = forward.x * throttle * speed * reverse_factor
@@ -191,7 +191,7 @@ func _physics_process(delta: float) -> void:
 	model_root.rotation.x = lerpf(model_root.rotation.x, pose_tilt, 9.0 * delta)
 	model_root.position.y = lerpf(model_root.position.y, pose_height, 8.0 * delta)
 	move_and_slide()
-	var moving := not is_zero_approx(throttle) and attack_time <= 0.0 and scream_time <= 0.0
+	var moving := not is_zero_approx(throttle) and scream_time <= 0.0
 	_update_energy(delta, moving, running, ducking)
 	_update_footsteps(moving and is_on_floor(), running, ducking)
 	_update_animation(moving, running, ducking)

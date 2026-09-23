@@ -87,7 +87,7 @@ Register new environment or actor renderables through `_register_quality_geometr
 
 The wildlife controller uses explicit states rather than a behavior-tree plugin.
 
-- Carnivores prioritize injury retreat, feeding, risk assessment, stalking and attacking in that order. Injury retreat begins below 50% health.
+- Carnivores prioritize injury retreat, feeding, risk assessment, stalking and attacking in that order. Injury retreat begins below 50% health. Favorable close-range strikes retain the pursuit direction and run speed instead of stopping movement.
 - Combat odds combine current/max health, strength, size and energy, plus partial power from nearby defenders.
 - Herbivores prioritize pack defense, direct retaliation/fleeing and formation movement.
 - Every pack has a slot-zero leader. It retains a 55–105 unit world goal until arrival and uses temporary collision-tangent steering rather than discarding a blocked goal. Followers use staggered formation targets and local separation.

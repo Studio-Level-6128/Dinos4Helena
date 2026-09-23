@@ -106,9 +106,19 @@ func _run() -> void:
 	player.set_mobile_action("jump", false)
 	assert(player.velocity.y > 0.0, "T-Rex did not jump")
 
+	var airborne_attack_start: Vector3 = player.position
+	player.set_mobile_action("move_forward", true)
+	player.set_mobile_action("run", true)
 	player.set_mobile_action("attack", true)
 	player.set_mobile_action("attack", false)
 	assert(player.attack_time > 0.0, "T-Rex attack did not trigger")
+	for frame in 10:
+		await physics_frame
+	player.set_mobile_action("move_forward", false)
+	player.set_mobile_action("run", false)
+	assert(player.attack_time > 0.0, "Attack ended before the airborne pursuit check")
+	assert(player.position.distance_to(airborne_attack_start) > 0.35, "Attacking stopped running movement")
+	assert(player.position.y > airborne_attack_start.y, "Attacking cancelled the active jump")
 
 	var scream_count := [0]
 	player.screamed.connect(func() -> void: scream_count[0] += 1)

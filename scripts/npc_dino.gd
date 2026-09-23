@@ -159,11 +159,11 @@ func _physics_process(delta: float) -> void:
 					move_direction = Vector3(food_offset.x, 0.0, food_offset.z).normalized()
 			else:
 				move_direction = _hunt_direction(delta)
-				if state in ["hunting", "avoiding"]:
+				if state in ["hunting", "attacking", "avoiding"]:
 					move_speed = run_speed
 		else:
 			move_direction = _hunt_direction(delta)
-			if state in ["hunting", "avoiding"]:
+			if state in ["hunting", "attacking", "avoiding"]:
 				move_speed = run_speed
 	else:
 		# Herbivore priority: defend alerted allies, respond to a direct threat,
@@ -198,7 +198,7 @@ func _physics_process(delta: float) -> void:
 					move_speed = run_speed
 	_apply_movement(move_direction, move_speed, delta)
 	if diet == "carnivore":
-		_update_energy(delta, move_direction.length_squared() > 0.01, state in ["hunting", "avoiding", "retreating"])
+		_update_energy(delta, move_direction.length_squared() > 0.01, state in ["hunting", "attacking", "avoiding", "retreating"])
 
 
 func _hunt_direction(delta: float) -> Vector3:
@@ -217,7 +217,9 @@ func _hunt_direction(delta: float) -> Vector3:
 		if odds >= strike_odds and distance <= collision_radius + _body_radius(prey) + 1.6:
 			state = "attacking"
 			_attack(prey)
-			return Vector3.ZERO
+			# Keep closing the gap through the strike instead of planting the
+			# hunter in place for every attack animation.
+			return Vector3(offset.x, 0.0, offset.z).normalized()
 		if odds >= strike_odds:
 			state = "hunting"
 			return Vector3(offset.x, 0.0, offset.z).normalized()
@@ -605,7 +607,7 @@ func _nearest_hunter() -> Node3D:
 
 
 func _apply_movement(direction: Vector3, speed: float, delta: float) -> void:
-	if direction.length_squared() > 0.01 and state != "attacking":
+	if direction.length_squared() > 0.01:
 		_face_direction(direction, delta)
 		velocity.x = direction.x * speed
 		velocity.z = direction.z * speed
@@ -619,7 +621,7 @@ func _apply_movement(direction: Vector3, speed: float, delta: float) -> void:
 		model_root.rotation.x = lerpf(model_root.rotation.x, 0.0, 7.0 * delta)
 	if get_slide_collision_count() > 0 and state in ["wandering", "leading", "packing", "regrouping", "trailing"]:
 		wander_time = 0.0
-	_update_animation(direction.length_squared() > 0.01 and state != "attacking", is_equal_approx(speed, run_speed))
+	_update_animation(direction.length_squared() > 0.01, is_equal_approx(speed, run_speed))
 
 
 func _update_pack_obstacle_avoidance() -> void:

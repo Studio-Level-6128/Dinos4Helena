@@ -89,8 +89,9 @@ func _run() -> void:
 	hunter.forced_target = prey
 	hunter.attack_cooldown = 0.0
 	var prey_health_before: int = prey.health
-	hunter._hunt_direction(0.1)
+	var strike_direction: Vector3 = hunter._hunt_direction(0.1)
 	assert(hunter.state == "attacking" and prey.health < prey_health_before, "Hunter did not strike when success odds were good")
+	assert(strike_direction.dot(Vector3.FORWARD) > 0.8, "Hunter stopped pursuing while attacking")
 
 	# Severe injury always overrides hunting while an opponent is nearby.
 	prey.health = prey.max_health

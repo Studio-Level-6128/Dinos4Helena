@@ -12,7 +12,7 @@ Choose one of the six dinosaurs on the landing page. Each species has different 
 | Jump | **Jump** | `Space` |
 | Run | Hold **Run** while moving | `Shift` |
 | Duck | Hold **Duck** | `C` or `Ctrl` |
-| Attack | **Attack** | `F` |
+| Attack | **Attack** — usable while walking, running or jumping | `F` |
 | Eat | Hold **Eat** near food | `E` |
 | Scream | **Scream** | `R` |
 
@@ -33,7 +33,7 @@ At zero health, the dinosaur dies and the game ends.
 
 Herbivores move in packs, flee hunters and fight back when attacked. Packs protect members of their own species, including a matching player. Their moving formation sometimes leaves one animal trailing behind.
 
-Carnivores hunt alone. Healthy hunters strongly prefer babies and accept riskier baby attacks, although a powerful nearby parent or pack can still deter them. They avoid hopeless adult fights, feed after a kill, and retreat once their health falls below half. Dinosaurs do not attack their own species.
+Carnivores hunt alone. Healthy hunters strongly prefer babies and accept riskier baby attacks, although a powerful nearby parent or pack can still deter them. They continue moving through pursuit attacks, avoid hopeless adult fights, feed after a kill, and retreat once their health falls below half. Dinosaurs do not attack their own species.
 
 ## Breed a baby
 
