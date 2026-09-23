@@ -4,13 +4,13 @@ extends Control
 # byte grid stores persistent fog-of-war discovery without allocating textures.
 const FOG_GRID_SIZE := 40
 const REVEAL_RADIUS := 34.0
-const DRAW_INTERVAL := 0.12
 
 var player: Node3D
 var world_half_size := 200.0
 var map_layout: Dictionary = {}
 var discovered := PackedByteArray()
 var draw_time := 0.0
+var draw_interval := 0.18
 
 
 func setup(target: Node3D, half_size: float, layout: Dictionary) -> void:
@@ -28,9 +28,15 @@ func _process(delta: float) -> void:
 		return
 	draw_time -= delta
 	if draw_time <= 0.0:
-		draw_time = DRAW_INTERVAL
+		draw_time = draw_interval
 		_reveal_player_area()
 		queue_redraw()
+
+
+func set_performance_tier(tier: int) -> void:
+	# Terrain and fog do not need a frame-rate refresh. Slower refresh intervals
+	# eliminate hundreds of small draw calls per second on constrained phones.
+	draw_interval = [0.40, 0.28, 0.12][clampi(tier, 0, 2)]
 
 
 func _draw() -> void:

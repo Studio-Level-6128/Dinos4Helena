@@ -80,6 +80,8 @@ var collision_shape: CollisionShape3D
 var current_animation := ""
 var rng := RandomNumberGenerator.new()
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var pack_members: Array = []
+var same_species_allies: Array = []
 
 
 func _ready() -> void:
@@ -115,7 +117,7 @@ func _ready() -> void:
 	_choose_wander_target()
 	if diet == "herbivore":
 		straggler_cooldown = rng.randf_range(12.0, 26.0)
-		call_deferred("_configure_friendly_collision_exceptions")
+		call_deferred("_initialize_pack_relations")
 
 
 func _physics_process(delta: float) -> void:
@@ -290,7 +292,23 @@ func _combat_odds(opponent: Node3D) -> float:
 			baby_parent = parent_value
 	var parent_counted := false
 	if str(opponent.get("diet")) == "herbivore":
-		for ally in get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur"):
+		var possible_allies: Array = []
+		# Wild herbivores already cache their species peers. Reusing that cache
+		# turns the hunters' most frequent nested whole-world scan into a short loop.
+		if opponent.is_in_group("prey_dinosaur") and not opponent.is_in_group("baby_dinosaur"):
+			var cached_allies = opponent.get("pack_members")
+			var cached_species_allies = opponent.get("same_species_allies")
+			if cached_species_allies is Array:
+				cached_allies = cached_species_allies
+			if cached_allies is Array:
+				possible_allies = cached_allies.duplicate()
+		if possible_allies.is_empty():
+			possible_allies = get_tree().get_nodes_in_group("prey_dinosaur")
+		else:
+			# Babies can hatch after the adult caches were built.
+			possible_allies.append_array(get_tree().get_nodes_in_group("baby_dinosaur"))
+		possible_allies.append_array(get_tree().get_nodes_in_group("player_dinosaur"))
+		for ally in possible_allies:
 			if not ally is Node3D or ally == opponent or bool(ally.get("dead")):
 				continue
 			if str(ally.get("dino_id")) != str(opponent.get("dino_id")):
@@ -391,7 +409,7 @@ func _pack_direction(delta: float) -> Vector3:
 func _pack_leader() -> Node3D:
 	var leader: Node3D
 	var lowest_slot := 1000000
-	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+	for candidate in _pack_candidates():
 		if not candidate is Node3D or bool(candidate.get("dead")):
 			continue
 		if candidate.get("pack_id") != pack_id or str(candidate.get("dino_id")) != dino_id:
@@ -479,7 +497,7 @@ func _update_straggler_schedule(delta: float) -> void:
 
 func _pack_separation() -> Vector3:
 	var separation := Vector3.ZERO
-	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+	for candidate in _pack_candidates():
 		if not candidate is Node3D or candidate == self or bool(candidate.get("dead")):
 			continue
 		if candidate.get("pack_id") != pack_id or str(candidate.get("dino_id")) != dino_id:
@@ -503,8 +521,26 @@ func _pack_separation() -> Vector3:
 	return separation
 
 
+func _initialize_pack_relations() -> void:
+	pack_members.clear()
+	same_species_allies.clear()
+	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+		if not candidate is Node3D or str(candidate.get("dino_id")) != dino_id:
+			continue
+		same_species_allies.append(candidate)
+		if candidate.get("pack_id") == pack_id:
+			pack_members.append(candidate)
+	_configure_friendly_collision_exceptions()
+
+
+func _pack_candidates() -> Array:
+	return pack_members if not pack_members.is_empty() else get_tree().get_nodes_in_group("prey_dinosaur")
+
+
 func _configure_friendly_collision_exceptions() -> void:
-	for candidate in get_tree().get_nodes_in_group("prey_dinosaur") + get_tree().get_nodes_in_group("player_dinosaur"):
+	var friendly_candidates := _pack_candidates().duplicate()
+	friendly_candidates.append_array(get_tree().get_nodes_in_group("player_dinosaur"))
+	for candidate in friendly_candidates:
 		if not candidate is PhysicsBody3D or candidate == self or bool(candidate.get("dead")):
 			continue
 		var same_pack: bool = candidate.is_in_group("prey_dinosaur") and candidate.get("pack_id") == pack_id and str(candidate.get("dino_id")) == dino_id
@@ -653,7 +689,8 @@ func receive_ally_alert(ally: Node3D, attacker: Node3D) -> void:
 
 
 func _alert_same_species_pack(attacker: Node3D) -> void:
-	for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+	var candidates := same_species_allies if not same_species_allies.is_empty() else get_tree().get_nodes_in_group("prey_dinosaur")
+	for candidate in candidates:
 		if candidate != self and candidate.has_method("receive_ally_alert"):
 			candidate.call("receive_ally_alert", self, attacker)
 

@@ -15,6 +15,17 @@ const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasa
 const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
 const CARNIVORE_IDS := ["trex", "velociraptor"]
 const MAP_HALF_SIZE := 200.0
+# Adaptive performance starts at full quality. It only reduces expensive
+# rendering features after several sustained low-frame-rate samples, and uses
+# a deliberately slower recovery threshold to avoid quality oscillation.
+const QUALITY_LOW := 0
+const QUALITY_MEDIUM := 1
+const QUALITY_HIGH := 2
+const PERFORMANCE_WARMUP_SECONDS := 8.0
+const PERFORMANCE_SAMPLE_SECONDS := 2.0
+const PERFORMANCE_DOWNGRADE_FPS := 42.0
+const PERFORMANCE_UPGRADE_FPS := 56.0
+const PERFORMANCE_CHANGE_COOLDOWN := 10.0
 const PLAY_GUIDE_TEXT := """[b]MOVEMENT AND ACTIONS[/b]
 Use the right-hand arrows to move forward or backward and steer. Use the left-hand buttons to jump, run, duck, attack, eat, or scream. Keyboard controls are WASD/arrows, Space, Shift, C/Ctrl, F, E, and R.
 
@@ -82,6 +93,16 @@ var generated_eggs: Array = []
 var environment_models: Dictionary = {}
 var token_rng := RandomNumberGenerator.new()
 var companions_spawned := 0
+var performance_tier := QUALITY_HIGH
+var performance_warmup := 0.0
+var performance_sample_time := 0.0
+var performance_sample_frames := 0
+var performance_low_samples := 0
+var performance_high_samples := 0
+var performance_change_cooldown := 0.0
+var quality_geometry: Array[GeometryInstance3D] = []
+var sun_light: DirectionalLight3D
+var active_minimap: Control
 
 
 func _ready() -> void:
@@ -91,6 +112,39 @@ func _ready() -> void:
 	_create_input_actions()
 	_build_main_menu()
 	_build_splash_screen()
+
+
+func _process(delta: float) -> void:
+	# Startup generation is intentionally excluded: only sustained gameplay FPS
+	# should decide whether this device needs a lower rendering tier.
+	if not is_instance_valid(world_root) or not is_instance_valid(player):
+		return
+	performance_warmup = maxf(performance_warmup - delta, 0.0)
+	performance_change_cooldown = maxf(performance_change_cooldown - delta, 0.0)
+	if performance_warmup > 0.0:
+		return
+	performance_sample_time += delta
+	performance_sample_frames += 1
+	if performance_sample_time < PERFORMANCE_SAMPLE_SECONDS:
+		return
+	var measured_fps := float(performance_sample_frames) / maxf(performance_sample_time, 0.001)
+	performance_sample_time = 0.0
+	performance_sample_frames = 0
+	if measured_fps < PERFORMANCE_DOWNGRADE_FPS:
+		performance_low_samples += 1
+		performance_high_samples = 0
+	elif measured_fps > PERFORMANCE_UPGRADE_FPS:
+		performance_high_samples += 1
+		performance_low_samples = 0
+	else:
+		performance_low_samples = 0
+		performance_high_samples = 0
+	if performance_change_cooldown > 0.0:
+		return
+	if performance_low_samples >= 2 and performance_tier > QUALITY_LOW:
+		_apply_performance_tier(performance_tier - 1)
+	elif performance_high_samples >= 5 and performance_tier < QUALITY_HIGH:
+		_apply_performance_tier(performance_tier + 1)
 
 
 func _start_game(dino_id: String) -> void:
@@ -108,6 +162,9 @@ func _start_game(dino_id: String) -> void:
 	world_root = Node3D.new()
 	world_root.name = "PrehistoricWorld"
 	add_child(world_root)
+	quality_geometry.clear()
+	sun_light = null
+	active_minimap = null
 	_generate_world_layout()
 	_build_environment()
 	_build_clouds()
@@ -118,6 +175,7 @@ func _start_game(dino_id: String) -> void:
 	_build_egg_nests()
 	_build_wild_dinosaurs()
 	_build_hud()
+	_reset_adaptive_performance()
 
 
 func _return_to_main_menu() -> void:
@@ -133,6 +191,10 @@ func _return_to_main_menu() -> void:
 	energy_label = null
 	bonus_label = null
 	companions_spawned = 0
+	quality_geometry.clear()
+	sun_light = null
+	active_minimap = null
+	get_viewport().scaling_3d_scale = 1.0
 	menu_layer.show()
 
 
@@ -682,6 +744,7 @@ func _build_environment() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 90.0
 	world_root.add_child(sun)
+	sun_light = sun
 
 
 func _build_clouds() -> void:
@@ -714,6 +777,7 @@ func _build_clouds() -> void:
 			puff.position = Vector3((float(puff_index) - 1.5) * 2.3, sin(float(puff_index) * 1.7) * 0.45, cos(float(puff_index) * 1.3) * 0.8) * cloud_scale
 			puff.scale = Vector3(2.4, 0.72, 1.45) * cloud_scale * (0.82 + float(puff_index % 2) * 0.22)
 			cloud.add_child(puff)
+			_register_quality_geometry(puff, "cloud")
 
 
 func _build_ambient_audio() -> void:
@@ -1083,6 +1147,7 @@ func _build_wild_dinosaurs() -> void:
 		npc.set("texture_variant", data.get("texture_variant", index))
 		npc.position = data["position"]
 		wildlife.add_child(npc)
+		_register_quality_geometry(npc.get("model_root"), "actor")
 
 
 func _build_powerup_tokens() -> void:
@@ -1116,6 +1181,7 @@ func _on_egg_hatched(parent_dino: CharacterBody3D, hatch_position: Vector3) -> v
 	baby.set("texture_variant", posmod(map_seed + companions_spawned + 1, GENERATED_MATERIALS.dino_variant_count()))
 	baby.position = hatch_position + Vector3(0.0, 0.1, 0.0)
 	world_root.add_child(baby)
+	_register_quality_geometry(baby.get("model_root"), "actor")
 	companions_spawned += 1
 	_show_status_message("A baby %s hatched and joined you!" % selected_dino_name)
 
@@ -1282,6 +1348,7 @@ func _build_hud() -> void:
 	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	minimap.clip_contents = true
 	root.add_child(minimap)
+	active_minimap = minimap
 	minimap.call("setup", player, MAP_HALF_SIZE, {
 		"biomes": generated_biomes,
 		"ponds": generated_ponds,
@@ -1401,12 +1468,14 @@ func _create_pond(pond_position: Vector3, pond_size: Vector2) -> void:
 	bank.position.y = 0.008
 	bank.material_override = _material(Color("756843"), 1.0)
 	lake.add_child(bank)
+	_register_quality_geometry(bank, "landmark")
 	var water := MeshInstance3D.new()
 	water.mesh = _round_water_mesh()
 	water.scale = Vector3(pond_size.x * 0.5, 1.0, pond_size.y * 0.5)
 	water.position.y = 0.035
 	water.material_override = _water_material()
 	lake.add_child(water)
+	_register_quality_geometry(water, "landmark")
 
 
 func _create_river(points: PackedVector2Array, width: float) -> void:
@@ -1506,6 +1575,7 @@ func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
 	hill.scale = hill_scale
 	hill.material_override = GENERATED_MATERIALS.ground_material(0 if int(hill_position.x) % 2 == 0 else 1, 0.11)
 	hill_body.add_child(hill)
+	_register_quality_geometry(hill, "large")
 
 	var collision := CollisionShape3D.new()
 	collision.shape = _ellipsoid_shape(hill_scale)
@@ -1544,6 +1614,7 @@ func _create_high_ground(formation: Dictionary) -> void:
 		mesh_instance.mesh = mesh
 		mesh_instance.material_override = GENERATED_MATERIALS.rock_material(tier_index + int(formation["position"].x), 0.48)
 		tier.add_child(mesh_instance)
+		_register_quality_geometry(mesh_instance, "landmark")
 		var collision := CollisionShape3D.new()
 		var shape := CylinderShape3D.new()
 		shape.radius = tier_radius * 0.94
@@ -1586,6 +1657,7 @@ func _create_tree(tree_data: Dictionary) -> void:
 	model.name = tree_type.to_pascal_case()
 	tree.add_child(model)
 	GENERATED_MATERIALS.apply_bark(model, abs(int(tree_position.x * 13.0 + tree_position.z * 7.0)))
+	_register_quality_geometry(model, "large")
 
 
 func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
@@ -1601,6 +1673,7 @@ func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
 	rock.name = "MossyBasaltRock"
 	rock_body.add_child(rock)
 	GENERATED_MATERIALS.apply_rock(rock, abs(int(rock_position.x * 11.0 + rock_position.z * 17.0)))
+	_register_quality_geometry(rock, "medium")
 
 	var collision := CollisionShape3D.new()
 	collision.shape = _ellipsoid_shape(Vector3(1.1, 0.78, 0.86))
@@ -1621,6 +1694,7 @@ func _create_fallen_log(log_data: Dictionary) -> void:
 	log_body.add_child(model)
 	var log_position: Vector3 = log_data["position"]
 	GENERATED_MATERIALS.apply_bark(model, abs(int(log_position.x * 5.0 + log_position.z * 3.0)))
+	_register_quality_geometry(model, "medium")
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(6.5, 1.2, 1.45)
@@ -1639,6 +1713,7 @@ func _create_vegetation(vegetation: Dictionary) -> void:
 	plant.add_to_group("edible_plant")
 	plant.set_meta("energy_remaining", 18.0)
 	world_root.add_child(plant)
+	_register_quality_geometry(plant, "small")
 
 
 func _build_map_boundary() -> void:
@@ -1687,6 +1762,101 @@ func _material(color: Color, roughness: float) -> StandardMaterial3D:
 	material.albedo_color = color
 	material.roughness = roughness
 	return material
+
+
+func _register_quality_geometry(root: Node, category: String) -> void:
+	# Imported GLBs often contain several MeshInstance3D children. Register each
+	# renderable once while preserving its full-quality settings for recovery.
+	if not is_instance_valid(root):
+		return
+	var renderables: Array[Node] = []
+	if root is GeometryInstance3D:
+		renderables.append(root)
+	renderables.append_array(root.find_children("*", "GeometryInstance3D", true, false))
+	for item in renderables:
+		var geometry := item as GeometryInstance3D
+		if not is_instance_valid(geometry) or geometry.has_meta("_quality_category"):
+			continue
+		geometry.set_meta("_quality_category", category)
+		geometry.set_meta("_quality_original_range", geometry.visibility_range_end)
+		geometry.set_meta("_quality_original_margin", geometry.visibility_range_end_margin)
+		geometry.set_meta("_quality_original_lod_bias", geometry.lod_bias)
+		geometry.set_meta("_quality_original_shadow", int(geometry.cast_shadow))
+		quality_geometry.append(geometry)
+		_apply_geometry_quality(geometry)
+
+
+func _reset_adaptive_performance() -> void:
+	performance_warmup = PERFORMANCE_WARMUP_SECONDS
+	performance_sample_time = 0.0
+	performance_sample_frames = 0
+	performance_low_samples = 0
+	performance_high_samples = 0
+	performance_change_cooldown = 0.0
+	_apply_performance_tier(QUALITY_HIGH)
+
+
+func _apply_performance_tier(next_tier: int) -> void:
+	performance_tier = clampi(next_tier, QUALITY_LOW, QUALITY_HIGH)
+	performance_low_samples = 0
+	performance_high_samples = 0
+	performance_change_cooldown = PERFORMANCE_CHANGE_COOLDOWN
+	for index in range(quality_geometry.size() - 1, -1, -1):
+		var geometry := quality_geometry[index]
+		if not is_instance_valid(geometry):
+			quality_geometry.remove_at(index)
+			continue
+		_apply_geometry_quality(geometry)
+
+	var viewport := get_viewport()
+	viewport.scaling_3d_scale = [0.72, 0.86, 1.0][performance_tier]
+	if is_instance_valid(sun_light):
+		sun_light.shadow_enabled = performance_tier > QUALITY_LOW
+		sun_light.directional_shadow_max_distance = [42.0, 62.0, 90.0][performance_tier]
+	if is_instance_valid(player):
+		var cameras: Array[Node] = player.find_children("*", "Camera3D", true, false)
+		if not cameras.is_empty():
+			(cameras[0] as Camera3D).far = [170.0, 240.0, 360.0][performance_tier]
+	if is_instance_valid(active_minimap) and active_minimap.has_method("set_performance_tier"):
+		active_minimap.call("set_performance_tier", performance_tier)
+
+
+func _apply_geometry_quality(geometry: GeometryInstance3D) -> void:
+	var category := str(geometry.get_meta("_quality_category", "medium"))
+	if performance_tier == QUALITY_HIGH:
+		geometry.visibility_range_end = float(geometry.get_meta("_quality_original_range", 0.0))
+		geometry.visibility_range_end_margin = float(geometry.get_meta("_quality_original_margin", 0.0))
+		geometry.lod_bias = float(geometry.get_meta("_quality_original_lod_bias", 1.0))
+		geometry.cast_shadow = int(geometry.get_meta("_quality_original_shadow", GeometryInstance3D.SHADOW_CASTING_SETTING_ON))
+		return
+
+	var medium_ranges := {
+		"small": 95.0,
+		"medium": 145.0,
+		"large": 175.0,
+		"landmark": 230.0,
+		"actor": 190.0,
+		"cloud": 260.0
+	}
+	var low_ranges := {
+		"small": 62.0,
+		"medium": 100.0,
+		"large": 120.0,
+		"landmark": 165.0,
+		"actor": 135.0,
+		"cloud": 175.0
+	}
+	var ranges: Dictionary = medium_ranges if performance_tier == QUALITY_MEDIUM else low_ranges
+	var cull_distance := float(ranges.get(category, 130.0))
+	geometry.visibility_range_end = cull_distance
+	geometry.visibility_range_end_margin = minf(cull_distance * 0.12, 14.0)
+	geometry.lod_bias = 0.72 if performance_tier == QUALITY_MEDIUM else 0.48
+	var keeps_shadow := category in ["actor", "landmark", "large"] and performance_tier == QUALITY_MEDIUM
+	geometry.cast_shadow = int(geometry.get_meta("_quality_original_shadow", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)) if keeps_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func get_performance_tier_name() -> String:
+	return ["low", "medium", "high"][performance_tier]
 
 
 func _create_input_actions() -> void:

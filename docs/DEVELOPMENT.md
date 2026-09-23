@@ -71,6 +71,17 @@ Selection cards and runtime actors read the same file. When adding a setting, gi
 
 Use `_find_world_position()` for solid objects and `_find_biome_position()` for biome-specific decoration. Add solid footprints to the local `occupied` list, and reject water positions with `_is_position_in_water()`. If a new generated collection affects the world identity, include it in `procedural_world_smoke.gd`'s layout signature.
 
+## Adaptive mobile performance
+
+Gameplay starts in the high-quality tier at native 3D resolution. After an eight-second warm-up, `main.gd` samples delivered frame rate in two-second windows. Two sustained samples below 42 FPS lower the tier; five samples above 56 FPS restore one tier. A cooldown prevents rapid oscillation.
+
+- High preserves native resolution, original draw ranges, shadows and minimap refresh.
+- Medium uses 86% 3D resolution, shorter shadow/draw distances and cheaper distant LODs.
+- Low uses 72% 3D resolution, disables the world shadow and shortens scenery/camera ranges further.
+- UI remains at native resolution in every tier.
+
+Register new environment or actor renderables through `_register_quality_geometry()` with the closest existing category. Collision and AI remain active outside visual culling range. Update `performance_scaling_smoke.gd` when changing tier values.
+
 ## Wildlife AI
 
 The wildlife controller uses explicit states rather than a behavior-tree plugin.
@@ -81,6 +92,7 @@ The wildlife controller uses explicit states rather than a behavior-tree plugin.
 - Every pack has a slot-zero leader. It retains a 55–105 unit world goal until arrival and uses temporary collision-tangent steering rather than discarding a blocked goal. Followers use staggered formation targets and local separation.
 - Same-pack collision exceptions prevent physical deadlocks. Slot one periodically trails beyond the pack-support radius, then regroups.
 - Same-species checks exist both during target selection and damage application; preserve both layers.
+- Pack and same-species membership are cached after spawning; use those caches for frequent AI queries and reserve whole-tree group scans for dynamic targets such as babies.
 
 Babies join the prey and NPC groups so predators can target them, but use a separate script with no energy or hunting logic. Hunters give baby targets a strong selection bonus and use lower stalking/strike odds (0.55/0.68 instead of 0.78/1.0), while the combat-risk calculation still counts the nearby parent and herd before permitting an attack.
 
