@@ -41,7 +41,7 @@ Run `./scripts/setup-dev.sh` if the ignored local Godot/Android toolchain under 
 
 ## Runtime lifecycle
 
-`main.gd` loads configuration and builds the selection menu, then places the startup splash above it. Dismissing the splash reveals the menu. Starting a game performs this sequence:
+`main.gd` loads configuration and builds a two-stage menu, then places the startup splash above it. Dismissing the splash reveals `LandingPage`, which contains the Quests placeholder, Free Game tile, and Credits button. Free Game switches to `FreeGamePage`, which owns the seed controls, two-row dinosaur selection, play guide, and back button. Starting a game performs this sequence:
 
 1. Validate and commit the six-digit seed.
 2. Generate deterministic layout dictionaries.
@@ -49,11 +49,12 @@ Run `./scripts/setup-dev.sh` if the ignored local Godot/Android toolchain under 
 4. Spawn tokens, the player, egg nests and wildlife.
 5. Build the HUD and initialize the minimap.
 
-Returning to the menu frees the world and HUD while retaining the already-built menu. Keep world-owned nodes below `world_root`; otherwise they may survive between sessions.
+Returning to the menu frees the world and HUD, resets the UI to `LandingPage`, and retains the already-built menu. Keep world-owned nodes below `world_root`; otherwise they may survive between sessions.
 
 ## Configuration and balancing
 
 Use `config/dinosaurs.cfg` instead of hard-coding species balance. Each dinosaur section defines its model, diet, scale, speeds, strength, jump ability, health, collision and camera framing. Shared sections define energy costs, token behavior and breeding values.
+Optional `audio_profile` and `run_animation_speed_scale` values let a species share an existing sound family or reuse a walk clip for running.
 
 Selection cards and runtime actors read the same file. When adding a setting, give code a sensible fallback and add a smoke-test assertion where practical.
 
@@ -61,7 +62,7 @@ Selection cards and runtime actors read the same file. When adding a setting, gi
 
 1. Add the model and its license/source information under `assets/models/`.
 2. Add a complete species section to `config/dinosaurs.cfg`.
-3. Add the identifier to `DINO_IDS` and to the correct diet list in `main.gd`.
+3. Add the identifier to the player-facing `DINO_IDS`. Add it to a diet list only if it should also spawn as wildlife; Spinosaurus intentionally is not in either wildlife list.
 4. Add its menu portrait and action sounds using the existing naming scheme.
 5. Verify model facing, scale, collision, animation names and camera distance.
 6. Run the dinosaur-selection, gameplay, wildlife and Android export tests.

@@ -16,6 +16,7 @@ var parent_dino: CharacterBody3D
 var diet := "herbivore"
 var display_name := "Baby Dinosaur"
 var model_scale := 0.1
+var run_animation_speed_scale := 1.0
 var walk_speed := 2.5
 var run_speed := 4.5
 var turn_speed := 2.5
@@ -42,6 +43,7 @@ func _ready() -> void:
 	var baby_scale := float(config.get_value("breeding", "baby_scale", 0.42))
 	var speed_factor := float(config.get_value("breeding", "baby_speed_factor", 0.84))
 	model_scale = float(config.get_value(dino_id, "model_scale", 0.2)) * baby_scale
+	run_animation_speed_scale = config.get_value(dino_id, "run_animation_speed_scale", 1.0)
 	walk_speed = float(config.get_value(dino_id, "walk_speed", 3.0)) * speed_factor
 	run_speed = float(config.get_value(dino_id, "run_speed", 6.0)) * speed_factor
 	turn_speed = float(config.get_value(dino_id, "turn_speed", 2.0)) * 1.15
@@ -117,6 +119,8 @@ func _die(attacker: Node3D = null) -> void:
 	remove_from_group("prey_dinosaur")
 	collision_shape.set_deferred("disabled", true)
 	_play_animation("death", true)
+	if animation_player:
+		animation_player.speed_scale = 0.85
 	var meat := _drop_meat()
 	if is_instance_valid(attacker) and attacker.has_method("claim_meal"):
 		attacker.call("claim_meal", meat)
@@ -202,6 +206,7 @@ func _update_animation(moving: bool, running: bool) -> void:
 	if dead or animation_player == null:
 		return
 	_play_animation(("run" if running else "walk") if moving else "idle")
+	animation_player.speed_scale = run_animation_speed_scale if moving and running else 1.0
 
 
 func _play_animation(keyword: String, force := false) -> void:
@@ -217,7 +222,14 @@ func _play_animation(keyword: String, force := false) -> void:
 func _find_animation(keyword: String) -> String:
 	if animation_player == null:
 		return ""
-	for animation_name in animation_player.get_animation_list():
-		if keyword.to_lower() in animation_name.to_lower():
-			return animation_name
+	var search_terms: Array[String] = [keyword.to_lower()]
+	match keyword.to_lower():
+		"death":
+			search_terms.append("dead")
+		"run":
+			search_terms.append("walk")
+	for search_term in search_terms:
+		for animation_name in animation_player.get_animation_list():
+			if search_term in animation_name.to_lower():
+				return animation_name
 	return ""

@@ -12,7 +12,9 @@ const POWERUP_TOKEN_SCRIPT := preload("res://scripts/powerup_token.gd")
 const EGG_NEST_SCRIPT := preload("res://scripts/egg_nest.gd")
 const BABY_DINO_SCRIPT := preload("res://scripts/baby_dino.gd")
 const VIRTUAL_JOYSTICK_SCRIPT := preload("res://scripts/virtual_joystick.gd")
-const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
+# DINO_IDS is the player-selection roster. The two diet lists below are the
+# deliberately smaller wildlife pools; Spinosaurus is player-only.
+const DINO_IDS := ["trex", "spinosaurus", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
 const CARNIVORE_IDS := ["trex", "velociraptor"]
 const MAP_HALF_SIZE := 200.0
@@ -63,6 +65,8 @@ var status_label: Label
 var world_root: Node3D
 var game_hud: CanvasLayer
 var menu_layer: CanvasLayer
+var landing_page: Control
+var free_game_page: Control
 var credits_overlay: Control
 var play_guide_overlay: Control
 var splash_layer: CanvasLayer
@@ -196,6 +200,7 @@ func _return_to_main_menu() -> void:
 	sun_light = null
 	active_minimap = null
 	get_viewport().scaling_3d_scale = 1.0
+	_show_landing_page()
 	menu_layer.show()
 
 
@@ -249,49 +254,126 @@ func _build_main_menu() -> void:
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(shade)
 
+	# The menu has two distinct levels: a simple mode landing page and the
+	# detailed Free Game setup page. Keeping both under the same CanvasLayer
+	# makes transitions instant and retains the chosen seed between visits.
+	landing_page = Control.new()
+	landing_page.name = "LandingPage"
+	landing_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(landing_page)
+
+	free_game_page = Control.new()
+	free_game_page.name = "FreeGamePage"
+	free_game_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(free_game_page)
+	free_game_page.hide()
+
 	var title := Label.new()
 	title.text = "DINOS4HELENA"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	title.position = Vector2(-440, 34)
+	title.position = Vector2(-440, 62)
 	title.size = Vector2(880, 78)
 	title.add_theme_font_size_override("font_size", 58)
 	title.add_theme_color_override("font_color", Color("fff2c2"))
 	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	title.add_theme_constant_override("shadow_offset_x", 3)
 	title.add_theme_constant_override("shadow_offset_y", 4)
-	root.add_child(title)
+	landing_page.add_child(title)
 
 	var subtitle := Label.new()
 	subtitle.text = "Helena's Dino game - made by dad"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	subtitle.position = Vector2(-350, 108)
+	subtitle.position = Vector2(-350, 136)
 	subtitle.size = Vector2(700, 40)
 	subtitle.add_theme_font_size_override("font_size", 23)
 	subtitle.add_theme_color_override("font_color", Color("f5dc9d"))
 	subtitle.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	subtitle.add_theme_constant_override("shadow_offset_x", 2)
 	subtitle.add_theme_constant_override("shadow_offset_y", 2)
-	root.add_child(subtitle)
+	landing_page.add_child(subtitle)
+
+	var mode_tiles := HBoxContainer.new()
+	mode_tiles.name = "GameModeTiles"
+	mode_tiles.set_anchors_preset(Control.PRESET_CENTER)
+	mode_tiles.position = Vector2(-344, -110)
+	mode_tiles.size = Vector2(688, 238)
+	mode_tiles.alignment = BoxContainer.ALIGNMENT_CENTER
+	mode_tiles.add_theme_constant_override("separation", 28)
+	landing_page.add_child(mode_tiles)
+
+	var quests_tile := Button.new()
+	quests_tile.name = "QuestsTile"
+	quests_tile.text = "QUESTS\nCOMING LATER"
+	quests_tile.custom_minimum_size = Vector2(330, 220)
+	quests_tile.disabled = true
+	quests_tile.focus_mode = Control.FOCUS_NONE
+	quests_tile.tooltip_text = "Quests will be added in a future update"
+	quests_tile.add_theme_font_size_override("font_size", 25)
+	quests_tile.add_theme_color_override("font_disabled_color", Color(0.92, 0.92, 0.82, 0.92))
+	quests_tile.add_theme_color_override("font_outline_color", Color(0.01, 0.025, 0.015, 0.96))
+	quests_tile.add_theme_constant_override("outline_size", 8)
+	quests_tile.add_theme_stylebox_override("disabled", _tile_image_style(load("res://assets/ui/menu/quests-tile.png"), Color(0.44, 0.47, 0.42, 1.0)))
+	mode_tiles.add_child(quests_tile)
+
+	var free_game_tile := Button.new()
+	free_game_tile.name = "FreeGameTile"
+	free_game_tile.text = "FREE GAME\nCHOOSE YOUR DINOSAUR"
+	free_game_tile.custom_minimum_size = Vector2(330, 220)
+	free_game_tile.focus_mode = Control.FOCUS_NONE
+	free_game_tile.add_theme_font_size_override("font_size", 25)
+	free_game_tile.add_theme_color_override("font_color", Color("fff2c2"))
+	free_game_tile.add_theme_color_override("font_hover_color", Color.WHITE)
+	free_game_tile.add_theme_color_override("font_pressed_color", Color.WHITE)
+	free_game_tile.add_theme_color_override("font_outline_color", Color(0.01, 0.025, 0.015, 0.96))
+	free_game_tile.add_theme_constant_override("outline_size", 8)
+	var free_game_art: Texture2D = load("res://assets/ui/menu/free-game-tile.png")
+	free_game_tile.add_theme_stylebox_override("normal", _tile_image_style(free_game_art, Color(0.72, 0.72, 0.68, 1.0)))
+	free_game_tile.add_theme_stylebox_override("hover", _tile_image_style(free_game_art, Color(0.92, 0.92, 0.86, 1.0)))
+	free_game_tile.add_theme_stylebox_override("pressed", _tile_image_style(free_game_art, Color(0.58, 0.6, 0.54, 1.0)))
+	free_game_tile.pressed.connect(_show_free_game_page)
+	mode_tiles.add_child(free_game_tile)
+
+	var free_game_title := Label.new()
+	free_game_title.text = "FREE GAME"
+	free_game_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	free_game_title.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	free_game_title.position = Vector2(-260, 12)
+	free_game_title.size = Vector2(520, 44)
+	free_game_title.add_theme_font_size_override("font_size", 32)
+	free_game_title.add_theme_color_override("font_color", Color("fff2c2"))
+	free_game_page.add_child(free_game_title)
+
+	var back_button := Button.new()
+	back_button.name = "BackToLandingButton"
+	back_button.text = "← BACK"
+	back_button.position = Vector2(20, 18)
+	back_button.size = Vector2(126, 42)
+	back_button.focus_mode = Control.FOCUS_NONE
+	back_button.add_theme_font_size_override("font_size", 16)
+	back_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
+	back_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
+	back_button.pressed.connect(_show_landing_page)
+	free_game_page.add_child(back_button)
 
 	var prompt := Label.new()
 	prompt.text = "CHOOSE YOUR DINOSAUR"
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	prompt.position = Vector2(-260, 169)
+	prompt.position = Vector2(-260, 55)
 	prompt.size = Vector2(520, 42)
 	prompt.add_theme_font_size_override("font_size", 21)
 	prompt.add_theme_color_override("font_color", Color.WHITE)
-	root.add_child(prompt)
+	free_game_page.add_child(prompt)
 
 	var seed_row := HBoxContainer.new()
 	seed_row.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	seed_row.position = Vector2(-225, 210)
+	seed_row.position = Vector2(-225, 94)
 	seed_row.size = Vector2(450, 40)
 	seed_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	seed_row.add_theme_constant_override("separation", 10)
-	root.add_child(seed_row)
+	free_game_page.add_child(seed_row)
 
 	var seed_label := Label.new()
 	seed_label.text = "WORLD SEED"
@@ -321,18 +403,29 @@ func _build_main_menu() -> void:
 	seed_row.add_child(random_seed_button)
 	_set_random_world_seed()
 
-	var cards := HBoxContainer.new()
+	var cards := VBoxContainer.new()
 	cards.name = "DinosaurCards"
 	cards.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	cards.position = Vector2(-590, 258)
-	cards.size = Vector2(1180, 360)
+	cards.position = Vector2(-430, 137)
+	cards.size = Vector2(860, 496)
 	cards.alignment = BoxContainer.ALIGNMENT_CENTER
-	cards.add_theme_constant_override("separation", 12)
-	root.add_child(cards)
+	cards.add_theme_constant_override("separation", 8)
+	free_game_page.add_child(cards)
 
-	for dino_id in DINO_IDS:
+	var card_rows: Array[HBoxContainer] = []
+	for row_index in 2:
+		var row := HBoxContainer.new()
+		row.name = "DinosaurCardRow%d" % (row_index + 1)
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 10)
+		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		cards.add_child(row)
+		card_rows.append(row)
+
+	for dino_index in DINO_IDS.size():
+		var dino_id: String = DINO_IDS[dino_index]
 		var display_name: String = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
-		cards.add_child(_create_dino_card(dino_id, display_name))
+		card_rows[0 if dino_index < 4 else 1].add_child(_create_dino_card(dino_id, display_name))
 
 	var footer := Label.new()
 	footer.text = "Select a dinosaur to begin your prehistoric adventure"
@@ -342,7 +435,7 @@ func _build_main_menu() -> void:
 	footer.size = Vector2(700, 32)
 	footer.add_theme_font_size_override("font_size", 17)
 	footer.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
-	root.add_child(footer)
+	free_game_page.add_child(footer)
 
 	var credits_button := Button.new()
 	credits_button.name = "CreditsButton"
@@ -356,7 +449,7 @@ func _build_main_menu() -> void:
 	credits_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
 	credits_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
 	credits_button.pressed.connect(_open_credits)
-	root.add_child(credits_button)
+	landing_page.add_child(credits_button)
 
 	var guide_button := Button.new()
 	guide_button.name = "PlayGuideButton"
@@ -370,9 +463,27 @@ func _build_main_menu() -> void:
 	guide_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
 	guide_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
 	guide_button.pressed.connect(_open_play_guide)
-	root.add_child(guide_button)
+	free_game_page.add_child(guide_button)
 	_build_credits_overlay(root)
 	_build_play_guide_overlay(root)
+
+
+func _show_free_game_page() -> void:
+	if is_instance_valid(credits_overlay):
+		credits_overlay.hide()
+	if is_instance_valid(play_guide_overlay):
+		play_guide_overlay.hide()
+	landing_page.hide()
+	free_game_page.show()
+
+
+func _show_landing_page() -> void:
+	if is_instance_valid(credits_overlay):
+		credits_overlay.hide()
+	if is_instance_valid(play_guide_overlay):
+		play_guide_overlay.hide()
+	free_game_page.hide()
+	landing_page.show()
 
 
 func _build_splash_screen() -> void:
@@ -641,18 +752,21 @@ func _credits_style() -> StyleBoxFlat:
 
 func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(184, 338)
+	panel.custom_minimum_size = Vector2(202, 238)
 	panel.add_theme_stylebox_override("panel", _card_style())
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
+	column.add_theme_constant_override("separation", 3)
 	panel.add_child(column)
 
 	var portrait := TextureButton.new()
-	portrait.custom_minimum_size = Vector2(168, 158)
+	portrait.name = "Portrait"
+	portrait.custom_minimum_size = Vector2(186, 116)
 	portrait.texture_normal = load("res://assets/ui/menu/%s.png" % dino_id)
 	portrait.ignore_texture_size = true
-	portrait.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_COVERED
+	# Keep the complete dinosaur visible. The generated portraits have varying
+	# aspect ratios, so cover mode would crop heads, tails, or feet.
+	portrait.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	portrait.tooltip_text = "Play as " + display_name
 	portrait.pressed.connect(_start_game.bind(dino_id))
 	column.add_child(portrait)
@@ -660,14 +774,14 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	var name_label := Label.new()
 	name_label.text = display_name.to_upper()
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 17 if display_name.length() < 13 else 14)
+	name_label.add_theme_font_size_override("font_size", 15 if display_name.length() < 13 else 13)
 	name_label.add_theme_color_override("font_color", Color("fff2c2"))
 	column.add_child(name_label)
 
 	var stats := GridContainer.new()
 	stats.columns = 2
 	stats.add_theme_constant_override("h_separation", 8)
-	stats.add_theme_constant_override("v_separation", 2)
+	stats.add_theme_constant_override("v_separation", 0)
 	column.add_child(stats)
 	_add_stat(stats, "SPEED", "%.1f" % float(dinosaur_config.get_value(dino_id, "run_speed", 0.0)))
 	_add_stat(stats, "STRENGTH", "%d/10" % int(dinosaur_config.get_value(dino_id, "strength", 0)))
@@ -676,8 +790,9 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 
 	var play := Button.new()
 	play.text = "PLAY"
+	play.custom_minimum_size.y = 27
 	play.focus_mode = Control.FOCUS_NONE
-	play.add_theme_font_size_override("font_size", 16)
+	play.add_theme_font_size_override("font_size", 14)
 	play.add_theme_color_override("font_color", Color("f7f2d0"))
 	play.add_theme_stylebox_override("normal", _button_style(Color(0.12, 0.25, 0.16, 0.92), Color(0.72, 0.83, 0.42, 0.8)))
 	play.add_theme_stylebox_override("hover", _button_style(Color(0.24, 0.43, 0.22, 0.96), Color("f7f2d0")))
@@ -690,13 +805,13 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 func _add_stat(parent: GridContainer, stat_name: String, stat_value: String) -> void:
 	var name_label := Label.new()
 	name_label.text = stat_name
-	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.add_theme_font_size_override("font_size", 10)
 	name_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.68))
 	parent.add_child(name_label)
 	var value_label := Label.new()
 	value_label.text = stat_value
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	value_label.add_theme_font_size_override("font_size", 12)
+	value_label.add_theme_font_size_override("font_size", 10)
 	value_label.add_theme_color_override("font_color", Color("f5dc9d"))
 	parent.add_child(value_label)
 
@@ -1459,6 +1574,21 @@ func _button_style(color: Color, border_color: Color) -> StyleBoxFlat:
 	style.content_margin_right = 8
 	style.content_margin_top = 5
 	style.content_margin_bottom = 5
+	return style
+
+
+func _tile_image_style(texture: Texture2D, tint: Color) -> StyleBoxTexture:
+	# A texture style keeps the Button semantics and accessible hit target while
+	# letting the generated scene fill the complete 3:2 tile behind its label.
+	var style := StyleBoxTexture.new()
+	style.texture = texture
+	style.modulate_color = tint
+	style.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	style.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 16
+	style.content_margin_bottom = 16
 	return style
 
 

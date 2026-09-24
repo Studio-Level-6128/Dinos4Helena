@@ -1,6 +1,6 @@
 extends SceneTree
 
-const DINO_IDS := ["trex", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
+const DINO_IDS := ["trex", "spinosaurus", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 
 
 func _initialize() -> void:
@@ -18,8 +18,22 @@ func _run() -> void:
 	assert(not app.menu_layer.visible, "Selection menu should wait behind the splash")
 	app._dismiss_splash(true)
 	assert(app.menu_layer.visible, "Main menu is not visible at startup")
+	var landing_page := app.menu_layer.find_child("LandingPage", true, false) as Control
+	var free_game_page := app.menu_layer.find_child("FreeGamePage", true, false) as Control
+	var quests_tile := app.menu_layer.find_child("QuestsTile", true, false) as Button
+	var free_game_tile := app.menu_layer.find_child("FreeGameTile", true, false) as Button
+	assert(landing_page != null and landing_page.visible, "Landing page should be visible at startup")
+	assert(free_game_page != null and not free_game_page.visible, "Free Game page should start hidden")
+	assert(quests_tile != null and quests_tile.disabled, "Unavailable Quests tile is missing or enabled")
+	assert(free_game_tile != null, "Free Game tile is missing")
+	assert(ResourceLoader.exists("res://assets/ui/menu/quests-tile.png"), "Quests tile background is missing")
+	assert(ResourceLoader.exists("res://assets/ui/menu/free-game-tile.png"), "Free Game tile background is missing")
+	var mode_tiles: Node = app.menu_layer.find_child("GameModeTiles", true, false)
+	assert(mode_tiles != null and mode_tiles.get_child_count() == 2, "Landing page should contain exactly two mode tiles")
+
+	# Credits remain available from the clean landing page.
 	var credits_button := app.menu_layer.find_child("CreditsButton", true, false) as Button
-	assert(credits_button != null, "Credits button is missing from the main menu")
+	assert(credits_button != null and credits_button.get_parent() == landing_page, "Credits button is missing from the landing page")
 	assert(app.credits_overlay != null and not app.credits_overlay.visible, "Credits overlay should start hidden")
 	credits_button.pressed.emit()
 	assert(app.credits_overlay.visible, "Credits button did not open the credits page")
@@ -34,14 +48,33 @@ func _run() -> void:
 	app._close_credits()
 	assert(not app.credits_overlay.visible, "Credits page did not close")
 
+	free_game_tile.pressed.emit()
+	assert(not landing_page.visible and free_game_page.visible, "Free Game tile did not open the setup page")
+	var cards: Node = app.menu_layer.find_child("DinosaurCards", true, false)
+	assert(cards != null and cards.get_child_count() == 2, "Dinosaur cards are not arranged in two rows")
+	assert(cards.get_child(0).get_child_count() == 4, "First dinosaur-card row should contain four cards")
+	assert(cards.get_child(1).get_child_count() == 3, "Second dinosaur-card row should contain three cards")
+	var first_portrait := cards.get_child(0).get_child(0).find_child("Portrait", true, false) as TextureButton
+	assert(first_portrait != null and first_portrait.stretch_mode == TextureButton.STRETCH_KEEP_ASPECT_CENTERED, "Dinosaur portraits should fit without cropping")
+	var back_button := app.menu_layer.find_child("BackToLandingButton", true, false) as Button
+	assert(back_button != null, "Free Game back button is missing")
+	back_button.pressed.emit()
+	assert(landing_page.visible and not free_game_page.visible, "Back button did not return to the landing page")
+	free_game_tile.pressed.emit()
+	assert(ResourceLoader.exists("res://assets/models/spinosaurus/Spinosaurus.glb"), "Spinosaurus model is missing")
+	assert(ResourceLoader.exists("res://assets/ui/menu/spinosaurus.png"), "Spinosaurus portrait is missing")
+
 	for dino_id in DINO_IDS:
 		app._start_game(dino_id)
 		await process_frame
 		await physics_frame
 		var player := app.get_node("PrehistoricWorld/PlayerDinosaur")
 		assert(player.dino_id == dino_id, "Wrong dinosaur selected: " + dino_id)
+		for wild_dino in app.generated_dinosaurs:
+			assert(wild_dino["species"] != "spinosaurus", "Player-only Spinosaurus appeared as wildlife")
 		assert(player.animation_player != null, "Missing animations for: " + dino_id)
-		assert(player.animation_player.get_animation_list().size() >= 5, "Incomplete animation set for: " + dino_id)
+		var minimum_animation_count := 4 if dino_id == "spinosaurus" else 5
+		assert(player.animation_player.get_animation_list().size() >= minimum_animation_count, "Incomplete animation set for: " + dino_id)
 		var death_animation: String = player._find_animation("death")
 		assert(death_animation != "", "Missing death animation for: " + dino_id)
 		assert(player.animation_player.get_animation(death_animation).loop_mode == Animation.LOOP_NONE, "Death animation loops for: " + dino_id)
@@ -59,8 +92,9 @@ func _run() -> void:
 		app._return_to_main_menu()
 		await process_frame
 		assert(app.menu_layer.visible, "Could not return to menu after: " + dino_id)
+		assert(landing_page.visible and not free_game_page.visible, "Gameplay should return to the landing page")
 
-	print("Dinosaur selection smoke test passed for all 6 species")
+	print("Dinosaur selection smoke test passed for all 7 species")
 	app.queue_free()
 	await process_frame
 	quit()

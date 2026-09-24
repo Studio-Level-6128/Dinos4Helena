@@ -16,6 +16,8 @@ var dino_id := "trex"
 var texture_variant := 0
 var dino_config := ConfigFile.new()
 var model_scale := 0.20
+var audio_profile := ""
+var run_animation_speed_scale := 1.0
 var walk_speed := 4.0
 var run_speed := 8.0
 var duck_speed := 2.2
@@ -75,6 +77,8 @@ func _ready() -> void:
 	var config_error := dino_config.load("res://config/dinosaurs.cfg")
 	assert(config_error == OK, "Could not load dinosaur configuration")
 	model_scale = dino_config.get_value(dino_id, "model_scale", 0.20)
+	audio_profile = dino_config.get_value(dino_id, "audio_profile", dino_id)
+	run_animation_speed_scale = dino_config.get_value(dino_id, "run_animation_speed_scale", 1.0)
 	walk_speed = dino_config.get_value(dino_id, "walk_speed", 4.0)
 	run_speed = dino_config.get_value(dino_id, "run_speed", 8.0)
 	duck_speed = dino_config.get_value(dino_id, "duck_speed", 2.2)
@@ -230,7 +234,7 @@ func _build_model() -> void:
 	model_root = model_scene.instantiate()
 	model_root.name = "DinosaurModel"
 	model_root.scale = Vector3.ONE * model_scale
-	# The source FBX faces +Z. Godot gameplay convention uses -Z as forward.
+	# The source dinosaur assets face +Z. Gameplay convention uses -Z as forward.
 	model_root.rotation.y = PI
 	add_child(model_root)
 	GENERATED_MATERIALS.apply_dino_skin(model_root, texture_variant)
@@ -267,7 +271,7 @@ func _build_follow_camera() -> void:
 
 func _build_audio() -> void:
 	for sound_name in ["scream", "walk", "run", "jump", "duck", "attack", "hurt"]:
-		var path := "res://assets/audio/dinosaurs/%s/%s.mp3" % [dino_id, sound_name]
+		var path := "res://assets/audio/dinosaurs/%s/%s.mp3" % [audio_profile, sound_name]
 		if ResourceLoader.exists(path):
 			audio_streams[sound_name] = load(path)
 
@@ -316,6 +320,8 @@ func _start_attack() -> void:
 	attack_time = 0.85
 	_spend_energy(attack_energy_cost)
 	_play_animation("attack", true)
+	if animation_player:
+		animation_player.speed_scale = 1.0
 	_play_action_sound("attack")
 	get_tree().create_timer(0.24).timeout.connect(_perform_attack_hit)
 
@@ -348,15 +354,18 @@ func _perform_attack_hit() -> void:
 func _update_animation(moving: bool, running: bool, ducking: bool) -> void:
 	if animation_player == null or attack_time > 0.0 or scream_time > 0.0:
 		return
+	var playback_speed := 1.0
 	if eating_active:
 		_play_animation("idle")
+		playback_speed = 0.58
 	elif not is_on_floor():
 		_play_animation("jump")
 	elif moving:
 		_play_animation("walk" if ducking else ("run" if running else "walk"))
+		playback_speed = 0.65 if ducking else (run_animation_speed_scale if running else 1.0)
 	else:
 		_play_animation("idle")
-	animation_player.speed_scale = 0.58 if eating_active else (0.65 if ducking else (0.75 if scream_time > 0.0 else 1.0))
+	animation_player.speed_scale = playback_speed
 
 
 func _start_scream() -> void:
@@ -567,9 +576,20 @@ func _play_animation(keyword: String, force := false) -> void:
 func _find_animation(keyword: String) -> String:
 	if animation_player == null:
 		return ""
-	for animation_name in animation_player.get_animation_list():
-		if keyword.to_lower() in animation_name.to_lower():
-			return animation_name
+	var search_terms: Array[String] = [keyword.to_lower()]
+	# Gobkit names its death clip "dead" and intentionally ships no separate
+	# run/jump clips. These fallbacks keep every existing player action valid.
+	match keyword.to_lower():
+		"death":
+			search_terms.append("dead")
+		"run":
+			search_terms.append("walk")
+		"jump":
+			search_terms.append("idle")
+	for search_term in search_terms:
+		for animation_name in animation_player.get_animation_list():
+			if search_term in animation_name.to_lower():
+				return animation_name
 	return ""
 
 

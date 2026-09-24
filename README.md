@@ -1,10 +1,10 @@
 # Dinos4Helena
 
-A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has six selectable animated dinosaurs, a third-person follow camera, two-handed touch controls, species-specific sound design, and a procedural prehistoric valley.
+A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has seven selectable animated dinosaurs, a third-person follow camera, two-handed touch controls, species-specific sound design, and a procedural prehistoric valley.
 
 See the [player guide](docs/PLAY_GUIDE.md) for the complete game rules and the [development guide](docs/DEVELOPMENT.md) for architecture, setup, extension points, testing, and Android builds.
 
-The game opens with a generated cinematic dinosaur-fight splash, followed by the dinosaur-selection screen titled **DINOS4HELENA**, with the subtitle “Helena's Dino game - made by dad.” Choose T-Rex, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus. `HOW TO PLAY` opens the in-game guide, and the top-right `MAIN MENU` button returns to the selection screen at any time.
+The game opens with a generated cinematic dinosaur-fight splash, followed by a clean **DINOS4HELENA** landing page with `QUESTS`, `FREE GAME`, and `CREDITS`. Quests are marked as coming later. `FREE GAME` opens a separate setup page where the player chooses T-Rex, Spinosaurus, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus and sets the world seed. `HOW TO PLAY` is available there, and the top-right `MAIN MENU` button returns from gameplay to the landing page at any time.
 
 ## Play the prototype
 
@@ -22,7 +22,7 @@ The camera follows above and behind the player dinosaur. On Android, the action 
 
 Health and energy bars appear in the upper-left corner. Every dinosaur starts with its species-specific maximum health and 100% energy. Walking, running, ducking, jumping, attacking, and screaming consume energy at deliberately gradual rates. At zero energy, health silently falls without repeatedly playing the hurt sound; reaching zero health plays the species' death animation and ends the game.
 
-Herbivores regain energy slowly by holding `EAT` near grass or another plant. While grazing, the dinosaur stops, lowers its body and head, and makes a repeated chewing motion. T-Rex and Velociraptor regain energy quickly by eating meat left after a hunt.
+Herbivores regain energy slowly by holding `EAT` near grass or another plant. While grazing, the dinosaur stops, lowers its body and head, and makes a repeated chewing motion. Player-controlled T-Rex, Velociraptor, and Spinosaurus regain energy quickly by eating meat left after a hunt.
 
 Thirty glowing tokens are distributed throughout each seeded world: 14 health tokens restore 40 health, while 8 speed and 8 strength tokens double the matching stat for 30 seconds. Active bonuses and their countdowns appear beneath the health and energy bars. Tokens bob and rotate, disappear when collected, and respawn at a new clear location as the same type after a random 6–12 second delay. Counts, healing, bonus duration, and respawn timing are configurable under `[tokens]` in `config/dinosaurs.cfg`.
 
@@ -36,7 +36,7 @@ The world uses animated shader water with earthy banks for seeded lakes and rive
 
 Every seeded world also contains AI-controlled dinosaurs. Herbivores spawn in small same-species packs whose leader selects a distant destination, keeps pursuing it around obstacles, and chooses another only after arrival. Other members keep staggered side and trail positions, steer apart locally, and cannot physically deadlock one another. One animal periodically lags behind the moving herd, briefly creating an isolated hunting opportunity before it regroups. Packs welcome nearby herbivore players of their own species into the herd. If one of those players or another pack member is attacked, nearby herd members converge on the attacker and fight in its defense. T-Rex and Velociraptor hunters spawn alone and weigh their health, energy, strength, and size against a potential target plus its nearby same-species defenders. Healthy hunters strongly prefer babies and accept riskier baby attacks, while still accounting for nearby parents and defenders. They stalk marginal adult prey, avoid overpowering packs, feed after a kill, and retreat from opponents once their health falls below 50%.
 
-Wild dinosaurs use the same configured health, strength, speed, scale, collision, and animation data as the playable species. Dinosaurs never hunt, target, or damage their own species. The player's `ATTACK` action works while walking, running or jumping and can hit a different-species dinosaur in front of it. Hunters likewise keep pursuing through their strikes. Hunters can damage both wildlife and the player, and damaged NPCs briefly show their health. Carnivores spend energy while walking, pursuing, and attacking; after a kill they claim the dropped meat, feed to recover energy, and only then resume hunting. A defeated wild dinosaur plays its native death animation and leaves edible meat, whose explored location remains marked on the minimap until the meat is consumed.
+Wild dinosaurs use the same configured health, strength, speed, scale, collision, and animation data as their playable counterparts. Spinosaurus is deliberately player-only and never appears in the procedural wildlife pool. Dinosaurs never hunt, target, or damage their own species. The player's `ATTACK` action works while walking, running or jumping and can hit a different-species dinosaur in front of it. Hunters likewise keep pursuing through their strikes. Hunters can damage both wildlife and the player, and damaged NPCs briefly show their health. Carnivores spend energy while walking, pursuing, and attacking; after a kill they claim the dropped meat, feed to recover energy, and only then resume hunting. A defeated wild dinosaur plays its native death animation and leaves edible meat, whose explored location remains marked on the minimap until the meat is consumed.
 
 Six egg nests are hidden at deterministic clear locations in every seeded world. Stand over an egg and hold `DUCK` for four seconds to hatch a baby of the player's species. The smaller, slightly slower baby follows beside its parent, has independent health but no energy meter, and can be hunted and killed by different-species predators. Breeding counts, incubation time, baby scale, and speed are configurable in `config/dinosaurs.cfg`.
 
@@ -75,7 +75,7 @@ All species characteristics and physical presentation values are centralized in 
 
 The same configuration file contains the maximum energy, action costs, starvation damage, eating rates, and food-interaction distance under its `[energy]` section.
 
-The selection cards read directly from this file, so displayed speed, strength, jump capability, and health always match the gameplay values. Heavy adult dinosaurs cannot jump; Velociraptor is currently the agile jumping species. Apatosaurus is deliberately much larger, slower, and healthier than the other playable dinosaurs.
+The Free Game selection cards read directly from this file, so displayed speed, strength, jump capability, and health always match the gameplay values. Their portraits use an uncropped fit mode so the complete dinosaur remains visible. Heavy adult dinosaurs cannot jump; Velociraptor is currently the agile jumping species. Apatosaurus is deliberately much larger, slower, and healthier than the other playable dinosaurs.
 
 ## Installed development stack
 

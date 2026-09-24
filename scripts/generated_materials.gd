@@ -28,7 +28,7 @@ static func dino_variant_count() -> int:
 
 static func apply_dino_skin(model_root: Node, variant: int) -> void:
 	var material := _triplanar_material(DINO_TEXTURES[posmod(variant, DINO_TEXTURES.size())], 0.94, 1.45)
-	# The first surface is the hide on all six source models. Leaving the other
+	# The first surface is the hide on all seven source models. Leaving the other
 	# surfaces untouched preserves eyes, teeth, claws, horns, and markings.
 	for child in model_root.find_children("*", "MeshInstance3D", true, false):
 		var mesh_instance := child as MeshInstance3D

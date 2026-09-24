@@ -8,7 +8,8 @@ func _initialize() -> void:
 		"res://assets/models/dinosaurs/Stegosaurus.fbx",
 		"res://assets/models/dinosaurs/Velociraptor.fbx",
 		"res://assets/models/dinosaurs/Parasaurolophus.fbx",
-		"res://assets/models/dinosaurs/Apatosaurus.fbx"
+		"res://assets/models/dinosaurs/Apatosaurus.fbx",
+		"res://assets/models/spinosaurus/Spinosaurus.glb"
 	]
 	for source in sources:
 		print("\n=== " + source + " ===")
