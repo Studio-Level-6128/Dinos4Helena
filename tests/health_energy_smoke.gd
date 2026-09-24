@@ -80,7 +80,27 @@ func _run() -> void:
 	assert(herbivore.energy > 45.0, "Herbivore did not regain energy by grazing")
 	assert(world.energy_bar.value > 45.0, "Energy bar did not update after eating")
 
-	print("Health and energy smoke test passed: drain, starvation, food, HUD, and game over")
+	var poisonous_plants := world.get_tree().get_nodes_in_group("poisonous_plant")
+	assert(poisonous_plants.size() == 16, "Configured poisonous plants were not generated")
+	var poisonous_plant := poisonous_plants[0] as Node3D
+	assert(bool(poisonous_plant.get_meta("poisonous", false)), "Poison plant is not tagged as dangerous food")
+	assert(poisonous_plant.find_children("ToxicPod_*", "MeshInstance3D", true, false).size() == 5, "Poison plant lacks its visible toxin pods")
+	herbivore.global_position = poisonous_plant.global_position + Vector3(0.0, 0.1, 1.0)
+	herbivore.energy = 40.0
+	herbivore.set_mobile_action("eat", true)
+	for frame in 5:
+		await physics_frame
+	assert(herbivore.poisoned, "Eating a poisonous plant did not poison the player")
+	assert(world.poison_label.visible, "Poisoning is not indicated in the HUD")
+	var health_before_poison: int = herbivore.health
+	for frame in 70:
+		await physics_frame
+	herbivore.set_mobile_action("eat", false)
+	assert(herbivore.health < health_before_poison, "Poison did not continuously reduce health")
+	herbivore.collect_token("health")
+	assert(not herbivore.poisoned and not world.poison_label.visible, "A health token did not cure poison")
+
+	print("Health and energy smoke test passed: drain, starvation, food, poison, cure, HUD, and game over")
 	world.queue_free()
 	await process_frame
 	quit()

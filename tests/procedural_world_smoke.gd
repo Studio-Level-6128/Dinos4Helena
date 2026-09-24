@@ -23,6 +23,11 @@ func _run() -> void:
 	assert(app.generated_trees.size() >= 118, "Procedural world has too few trees")
 	assert(app.generated_rocks.size() >= 52, "Procedural world has too few grounded rocks")
 	assert(app.generated_vegetation.size() >= 580, "Procedural world has too little ground vegetation")
+	var poison_layout_count := 0
+	for vegetation in app.generated_vegetation:
+		if vegetation["type"] == "poisonous":
+			poison_layout_count += 1
+	assert(poison_layout_count == 16, "Seeded world has the wrong number of poisonous plants")
 	assert(app.generated_logs.size() >= 18, "Procedural world has too few fallen logs")
 	assert(app.generated_high_ground.size() >= 10, "Procedural world has too little jumpable high ground")
 	assert(app.generated_dinosaurs.size() >= 16, "Procedural world has too little wildlife")

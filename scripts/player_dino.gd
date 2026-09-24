@@ -9,6 +9,7 @@ signal screamed
 signal health_changed(current_health: int, maximum_health: int)
 signal energy_changed(current_energy: float, maximum_energy: float)
 signal bonuses_changed(speed_seconds: float, strength_seconds: float)
+signal poisoning_changed(active: bool)
 signal died
 signal status_requested(message: String)
 
@@ -47,10 +48,13 @@ var jump_energy_cost := 5.0
 var attack_energy_cost := 9.0
 var scream_energy_cost := 3.0
 var starvation_damage_per_second := 2.5
+var poison_damage_per_second := 3.0
 var plant_energy_per_second := 7.0
 var meat_energy_per_second := 22.0
 var food_reach := 4.5
 var starvation_damage_accumulator := 0.0
+var poison_damage_accumulator := 0.0
+var poisoned := false
 var eating_target: Node3D
 var eating_active := false
 var eating_pose_time := 0.0
@@ -108,6 +112,7 @@ func _ready() -> void:
 	attack_energy_cost = dino_config.get_value("energy", "attack_cost", 9.0)
 	scream_energy_cost = dino_config.get_value("energy", "scream_cost", 3.0)
 	starvation_damage_per_second = dino_config.get_value("energy", "starvation_damage_per_second", 2.5)
+	poison_damage_per_second = dino_config.get_value("poison", "damage_per_second", 3.0)
 	plant_energy_per_second = dino_config.get_value("energy", "plant_energy_per_second", 7.0)
 	meat_energy_per_second = dino_config.get_value("energy", "meat_energy_per_second", 22.0)
 	food_reach = dino_config.get_value("energy", "food_reach", 4.5)
@@ -123,6 +128,9 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 	_update_powerups(delta)
+	_update_poison(delta)
+	if dead:
+		return
 	attack_time = maxf(attack_time - delta, 0.0)
 	scream_time = maxf(scream_time - delta, 0.0)
 	footstep_time = maxf(footstep_time - delta, 0.0)
@@ -443,9 +451,17 @@ func restore_health(amount: int) -> void:
 func collect_token(token_type: String) -> void:
 	match token_type:
 		"health":
+			var poison_cured := poisoned
+			if poison_cured:
+				poisoned = false
+				poison_damage_accumulator = 0.0
+				poisoning_changed.emit(false)
 			var restored := mini(token_health_restore, max_health - health)
 			restore_health(token_health_restore)
-			status_requested.emit("Health token: +%d health" % restored if restored > 0 else "Health is already full")
+			if poison_cured:
+				status_requested.emit("Poison cured! +%d health" % restored if restored > 0 else "Poison cured!")
+			else:
+				status_requested.emit("Health token: +%d health" % restored if restored > 0 else "Health is already full")
 		"speed":
 			speed_bonus_time = token_bonus_duration
 			walk_speed = base_walk_speed * 2.0
@@ -476,6 +492,25 @@ func _update_powerups(delta: float) -> void:
 		bonuses_changed.emit(speed_bonus_time, strength_bonus_time)
 
 
+func apply_poison() -> void:
+	if poisoned or dead:
+		return
+	poisoned = true
+	poison_damage_accumulator = 0.0
+	poisoning_changed.emit(true)
+	status_requested.emit("POISONED! Find a red health token!")
+
+
+func _update_poison(delta: float) -> void:
+	if not poisoned or dead:
+		return
+	poison_damage_accumulator += poison_damage_per_second * delta
+	var damage := int(floor(poison_damage_accumulator))
+	if damage > 0:
+		poison_damage_accumulator -= float(damage)
+		take_damage(damage, false)
+
+
 func _update_eating(delta: float, wants_eat: bool) -> void:
 	eating_active = false
 	if not wants_eat:
@@ -493,6 +528,8 @@ func _update_eating(delta: float, wants_eat: bool) -> void:
 			status_requested.emit("Find a nearby plant to graze" if diet == "herbivore" else "Hunt prey for meat — coming later")
 		return
 	eating_active = true
+	if bool(eating_target.get_meta("poisonous", false)):
+		apply_poison()
 	var rate := plant_energy_per_second if diet == "herbivore" else meat_energy_per_second
 	restore_energy(rate * delta)
 	var food_remaining: float = eating_target.get_meta("energy_remaining", 18.0)

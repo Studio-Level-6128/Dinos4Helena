@@ -33,7 +33,7 @@ const PLAY_GUIDE_TEXT := """[b]MOVEMENT AND ACTIONS[/b]
 Drag the right-hand movement wheel in any direction to combine forward/backward movement and steering. Use the left-hand buttons to jump, run, duck, attack, eat, or scream. Keyboard controls are WASD/arrows, Space, Shift, C/Ctrl, F, E, and R.
 
 [b]HEALTH, ENERGY, AND FOOD[/b]
-Every action costs energy; running, jumping, and fighting cost more. At zero energy, health starts to fall. Herbivores regain energy by holding EAT near plants. Carnivores eat meat left by defeated dinosaurs. Red tokens restore health; blue and orange tokens temporarily double speed or strength.
+Every action costs energy; running, jumping, and fighting cost more. At zero energy, health starts to fall. Herbivores regain energy by holding EAT near plants. Avoid the glowing purple plants: eating one causes continuous poison damage until a red health token cures it. Carnivores eat meat left by defeated dinosaurs. Red tokens restore health and cure poison; blue and orange tokens temporarily double speed or strength.
 
 [b]WILDLIFE[/b]
 Herbivores travel in moving packs. They flee hunters, but fight back and defend members of their own species. A matching herbivore player can shelter with a pack. Carnivores stalk prey, avoid fights they are unlikely to win, feed after a kill, and retreat when badly injured. Dinosaurs never attack their own species.
@@ -42,7 +42,7 @@ Herbivores travel in moving packs. They flee hunters, but fight back and defend 
 Egg nests are hidden throughout the valley. Stand over an egg and hold DUCK until it hatches. The baby matches your species, follows beside you, and has its own health. Protect it from predators.
 
 [b]EXPLORING THE WORLD[/b]
-Trees, rocks, fallen logs, hills, and raised ledges are solid. Rivers and lakes divide the forest and grassland areas. Invisible walls keep dinosaurs inside the valley. The minimap reveals terrain as you explore and marks meat from defeated dinosaurs.
+Trees, rocks, fallen logs, hills, and raised ledges are solid. Rivers and lakes divide the forest and grassland areas. Invisible walls keep dinosaurs inside the valley. The minimap reveals terrain as you explore, marks predators red and herbivores green, and marks meat from defeated dinosaurs. Each herbivore pack uses one green marker.
 
 [b]WORLD SEEDS[/b]
 The six-digit seed on the selection screen controls the complete map layout. Reuse a seed to replay the same valley or generate a new random one."""
@@ -77,6 +77,7 @@ var energy_bar: ProgressBar
 var health_label: Label
 var energy_label: Label
 var bonus_label: Label
+var poison_label: Label
 var selected_dino_name := "T-Rex"
 var selected_dino_id := "trex"
 var dinosaur_config := ConfigFile.new()
@@ -195,6 +196,7 @@ func _return_to_main_menu() -> void:
 	health_label = null
 	energy_label = null
 	bonus_label = null
+	poison_label = null
 	companions_spawned = 0
 	quality_geometry.clear()
 	sun_light = null
@@ -1015,6 +1017,15 @@ func _generate_world_layout() -> void:
 		var plant_position := _find_biome_position(rng, "forest", 0.7 * plant_scale, [], 0.0)
 		generated_vegetation.append({"type": plant_type, "position": Vector3(plant_position.x, 0.02, plant_position.y), "scale": plant_scale, "rotation": rng.randf_range(0.0, TAU)})
 
+	# Use a separate deterministic stream so adding poisonous plants never
+	# changes the established terrain, wildlife, token, or egg layout for a seed.
+	var poison_rng := RandomNumberGenerator.new()
+	poison_rng.seed = map_seed ^ 0x70A150
+	for index in int(dinosaur_config.get_value("poison", "plant_count", 16)):
+		var poison_scale := poison_rng.randf_range(0.9, 1.35)
+		var poison_position := _find_biome_position(poison_rng, "forest", 0.8 * poison_scale, [], 0.0)
+		generated_vegetation.append({"type": "poisonous", "position": Vector3(poison_position.x, 0.02, poison_position.y), "scale": poison_scale, "rotation": poison_rng.randf_range(0.0, TAU)})
+
 	for index in rng.randi_range(360, 460):
 		var grass_scale := rng.randf_range(0.7, 1.4)
 		var grass_position := _find_biome_position(rng, "grassland", 0.45 * grass_scale, [], 0.0)
@@ -1242,6 +1253,7 @@ func _build_player(dino_id: String) -> void:
 	player.health_changed.connect(_on_health_changed)
 	player.energy_changed.connect(_on_energy_changed)
 	player.bonuses_changed.connect(_on_bonuses_changed)
+	player.poisoning_changed.connect(_on_poisoning_changed)
 	player.died.connect(_on_player_died)
 	player.status_requested.connect(_show_status_message)
 
@@ -1482,6 +1494,7 @@ func _build_hud() -> void:
 	_on_health_changed(player.health, player.max_health)
 	_on_energy_changed(player.energy, player.max_energy)
 	_on_bonuses_changed(player.speed_bonus_time, player.strength_bonus_time)
+	_on_poisoning_changed(player.poisoned)
 
 
 func _build_vital_bars(parent: Control) -> void:
@@ -1499,6 +1512,17 @@ func _build_vital_bars(parent: Control) -> void:
 	bonus_label.add_theme_constant_override("shadow_offset_x", 1)
 	bonus_label.add_theme_constant_override("shadow_offset_y", 1)
 	parent.add_child(bonus_label)
+	poison_label = Label.new()
+	poison_label.name = "PoisonWarning"
+	poison_label.text = "POISONED • HEALTH FALLING • FIND RED TOKEN"
+	poison_label.position = Vector2(18, 116)
+	poison_label.size = Vector2(430, 26)
+	poison_label.add_theme_font_size_override("font_size", 15)
+	poison_label.add_theme_color_override("font_color", Color("f46cff"))
+	poison_label.add_theme_color_override("font_outline_color", Color(0.08, 0.0, 0.09, 0.95))
+	poison_label.add_theme_constant_override("outline_size", 5)
+	poison_label.hide()
+	parent.add_child(poison_label)
 
 
 func _create_vital_bar(parent: Control, bar_name: String, bar_position: Vector2, fill_color: Color) -> ProgressBar:
@@ -1840,15 +1864,56 @@ func _create_fallen_log(log_data: Dictionary) -> void:
 
 func _create_vegetation(vegetation: Dictionary) -> void:
 	var plant_type: String = vegetation["type"]
-	var plant: Node3D = (environment_models[plant_type] as PackedScene).instantiate()
-	plant.name = plant_type.capitalize()
+	var model_type := "fiddlehead" if plant_type == "poisonous" else plant_type
+	var plant: Node3D = (environment_models[model_type] as PackedScene).instantiate()
+	plant.name = "PoisonousPlant" if plant_type == "poisonous" else plant_type.capitalize()
 	plant.position = vegetation["position"]
 	plant.rotation.y = vegetation["rotation"]
 	plant.scale = Vector3.ONE * float(vegetation["scale"])
 	plant.add_to_group("edible_plant")
 	plant.set_meta("energy_remaining", 18.0)
+	if plant_type == "poisonous":
+		plant.add_to_group("poisonous_plant")
+		plant.set_meta("poisonous", true)
+		_decorate_poisonous_plant(plant)
 	world_root.add_child(plant)
 	_register_quality_geometry(plant, "small")
+
+
+func _decorate_poisonous_plant(plant: Node3D) -> void:
+	# Purple foliage and luminous red toxin pods make the dangerous plant easy
+	# to learn at a distance without adding another large model to the build.
+	var foliage_material := StandardMaterial3D.new()
+	foliage_material.albedo_color = Color("702878")
+	foliage_material.roughness = 0.72
+	foliage_material.emission_enabled = true
+	foliage_material.emission = Color("5e1768")
+	foliage_material.emission_energy_multiplier = 0.55
+	for child in plant.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := child as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		for surface_index in mesh_instance.mesh.get_surface_count():
+			mesh_instance.set_surface_override_material(surface_index, foliage_material)
+	var pod_material := StandardMaterial3D.new()
+	pod_material.albedo_color = Color("ff315f")
+	pod_material.roughness = 0.28
+	pod_material.emission_enabled = true
+	pod_material.emission = Color("d81b62")
+	pod_material.emission_energy_multiplier = 2.1
+	for pod_index in 5:
+		var pod := MeshInstance3D.new()
+		pod.name = "ToxicPod_%d" % pod_index
+		var pod_mesh := SphereMesh.new()
+		pod_mesh.radius = 0.13 + float(pod_index % 2) * 0.035
+		pod_mesh.height = pod_mesh.radius * 2.0
+		pod_mesh.radial_segments = 10
+		pod_mesh.rings = 6
+		pod.mesh = pod_mesh
+		var angle := TAU * float(pod_index) / 5.0
+		pod.position = Vector3(cos(angle) * 0.46, 0.72 + float(pod_index % 3) * 0.22, sin(angle) * 0.46)
+		pod.material_override = pod_material
+		plant.add_child(pod)
 
 
 func _build_map_boundary() -> void:
@@ -2029,8 +2094,15 @@ func _show_status_message(message: String) -> void:
 	tween.tween_interval(1.0)
 	tween.tween_callback(func() -> void:
 		if is_instance_valid(status_label) and status_label.text == message:
-			status_label.text = "Explore the valley"
+			status_label.text = "POISONED — FIND A HEALTH TOKEN" if is_instance_valid(player) and bool(player.get("poisoned")) else "Explore the valley"
 	)
+
+
+func _on_poisoning_changed(active: bool) -> void:
+	if is_instance_valid(poison_label):
+		poison_label.visible = active
+	if is_instance_valid(status_label):
+		status_label.text = "POISONED — FIND A HEALTH TOKEN" if active else "Explore the valley"
 
 
 func _on_health_changed(current_health: int, maximum_health: int) -> void:

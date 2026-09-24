@@ -24,7 +24,8 @@ Health and energy appear at the top left. All actions consume energy; running, j
 
 - Herbivores recover energy slowly by eating nearby plants.
 - Carnivores recover energy quickly from meat left by defeated dinosaurs.
-- Red tokens restore health.
+- Glowing purple plants with bright red pods are poisonous. Eating one makes health fall continuously and displays a purple warning.
+- Red tokens restore health and cure poisoning immediately.
 - Blue speed tokens and orange strength tokens double that attribute temporarily.
 
 At zero health, the dinosaur dies and the game ends.
@@ -45,4 +46,4 @@ The baby follows beside you and has its own health, but no energy meter. It is s
 
 The world contains forest and grassland regions, rivers, lakes, hills, jumpable ledges, trees, rocks, plants and fallen logs. Solid scenery cannot be walked through, and invisible walls prevent falls from the map edge.
 
-The minimap reveals nearby terrain as you explore. Red feast markers show meat left by defeated dinosaurs in explored areas. The sun, moving clouds, ambient wildlife, tokens, eggs and dinosaurs all form part of the seeded world.
+The minimap reveals nearby terrain as you explore. Living predators appear as red dots and herbivores as green dots wherever their current position has been explored. A whole herbivore pack uses a single green marker to keep the map readable. Red-and-cream feast symbols show meat left by defeated dinosaurs. The sun, moving clouds, ambient wildlife, tokens, eggs and dinosaurs all form part of the seeded world.

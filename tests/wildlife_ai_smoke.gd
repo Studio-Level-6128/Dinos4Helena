@@ -121,7 +121,46 @@ func _run() -> void:
 	player.set_mobile_action("eat", false)
 	assert(player.energy > 48.0, "Carnivore did not regain energy from defeated prey")
 
-	print("Wildlife AI smoke test passed: energy, feeding, fleeing, retaliation, combat, and mapped feast drops")
+	# Place one surviving pack and one predator in already explored terrain.
+	# The pack must collapse to one green marker while the solitary hunter gets
+	# its own red marker.
+	for dinosaur in world.get_tree().get_nodes_in_group("npc_dinosaur"):
+		dinosaur.set_physics_process(false)
+		dinosaur.global_position = Vector3(175.0, 0.1, 175.0)
+	player.global_position = Vector3.ZERO
+	var marker_pack_id := -1
+	var marker_pack_members: Array = []
+	var surviving_packs: Dictionary = {}
+	for candidate in herbivores:
+		if bool(candidate.dead):
+			continue
+		var surviving_pack_id: int = candidate.pack_id
+		var surviving_members: Array = surviving_packs.get(surviving_pack_id, [])
+		surviving_members.append(candidate)
+		surviving_packs[surviving_pack_id] = surviving_members
+	for surviving_pack_id in surviving_packs:
+		var surviving_members: Array = surviving_packs[surviving_pack_id]
+		if surviving_members.size() >= 2:
+			marker_pack_id = int(surviving_pack_id)
+			marker_pack_members = surviving_members
+			break
+	assert(marker_pack_members.size() >= 2, "Could not find a surviving pack for minimap grouping")
+	for member_index in marker_pack_members.size():
+		marker_pack_members[member_index].global_position = Vector3(float(member_index) * 1.5, 0.1, 4.0)
+	hunter.global_position = Vector3(-5.0, 0.1, 2.0)
+	minimap._reveal_player_area()
+	var wildlife_markers: Array[Dictionary] = minimap.get_wildlife_marker_data()
+	var matching_pack_markers := 0
+	var predator_markers := 0
+	for marker_data in wildlife_markers:
+		if marker_data["pack_id"] == marker_pack_id:
+			matching_pack_markers += 1
+		if marker_data["kind"] == "predator":
+			predator_markers += 1
+	assert(matching_pack_markers == 1, "Minimap did not collapse an herbivore pack to one marker")
+	assert(predator_markers == 1, "Minimap did not show the explored predator marker")
+
+	print("Wildlife AI smoke test passed: combat, feeding, feast drops, and grouped explored map markers")
 	world.queue_free()
 	await process_frame
 	quit()

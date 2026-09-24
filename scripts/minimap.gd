@@ -81,6 +81,7 @@ func _draw() -> void:
 		var log_position: Vector3 = log_data["position"]
 		draw_circle(_world_to_map(Vector2(log_position.x, log_position.z)), 1.5, Color(0.30, 0.20, 0.11, 1.0))
 	_draw_feast_markers()
+	_draw_wildlife_markers()
 
 	_draw_unexplored_fog()
 	var font := ThemeDB.fallback_font
@@ -119,6 +120,53 @@ func get_feast_marker_count() -> int:
 	if not is_inside_tree():
 		return 0
 	return get_tree().get_nodes_in_group("edible_meat").size()
+
+
+func _draw_wildlife_markers() -> void:
+	for marker_data in get_wildlife_marker_data():
+		var marker_position: Vector2 = marker_data["position"]
+		var marker := _world_to_map(marker_position)
+		var marker_color := Color("e4473f") if marker_data["kind"] == "predator" else Color("55d46a")
+		draw_circle(marker, 3.7, Color(0.015, 0.025, 0.018, 0.92))
+		draw_circle(marker, 2.6, marker_color)
+
+
+func get_wildlife_marker_data() -> Array[Dictionary]:
+	# Pack members move close together and would otherwise make the small map
+	# unreadable. Average only currently explored members into one live marker;
+	# solitary hunters and babies retain their own marker.
+	var markers: Array[Dictionary] = []
+	var explored_packs: Dictionary = {}
+	if not is_inside_tree():
+		return markers
+	for candidate in get_tree().get_nodes_in_group("npc_dinosaur"):
+		if not candidate is Node3D or bool(candidate.get("dead")):
+			continue
+		var dinosaur := candidate as Node3D
+		var world_position := Vector2(dinosaur.global_position.x, dinosaur.global_position.z)
+		if not is_world_position_explored(world_position):
+			continue
+		var pack_id := int(dinosaur.get("pack_id"))
+		var is_herbivore_pack := dinosaur.is_in_group("prey_dinosaur") and not dinosaur.is_in_group("baby_dinosaur") and pack_id >= 0
+		if is_herbivore_pack:
+			var pack_key := "%s:%d" % [str(dinosaur.get("dino_id")), pack_id]
+			var pack_data: Dictionary = explored_packs.get(pack_key, {"position_sum": Vector2.ZERO, "count": 0, "pack_id": pack_id})
+			pack_data["position_sum"] = pack_data["position_sum"] + world_position
+			pack_data["count"] = int(pack_data["count"]) + 1
+			explored_packs[pack_key] = pack_data
+		else:
+			markers.append({
+				"position": world_position,
+				"kind": "predator" if dinosaur.is_in_group("hunter_dinosaur") else "herbivore",
+				"pack_id": -1
+			})
+	for pack_data in explored_packs.values():
+		markers.append({
+			"position": pack_data["position_sum"] / float(pack_data["count"]),
+			"kind": "herbivore",
+			"pack_id": pack_data["pack_id"]
+		})
+	return markers
 
 
 func _draw_unexplored_fog() -> void:

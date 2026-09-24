@@ -32,7 +32,7 @@ Run `./scripts/setup-dev.sh` if the ignored local Godot/Android toolchain under 
 | `scripts/npc_dino.gd` | Herbivore packs, carnivore strategy, wildlife movement and combat. |
 | `scripts/egg_nest.gd` | Non-solid duck-to-incubate interaction and egg visuals. |
 | `scripts/baby_dino.gd` | Baby companion following, health, death and meat drop. |
-| `scripts/minimap.gd` | Runtime map drawing, fog of war and feast markers. |
+| `scripts/minimap.gd` | Runtime map drawing, fog of war, grouped wildlife markers and feast markers. |
 | `scripts/powerup_token.gd` | Health, speed and strength collectibles. |
 | `scripts/generated_materials.gd` | Shared textured-material construction. |
 | `config/dinosaurs.cfg` | Species balance plus energy, token and breeding settings. |
@@ -53,7 +53,7 @@ Returning to the menu frees the world and HUD, resets the UI to `LandingPage`, a
 
 ## Configuration and balancing
 
-Use `config/dinosaurs.cfg` instead of hard-coding species balance. Each dinosaur section defines its model, diet, scale, speeds, strength, jump ability, health, collision and camera framing. Shared sections define energy costs, token behavior and breeding values.
+Use `config/dinosaurs.cfg` instead of hard-coding species balance. Each dinosaur section defines its model, diet, scale, speeds, strength, jump ability, health, collision and camera framing. Shared sections define energy costs, token behavior, poisonous-plant count and damage, and breeding values.
 Optional `audio_profile` and `run_animation_speed_scale` values let a species share an existing sound family or reuse a walk clip for running.
 
 Selection cards and runtime actors read the same file. When adding a setting, give code a sensible fallback and add a smoke-test assertion where practical.

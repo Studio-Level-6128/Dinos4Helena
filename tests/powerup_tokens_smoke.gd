@@ -35,10 +35,13 @@ func _run() -> void:
 	player.health_changed.emit(player.health, player.max_health)
 	var health_token = _find_token(world, "health")
 	var health_count_before: int = counts["health"]
+	player.apply_poison()
+	assert(player.poisoned and world.poison_label.visible, "Poison state was not active before collecting the cure")
 	player.global_position = health_token.global_position
 	for frame in 20:
 		await physics_frame
 	assert(player.health == player.max_health - 20, "Health token did not restore the configured health")
+	assert(not player.poisoned and not world.poison_label.visible, "Walking over a health token did not cure poison")
 	assert(world.get_tree().get_nodes_in_group("powerup_token").size() == tokens.size() - 1, "Collected health token was not consumed")
 	world._respawn_powerup_token("health")
 	await process_frame
