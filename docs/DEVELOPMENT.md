@@ -73,6 +73,12 @@ Selection cards and runtime actors read the same file. When adding a setting, gi
 
 Use `_find_world_position()` for solid objects and `_find_biome_position()` for biome-specific decoration. Add solid footprints to the local `occupied` list, and reject water positions with `_is_position_in_water()`. If a new generated collection affects the world identity, include it in `procedural_world_smoke.gd`'s layout signature.
 
+### Map topics
+
+`MAP_THEMES` defines the Free Game choices. Grassland retains the original seed stream; every additional topic has a fixed salt so the same six-digit seed remains deterministic within that topic. Prefer branching counts, biome names and materials inside the existing layout/build stages over copying the full generator.
+
+Theme terrain belongs in `GeneratedMaterials.theme_ground_material()`. Environment tinting stays centralized in `tint_environment()`. Winter footprints use one capped 256-instance `MultiMesh` for all actors. Volcano streams use shared ribbon geometry plus low-frequency `Area3D` damage, and both static placement and pack navigation must reject `_is_position_in_lava()`. Add topic-specific behavior to `map_themes_smoke.gd`.
+
 ## Adaptive mobile performance
 
 Gameplay starts in the high-quality tier at native 3D resolution. After an eight-second warm-up, `main.gd` samples delivered frame rate in two-second windows. Two sustained samples below 42 FPS lower the tier; five samples above 56 FPS restore one tier. A cooldown prevents rapid oscillation.

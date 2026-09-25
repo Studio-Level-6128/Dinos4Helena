@@ -105,6 +105,14 @@
       "group": "test"
     },
     {
+      "label": "Godot: Map themes test",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/godot.sh",
+      "args": ["--headless", "--path", "${workspaceFolder}", "--script", "res://tests/map_themes_smoke.gd"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
       "label": "Audio: Generate missing sounds",
       "type": "shell",
       "command": "${workspaceFolder}/scripts/generate-sounds.sh",

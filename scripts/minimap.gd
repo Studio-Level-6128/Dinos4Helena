@@ -41,28 +41,49 @@ func set_performance_tier(tier: int) -> void:
 
 func _draw() -> void:
 	var bounds := Rect2(Vector2.ZERO, size)
-	draw_rect(bounds, Color(0.025, 0.075, 0.045, 0.94), true)
-	draw_rect(bounds.grow(-2.0), Color(0.72, 0.83, 0.42, 0.88), false, 2.0)
+	var map_theme := str(map_layout.get("theme", "grassland"))
+	var frame_colors := {
+		"grassland": [Color(0.025, 0.075, 0.045, 0.94), Color(0.72, 0.83, 0.42, 0.88), Color("668b49")],
+		"desert": [Color(0.12, 0.075, 0.035, 0.94), Color("e2b566"), Color("bd8d4e")],
+		"winter": [Color(0.055, 0.075, 0.10, 0.96), Color("b9d6e5"), Color("dce8ed")],
+		"volcano": [Color(0.075, 0.035, 0.025, 0.96), Color("d16a3b"), Color("4d4841")]
+	}
+	var colors: Array = frame_colors.get(map_theme, frame_colors["grassland"])
+	draw_rect(bounds, colors[0], true)
+	draw_rect(bounds.grow(-2.0), colors[1], false, 2.0)
 	var play_area := _play_area()
-	draw_rect(play_area, Color("668b49"), true)
-	draw_rect(play_area, Color(0.9, 0.88, 0.58, 0.75), false, 1.5)
+	draw_rect(play_area, colors[2], true)
+	draw_rect(play_area, colors[1], false, 1.5)
 
 	for biome in map_layout.get("biomes", []):
 		var biome_position: Vector2 = biome["position"]
 		var biome_radius: float = biome["radius"] * play_area.size.x / (world_half_size * 2.0)
-		var biome_color := Color(0.12, 0.29, 0.12, 0.72) if biome["type"] == "forest" else Color(0.48, 0.62, 0.29, 0.62)
+		var biome_color := Color("6d9b55") if biome["type"] == "oasis" else (Color("a8753e") if biome["type"] == "desert" else (Color(0.12, 0.29, 0.12, 0.72) if biome["type"] == "forest" else Color(0.48, 0.62, 0.29, 0.62)))
+		if map_theme == "winter":
+			biome_color = Color("afc4cb") if biome["type"] == "forest" else Color("d9e5e8")
 		draw_circle(_world_to_map(biome_position), biome_radius, biome_color)
 	for pond in map_layout.get("ponds", []):
 		var pond_position: Vector3 = pond["position"]
 		var pond_size: Vector2 = pond["size"]
 		var pixel_size := _world_size_to_map(pond_size)
-		draw_rect(Rect2(_world_to_map(Vector2(pond_position.x, pond_position.z)) - pixel_size * 0.5, pixel_size), Color(0.16, 0.49, 0.66, 0.92), true)
+		draw_rect(Rect2(_world_to_map(Vector2(pond_position.x, pond_position.z)) - pixel_size * 0.5, pixel_size), (Color("9ed5e5") if map_theme == "winter" else Color(0.16, 0.49, 0.66, 0.92)), true)
 	for river in map_layout.get("rivers", []):
 		var river_map_points := PackedVector2Array()
 		for river_point in river["points"]:
 			river_map_points.append(_world_to_map(river_point))
 		var river_width := float(river["width"]) * play_area.size.x / (world_half_size * 2.0)
-		draw_polyline(river_map_points, Color(0.12, 0.42, 0.55, 0.95), maxf(river_width, 2.0), true)
+		draw_polyline(river_map_points, Color("a7d8e6") if map_theme == "winter" else Color(0.12, 0.42, 0.55, 0.95), maxf(river_width, 2.0), true)
+	if not map_layout.get("volcano", {}).is_empty():
+		var volcano: Dictionary = map_layout["volcano"]
+		var volcano_radius := float(volcano["radius"]) * play_area.size.x / (world_half_size * 2.0)
+		draw_circle(_world_to_map(Vector2.ZERO), volcano_radius, Color("332c29"))
+		draw_circle(_world_to_map(Vector2.ZERO), volcano_radius * 0.25, Color("ff5a20"))
+	for stream in map_layout.get("lava_streams", []):
+		var lava_points := PackedVector2Array()
+		for lava_point in stream["points"]:
+			lava_points.append(_world_to_map(lava_point))
+		var lava_width := float(stream["width"]) * play_area.size.x / (world_half_size * 2.0)
+		draw_polyline(lava_points, Color("ff6528"), maxf(lava_width, 2.0), true)
 	for hill in map_layout.get("hills", []):
 		var hill_position: Vector3 = hill["position"]
 		var hill_scale: Vector3 = hill["scale"]

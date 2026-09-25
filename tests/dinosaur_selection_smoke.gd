@@ -56,6 +56,31 @@ func _run() -> void:
 	assert(cards.get_child(1).get_child_count() == 3, "Second dinosaur-card row should contain three cards")
 	var first_portrait := cards.get_child(0).get_child(0).find_child("Portrait", true, false) as TextureButton
 	assert(first_portrait != null and first_portrait.stretch_mode == TextureButton.STRETCH_KEEP_ASPECT_CENTERED, "Dinosaur portraits should fit without cropping")
+	assert(first_portrait.size.y >= 130.0, "Dinosaur portraits were not enlarged")
+	var trex_card := cards.get_child(0).get_child(0) as PanelContainer
+	assert((trex_card.find_child("SelectionShade", true, false) as ColorRect).visible, "Selected dinosaur portrait is not shaded")
+	assert((trex_card.find_child("SelectedStats", true, false) as GridContainer).visible, "Selected dinosaur properties are not shown over its portrait")
+	var spinosaurus_card := cards.get_child(0).get_child(1) as PanelContainer
+	var spinosaurus_selector := spinosaurus_card.find_child("SelectButton", true, false) as Button
+	assert(spinosaurus_selector != null, "Whole dinosaur card is not selectable")
+	spinosaurus_selector.pressed.emit()
+	assert(app.selected_dino_id == "spinosaurus", "Dinosaur card did not update the selection")
+	assert((spinosaurus_card.find_child("SelectedMarker", true, false) as Label).visible, "Selected dinosaur has no visual marker")
+	assert((spinosaurus_card.find_child("SelectionShade", true, false) as ColorRect).visible, "Newly selected portrait is not shaded")
+	assert((spinosaurus_card.find_child("SelectedStats", true, false) as GridContainer).visible, "Newly selected dinosaur properties are not shown")
+	assert(not (trex_card.find_child("SelectedStats", true, false) as GridContainer).visible, "Unselected dinosaur properties should be hidden")
+	var trex_selector := cards.get_child(0).get_child(0).find_child("SelectButton", true, false) as Button
+	trex_selector.pressed.emit()
+	for candidate in cards.find_children("*", "Button", true, false):
+		assert((candidate as Button).text != "PLAY", "Per-dinosaur Play buttons should be removed")
+	for menu_label in free_game_page.find_children("*", "Label", true, false):
+		assert((menu_label as Label).text != "CHOOSE YOUR MAP", "Obsolete map-selection heading is still visible")
+	var theme_cards := app.menu_layer.find_child("MapThemeCards", true, false) as HBoxContainer
+	assert(theme_cards != null and theme_cards.get_child_count() == 4, "Visual map-theme cards are incomplete")
+	for theme_button in theme_cards.get_children():
+		assert((theme_button as Button).get_theme_stylebox("normal") is StyleBoxTexture, "Map theme card has no preview image")
+	var start_button := app.menu_layer.find_child("StartGameButton", true, false) as Button
+	assert(start_button != null and "T-REX" in start_button.text, "Shared Start Game button is missing or stale")
 	var back_button := app.menu_layer.find_child("BackToLandingButton", true, false) as Button
 	assert(back_button != null, "Free Game back button is missing")
 	back_button.pressed.emit()
@@ -101,7 +126,7 @@ func _run() -> void:
 		app._return_to_main_menu()
 		await process_frame
 		assert(app.menu_layer.visible, "Could not return to menu after: " + dino_id)
-		assert(landing_page.visible and not free_game_page.visible, "Gameplay should return to the landing page")
+		assert(not landing_page.visible and free_game_page.visible, "Gameplay should return to the Free Game selection page")
 
 	print("Dinosaur selection smoke test passed for all 7 species")
 	app.queue_free()

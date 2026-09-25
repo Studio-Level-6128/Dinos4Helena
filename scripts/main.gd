@@ -12,12 +12,17 @@ const POWERUP_TOKEN_SCRIPT := preload("res://scripts/powerup_token.gd")
 const EGG_NEST_SCRIPT := preload("res://scripts/egg_nest.gd")
 const BABY_DINO_SCRIPT := preload("res://scripts/baby_dino.gd")
 const VIRTUAL_JOYSTICK_SCRIPT := preload("res://scripts/virtual_joystick.gd")
+const LAVA_STREAM_SCRIPT := preload("res://scripts/lava_stream.gd")
+const SNOW_FOOTPRINTS_SCRIPT := preload("res://scripts/snow_footprints.gd")
 # DINO_IDS is the player-selection roster. The two diet lists below are the
 # deliberately smaller wildlife pools; Spinosaurus is player-only.
 const DINO_IDS := ["trex", "spinosaurus", "triceratops", "stegosaurus", "velociraptor", "parasaurolophus", "apatosaurus"]
 const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatosaurus"]
 const CARNIVORE_IDS := ["trex", "velociraptor"]
 const MAP_HALF_SIZE := 200.0
+const MAP_THEMES := ["grassland", "desert", "winter", "volcano"]
+const MAP_THEME_LABELS := ["GRASSLAND", "DESERT", "WINTER", "VOLCANO"]
+const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x71A7E2, "volcano": 0xB01CA0}
 # Adaptive performance starts at full quality. It only reduces expensive
 # rendering features after several sustained low-frame-rate samples, and uses
 # a deliberately slower recovery threshold to avoid quality oscillation.
@@ -44,8 +49,11 @@ Egg nests are hidden throughout the valley. Stand over an egg and hold DUCK unti
 [b]EXPLORING THE WORLD[/b]
 Trees, rocks, fallen logs, hills, and raised ledges are solid. Rivers and lakes divide the forest and grassland areas. Invisible walls keep dinosaurs inside the valley. The minimap reveals terrain as you explore, marks predators red and herbivores green, and marks meat from defeated dinosaurs. Each herbivore pack uses one green marker.
 
+[b]MAP TOPICS[/b]
+Choose Grassland, Desert, Winter, or Volcano in Free Game. Desert vegetation clusters around scarce water holes. Winter water is frozen and every moving dinosaur leaves tracks in the snow. Volcano maps contain an erupting central mountain and glowing lava streams; touching lava continuously damages health.
+
 [b]WORLD SEEDS[/b]
-The six-digit seed on the selection screen controls the complete map layout. Reuse a seed to replay the same valley or generate a new random one."""
+The six-digit seed and selected map topic control the complete layout. Reuse both to replay the same world or generate a new random seed."""
 const ENVIRONMENT_MODEL_PATHS := {
 	"tree": "res://assets/models/environment/araucaria_conifer.glb",
 	"fern": "res://assets/models/environment/forest_fern.glb",
@@ -80,6 +88,10 @@ var bonus_label: Label
 var poison_label: Label
 var selected_dino_name := "T-Rex"
 var selected_dino_id := "trex"
+var selected_map_theme := "grassland"
+var dino_cards: Dictionary = {}
+var map_theme_buttons: Dictionary = {}
+var start_game_button: Button
 var dinosaur_config := ConfigFile.new()
 var seed_input: LineEdit
 var map_seed := 0
@@ -96,6 +108,8 @@ var generated_logs: Array = []
 var generated_dinosaurs: Array = []
 var generated_tokens: Array = []
 var generated_eggs: Array = []
+var generated_lava_streams: Array = []
+var volcano_data: Dictionary = {}
 var environment_models: Dictionary = {}
 var token_rng := RandomNumberGenerator.new()
 var companions_spawned := 0
@@ -180,6 +194,7 @@ func _start_game(dino_id: String) -> void:
 	_build_player(dino_id)
 	_build_egg_nests()
 	_build_wild_dinosaurs()
+	_build_snow_footprints()
 	_build_hud()
 	_reset_adaptive_performance()
 
@@ -202,7 +217,7 @@ func _return_to_main_menu() -> void:
 	sun_light = null
 	active_minimap = null
 	get_viewport().scaling_3d_scale = 1.0
-	_show_landing_page()
+	_show_free_game_page()
 	menu_layer.show()
 
 
@@ -341,17 +356,17 @@ func _build_main_menu() -> void:
 	free_game_title.text = "FREE GAME"
 	free_game_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	free_game_title.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	free_game_title.position = Vector2(-260, 12)
-	free_game_title.size = Vector2(520, 44)
-	free_game_title.add_theme_font_size_override("font_size", 32)
+	free_game_title.position = Vector2(-260, 8)
+	free_game_title.size = Vector2(520, 38)
+	free_game_title.add_theme_font_size_override("font_size", 29)
 	free_game_title.add_theme_color_override("font_color", Color("fff2c2"))
 	free_game_page.add_child(free_game_title)
 
 	var back_button := Button.new()
 	back_button.name = "BackToLandingButton"
 	back_button.text = "← BACK"
-	back_button.position = Vector2(20, 18)
-	back_button.size = Vector2(126, 42)
+	back_button.position = Vector2(20, 14)
+	back_button.size = Vector2(126, 40)
 	back_button.focus_mode = Control.FOCUS_NONE
 	back_button.add_theme_font_size_override("font_size", 16)
 	back_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
@@ -363,16 +378,65 @@ func _build_main_menu() -> void:
 	prompt.text = "CHOOSE YOUR DINOSAUR"
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	prompt.position = Vector2(-260, 55)
-	prompt.size = Vector2(520, 42)
-	prompt.add_theme_font_size_override("font_size", 21)
+	prompt.position = Vector2(-260, 45)
+	prompt.size = Vector2(520, 28)
+	prompt.add_theme_font_size_override("font_size", 18)
 	prompt.add_theme_color_override("font_color", Color.WHITE)
 	free_game_page.add_child(prompt)
 
+	dino_cards.clear()
+	var cards := VBoxContainer.new()
+	cards.name = "DinosaurCards"
+	cards.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	cards.position = Vector2(-430, 72)
+	cards.size = Vector2(860, 326)
+	cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards.add_theme_constant_override("separation", 6)
+	free_game_page.add_child(cards)
+
+	var card_rows: Array[HBoxContainer] = []
+	for row_index in 2:
+		var row := HBoxContainer.new()
+		row.name = "DinosaurCardRow%d" % (row_index + 1)
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 10)
+		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		cards.add_child(row)
+		card_rows.append(row)
+
+	for dino_index in DINO_IDS.size():
+		var dino_id: String = DINO_IDS[dino_index]
+		var display_name: String = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
+		card_rows[0 if dino_index < 4 else 1].add_child(_create_dino_card(dino_id, display_name))
+
+	map_theme_buttons.clear()
+	var theme_row := HBoxContainer.new()
+	theme_row.name = "MapThemeCards"
+	theme_row.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	theme_row.position = Vector2(-360, 404)
+	theme_row.size = Vector2(720, 88)
+	theme_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	theme_row.add_theme_constant_override("separation", 12)
+	free_game_page.add_child(theme_row)
+	for theme_index in MAP_THEMES.size():
+		var theme_id: String = MAP_THEMES[theme_index]
+		var theme_button := Button.new()
+		theme_button.name = "MapTheme_%s" % theme_id
+		theme_button.custom_minimum_size = Vector2(171, 86)
+		theme_button.focus_mode = Control.FOCUS_NONE
+		theme_button.add_theme_font_size_override("font_size", 16)
+		theme_button.add_theme_color_override("font_color", Color("fff4d0"))
+		theme_button.add_theme_color_override("font_outline_color", Color(0.01, 0.015, 0.01, 0.98))
+		theme_button.add_theme_constant_override("outline_size", 6)
+		theme_button.tooltip_text = "Select the %s map" % MAP_THEME_LABELS[theme_index].capitalize()
+		theme_button.pressed.connect(_select_map_theme.bind(theme_id))
+		theme_row.add_child(theme_button)
+		map_theme_buttons[theme_id] = theme_button
+
 	var seed_row := HBoxContainer.new()
 	seed_row.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	seed_row.position = Vector2(-225, 94)
-	seed_row.size = Vector2(450, 40)
+	seed_row.position = Vector2(-250, 528)
+	seed_row.size = Vector2(500, 40)
 	seed_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	seed_row.add_theme_constant_override("separation", 10)
 	free_game_page.add_child(seed_row)
@@ -405,39 +469,32 @@ func _build_main_menu() -> void:
 	seed_row.add_child(random_seed_button)
 	_set_random_world_seed()
 
-	var cards := VBoxContainer.new()
-	cards.name = "DinosaurCards"
-	cards.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	cards.position = Vector2(-430, 137)
-	cards.size = Vector2(860, 496)
-	cards.alignment = BoxContainer.ALIGNMENT_CENTER
-	cards.add_theme_constant_override("separation", 8)
-	free_game_page.add_child(cards)
-
-	var card_rows: Array[HBoxContainer] = []
-	for row_index in 2:
-		var row := HBoxContainer.new()
-		row.name = "DinosaurCardRow%d" % (row_index + 1)
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 10)
-		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		cards.add_child(row)
-		card_rows.append(row)
-
-	for dino_index in DINO_IDS.size():
-		var dino_id: String = DINO_IDS[dino_index]
-		var display_name: String = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
-		card_rows[0 if dino_index < 4 else 1].add_child(_create_dino_card(dino_id, display_name))
+	start_game_button = Button.new()
+	start_game_button.name = "StartGameButton"
+	start_game_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	start_game_button.position = Vector2(-210, 579)
+	start_game_button.size = Vector2(420, 54)
+	start_game_button.focus_mode = Control.FOCUS_NONE
+	start_game_button.add_theme_font_size_override("font_size", 20)
+	start_game_button.add_theme_color_override("font_color", Color("fff7d6"))
+	start_game_button.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
+	start_game_button.add_theme_stylebox_override("hover", _button_style(Color("4f8a42"), Color("fff1a0")))
+	start_game_button.add_theme_stylebox_override("pressed", _button_style(Color("294f28"), Color.WHITE))
+	start_game_button.pressed.connect(_start_selected_game)
+	free_game_page.add_child(start_game_button)
 
 	var footer := Label.new()
-	footer.text = "Select a dinosaur to begin your prehistoric adventure"
+	footer.text = "Select a dinosaur and map, then start your adventure"
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	footer.position = Vector2(-350, -54)
-	footer.size = Vector2(700, 32)
-	footer.add_theme_font_size_override("font_size", 17)
+	footer.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	footer.position = Vector2(-350, 640)
+	footer.size = Vector2(700, 28)
+	footer.add_theme_font_size_override("font_size", 15)
 	footer.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
 	free_game_page.add_child(footer)
+	_update_dino_card_selection()
+	_update_map_theme_selection()
+	_update_start_button()
 
 	var credits_button := Button.new()
 	credits_button.name = "CreditsButton"
@@ -470,6 +527,62 @@ func _build_main_menu() -> void:
 	_build_play_guide_overlay(root)
 
 
+func _select_dino(dino_id: String) -> void:
+	if dino_id not in DINO_IDS:
+		return
+	selected_dino_id = dino_id
+	selected_dino_name = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
+	_update_dino_card_selection()
+	_update_start_button()
+
+
+func _select_map_theme(theme_id: String) -> void:
+	if theme_id not in MAP_THEMES:
+		return
+	selected_map_theme = theme_id
+	_update_map_theme_selection()
+	_update_start_button()
+
+
+func _start_selected_game() -> void:
+	_start_game(selected_dino_id)
+
+
+func _update_dino_card_selection() -> void:
+	for dino_id in dino_cards:
+		var panel := dino_cards[dino_id] as PanelContainer
+		var selected := str(dino_id) == selected_dino_id
+		panel.add_theme_stylebox_override("panel", _card_style(selected))
+		var marker := panel.find_child("SelectedMarker", true, false) as Label
+		var shade := panel.find_child("SelectionShade", true, false) as ColorRect
+		var stats := panel.find_child("SelectedStats", true, false) as GridContainer
+		if marker:
+			marker.visible = selected
+		if shade:
+			shade.visible = selected
+		if stats:
+			stats.visible = selected
+
+
+func _update_map_theme_selection() -> void:
+	for theme_id in map_theme_buttons:
+		var button := map_theme_buttons[theme_id] as Button
+		var selected := str(theme_id) == selected_map_theme
+		var label_index := MAP_THEMES.find(str(theme_id))
+		button.text = ("✓ " if selected else "") + MAP_THEME_LABELS[label_index]
+		var art: Texture2D = load("res://assets/ui/menu/theme-%s.png" % theme_id)
+		button.add_theme_stylebox_override("normal", _tile_image_style(art, Color(1.0, 1.0, 1.0, 1.0) if selected else Color(0.54, 0.56, 0.53, 1.0)))
+		button.add_theme_stylebox_override("hover", _tile_image_style(art, Color(0.9, 0.92, 0.88, 1.0)))
+		button.add_theme_stylebox_override("pressed", _tile_image_style(art, Color(0.72, 0.74, 0.68, 1.0)))
+
+
+func _update_start_button() -> void:
+	if not is_instance_valid(start_game_button):
+		return
+	var dino_name: String = dinosaur_config.get_value(selected_dino_id, "display_name", selected_dino_id.capitalize())
+	start_game_button.text = "START AS %s  •  %s" % [dino_name.to_upper(), selected_map_theme.to_upper()]
+
+
 func _show_free_game_page() -> void:
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
@@ -477,6 +590,9 @@ func _show_free_game_page() -> void:
 		play_guide_overlay.hide()
 	landing_page.hide()
 	free_game_page.show()
+	_update_dino_card_selection()
+	_update_map_theme_selection()
+	_update_start_button()
 
 
 func _show_landing_page() -> void:
@@ -754,53 +870,96 @@ func _credits_style() -> StyleBoxFlat:
 
 func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(202, 238)
-	panel.add_theme_stylebox_override("panel", _card_style())
+	panel.name = "DinoCard_%s" % dino_id
+	panel.custom_minimum_size = Vector2(202, 154)
+	panel.set_meta("dino_id", dino_id)
+	panel.add_theme_stylebox_override("panel", _card_style(dino_id == selected_dino_id))
+	dino_cards[dino_id] = panel
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 3)
-	panel.add_child(column)
+	# Cards stay image-first until selected. The chosen portrait is dimmed and
+	# reveals its configured abilities in the same space.
+	var content := Control.new()
+	content.name = "CardContent"
+	content.custom_minimum_size = Vector2(188, 140)
+	panel.add_child(content)
 
 	var portrait := TextureButton.new()
 	portrait.name = "Portrait"
-	portrait.custom_minimum_size = Vector2(186, 116)
+	portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	portrait.texture_normal = load("res://assets/ui/menu/%s.png" % dino_id)
 	portrait.ignore_texture_size = true
-	# Keep the complete dinosaur visible. The generated portraits have varying
-	# aspect ratios, so cover mode would crop heads, tails, or feet.
 	portrait.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	portrait.tooltip_text = "Play as " + display_name
-	portrait.pressed.connect(_start_game.bind(dino_id))
-	column.add_child(portrait)
+	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(portrait)
+
+	var shade := ColorRect.new()
+	shade.name = "SelectionShade"
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.005, 0.015, 0.008, 0.70)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shade.visible = dino_id == selected_dino_id
+	content.add_child(shade)
 
 	var name_label := Label.new()
+	name_label.name = "DinoName"
 	name_label.text = display_name.to_upper()
+	name_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	name_label.offset_left = 5.0
+	name_label.offset_top = 4.0
+	name_label.offset_right = -5.0
+	name_label.offset_bottom = 30.0
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 15 if display_name.length() < 13 else 13)
 	name_label.add_theme_color_override("font_color", Color("fff2c2"))
-	column.add_child(name_label)
+	name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.96))
+	name_label.add_theme_constant_override("outline_size", 5)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(name_label)
 
 	var stats := GridContainer.new()
+	stats.name = "SelectedStats"
 	stats.columns = 2
-	stats.add_theme_constant_override("h_separation", 8)
-	stats.add_theme_constant_override("v_separation", 0)
-	column.add_child(stats)
+	stats.set_anchors_preset(Control.PRESET_CENTER)
+	stats.position = Vector2(-76, -31)
+	stats.size = Vector2(152, 79)
+	stats.add_theme_constant_override("h_separation", 18)
+	stats.add_theme_constant_override("v_separation", 3)
+	stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stats.visible = dino_id == selected_dino_id
+	content.add_child(stats)
 	_add_stat(stats, "SPEED", "%.1f" % float(dinosaur_config.get_value(dino_id, "run_speed", 0.0)))
 	_add_stat(stats, "STRENGTH", "%d/10" % int(dinosaur_config.get_value(dino_id, "strength", 0)))
 	_add_stat(stats, "CAN JUMP", "YES" if dinosaur_config.get_value(dino_id, "can_jump", false) else "NO")
 	_add_stat(stats, "HEALTH", str(int(dinosaur_config.get_value(dino_id, "max_health", 0))))
 
-	var play := Button.new()
-	play.text = "PLAY"
-	play.custom_minimum_size.y = 27
-	play.focus_mode = Control.FOCUS_NONE
-	play.add_theme_font_size_override("font_size", 14)
-	play.add_theme_color_override("font_color", Color("f7f2d0"))
-	play.add_theme_stylebox_override("normal", _button_style(Color(0.12, 0.25, 0.16, 0.92), Color(0.72, 0.83, 0.42, 0.8)))
-	play.add_theme_stylebox_override("hover", _button_style(Color(0.24, 0.43, 0.22, 0.96), Color("f7f2d0")))
-	play.add_theme_stylebox_override("pressed", _button_style(Color(0.52, 0.64, 0.24, 1.0), Color.WHITE))
-	play.pressed.connect(_start_game.bind(dino_id))
-	column.add_child(play)
+	var marker := Label.new()
+	marker.name = "SelectedMarker"
+	marker.text = "✓"
+	marker.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	marker.position = Vector2(-31, 3)
+	marker.size = Vector2(26, 26)
+	marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	marker.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	marker.add_theme_font_size_override("font_size", 21)
+	marker.add_theme_color_override("font_color", Color("ffe778"))
+	marker.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	marker.add_theme_constant_override("shadow_offset_x", 2)
+	marker.add_theme_constant_override("shadow_offset_y", 2)
+	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marker.visible = dino_id == selected_dino_id
+	content.add_child(marker)
+
+	var selector := Button.new()
+	selector.name = "SelectButton"
+	selector.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	selector.flat = true
+	selector.focus_mode = Control.FOCUS_NONE
+	selector.tooltip_text = "Select " + display_name
+	selector.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	for state in ["normal", "hover", "pressed", "focus"]:
+		selector.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	selector.pressed.connect(_select_dino.bind(dino_id))
+	content.add_child(selector)
 	return panel
 
 
@@ -818,11 +977,11 @@ func _add_stat(parent: GridContainer, stat_name: String, stat_value: String) -> 
 	parent.add_child(value_label)
 
 
-func _card_style() -> StyleBoxFlat:
+func _card_style(selected := false) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.025, 0.075, 0.045, 0.88)
-	style.border_color = Color(0.82, 0.72, 0.35, 0.72)
-	style.set_border_width_all(2)
+	style.bg_color = Color(0.055, 0.14, 0.075, 0.96) if selected else Color(0.025, 0.075, 0.045, 0.88)
+	style.border_color = Color("ffe778") if selected else Color(0.82, 0.72, 0.35, 0.72)
+	style.set_border_width_all(4 if selected else 2)
 	style.set_corner_radius_all(14)
 	style.content_margin_left = 7
 	style.content_margin_right = 7
@@ -837,28 +996,51 @@ func _build_environment() -> void:
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("4f95c7")
-	sky_material.sky_horizon_color = Color("d6e6b5")
-	sky_material.ground_bottom_color = Color("425b2e")
-	sky_material.ground_horizon_color = Color("c7d39b")
+	match selected_map_theme:
+		"desert":
+			sky_material.sky_top_color = Color("4c91c6")
+			sky_material.sky_horizon_color = Color("efd39b")
+			sky_material.ground_bottom_color = Color("8c5f2f")
+			sky_material.ground_horizon_color = Color("d7ad6d")
+			environment.fog_light_color = Color("d8b77c")
+			environment.fog_density = 0.003
+		"winter":
+			sky_material.sky_top_color = Color("252d3a")
+			sky_material.sky_horizon_color = Color("697583")
+			sky_material.ground_bottom_color = Color("8c99a4")
+			sky_material.ground_horizon_color = Color("c5ced3")
+			environment.fog_light_color = Color("788794")
+			environment.fog_density = 0.012
+		"volcano":
+			sky_material.sky_top_color = Color("352e32")
+			sky_material.sky_horizon_color = Color("9a6651")
+			sky_material.ground_bottom_color = Color("27211f")
+			sky_material.ground_horizon_color = Color("5e4b3e")
+			environment.fog_light_color = Color("76594c")
+			environment.fog_density = 0.009
+		_:
+			sky_material.sky_top_color = Color("4f95c7")
+			sky_material.sky_horizon_color = Color("d6e6b5")
+			sky_material.ground_bottom_color = Color("425b2e")
+			sky_material.ground_horizon_color = Color("c7d39b")
+			environment.fog_light_color = Color("b9caa3")
+			environment.fog_density = 0.006
 	sky_material.sun_angle_max = 10.0
 	sky_material.sun_curve = 0.08
 	sky.sky_material = sky_material
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.72
+	environment.ambient_light_energy = 0.52 if selected_map_theme in ["winter", "volcano"] else 0.72
 	environment.fog_enabled = true
-	environment.fog_light_color = Color("b9caa3")
-	environment.fog_density = 0.006
-	environment.fog_sky_affect = 0.45
+	environment.fog_sky_affect = 0.65 if selected_map_theme == "winter" else 0.45
 	world_environment.environment = environment
 	world_root.add_child(world_environment)
 
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
-	sun.light_color = Color("fff1c4")
-	sun.light_energy = 1.42
+	sun.light_color = Color("cbd5df") if selected_map_theme == "winter" else (Color("ffd2a1") if selected_map_theme == "volcano" else Color("fff1c4"))
+	sun.light_energy = 0.72 if selected_map_theme == "winter" else (1.08 if selected_map_theme == "volcano" else 1.42)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 90.0
 	world_root.add_child(sun)
@@ -870,7 +1052,7 @@ func _build_clouds() -> void:
 	cloud_layer.name = "Clouds"
 	world_root.add_child(cloud_layer)
 	var cloud_material := StandardMaterial3D.new()
-	cloud_material.albedo_color = Color(0.94, 0.97, 0.96, 0.72)
+	cloud_material.albedo_color = Color(0.31, 0.34, 0.39, 0.92) if selected_map_theme == "winter" else (Color(0.36, 0.31, 0.31, 0.82) if selected_map_theme == "volcano" else Color(0.94, 0.97, 0.96, 0.72))
 	cloud_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	cloud_material.roughness = 1.0
 	cloud_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -932,39 +1114,52 @@ func _generate_world_layout() -> void:
 	generated_dinosaurs.clear()
 	generated_tokens.clear()
 	generated_eggs.clear()
+	generated_lava_streams.clear()
+	volcano_data.clear()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = map_seed
+	rng.seed = map_seed ^ int(MAP_THEME_SEED_SALTS[selected_map_theme])
 	var occupied: Array = []
+	if selected_map_theme == "volcano":
+		_generate_volcano_layout(rng)
+		occupied.append({"position": Vector2.ZERO, "radius": 43.0})
 
-	for index in rng.randi_range(3, 5):
+	var forest_biome := "oasis" if selected_map_theme == "desert" else "forest"
+	var open_biome := "desert" if selected_map_theme == "desert" else "grassland"
+	var forest_biome_count := rng.randi_range(2, 3) if selected_map_theme == "desert" else rng.randi_range(3, 5)
+	for index in forest_biome_count:
 		generated_biomes.append({
-			"type": "forest",
+			"type": forest_biome,
 			"position": _random_clear_position(rng, 45.0),
-			"radius": rng.randf_range(42.0, 64.0)
+			"radius": rng.randf_range(22.0, 34.0) if selected_map_theme == "desert" else rng.randf_range(42.0, 64.0)
 		})
-	for index in rng.randi_range(2, 4):
+	for index in rng.randi_range(3, 5) if selected_map_theme == "desert" else rng.randi_range(2, 4):
 		generated_biomes.append({
-			"type": "grassland",
+			"type": open_biome,
 			"position": _random_clear_position(rng, 38.0),
-			"radius": rng.randf_range(38.0, 58.0)
+			"radius": rng.randf_range(46.0, 68.0) if selected_map_theme == "desert" else rng.randf_range(38.0, 58.0)
 		})
 
-	for index in rng.randi_range(3, 5):
+	var pond_count := rng.randi_range(2, 3) if selected_map_theme == "desert" else rng.randi_range(3, 5)
+	for index in pond_count:
 		var pond_size := Vector2(rng.randf_range(22.0, 44.0), rng.randf_range(16.0, 34.0))
 		var pond_radius := maxf(pond_size.x, pond_size.y) * 0.6
 		var pond_position := _find_world_position(rng, pond_radius, occupied, 8.0)
 		generated_ponds.append({"position": Vector3(pond_position.x, 0.025, pond_position.y), "size": pond_size})
 		occupied.append({"position": pond_position, "radius": pond_radius})
 
-	var river_points := PackedVector2Array()
-	var horizontal_river := rng.randf() > 0.5
-	var river_offset := rng.randf_range(52.0, 105.0) * (-1.0 if rng.randf() < 0.5 else 1.0)
-	var river_phase := rng.randf_range(0.0, TAU)
-	for point_index in 21:
-		var along := lerpf(-MAP_HALF_SIZE - 8.0, MAP_HALF_SIZE + 8.0, float(point_index) / 20.0)
-		var across := river_offset + sin(float(point_index) * 0.62 + river_phase) * rng.randf_range(12.0, 25.0)
-		river_points.append(Vector2(along, across) if horizontal_river else Vector2(across, along))
-	generated_rivers.append({"points": river_points, "width": rng.randf_range(8.0, 13.0)})
+	if selected_map_theme == "desert":
+		var oasis_index := 0
+		for biome in generated_biomes:
+			if biome["type"] != "oasis":
+				continue
+			var water_hole: Dictionary = generated_ponds[oasis_index % generated_ponds.size()]
+			var water_position: Vector3 = water_hole["position"]
+			biome["position"] = Vector2(water_position.x, water_position.z)
+			biome["radius"] = maxf(float(water_hole["size"].x), float(water_hole["size"].y)) * 0.5 + 14.0
+			oasis_index += 1
+
+	if selected_map_theme != "desert":
+		_generate_river_layout(rng)
 
 	for index in rng.randi_range(10, 15):
 		var hill_scale := Vector3(rng.randf_range(9.0, 20.0), rng.randf_range(3.5, 8.0), rng.randf_range(8.0, 18.0))
@@ -982,11 +1177,12 @@ func _generate_world_layout() -> void:
 		})
 		occupied.append({"position": formation_position, "radius": 7.5})
 
-	for index in rng.randi_range(118, 152):
+	var tree_count := rng.randi_range(22, 34) if selected_map_theme == "desert" else rng.randi_range(118, 152)
+	for index in tree_count:
 		var tree_scale := rng.randf_range(1.0, 2.15)
-		var tree_position := _find_biome_position(rng, "forest", 1.55 * tree_scale, occupied, 1.7)
+		var tree_position := _find_biome_position(rng, forest_biome, 1.55 * tree_scale, occupied, 1.7)
 		var tree_roll := rng.randf()
-		var tree_type := "tree" if tree_roll < 0.72 else ("tree_fern" if tree_roll < 0.92 else "dead_tree")
+		var tree_type := ("dead_tree" if tree_roll < 0.34 else "tree_fern") if selected_map_theme == "desert" else ("tree" if tree_roll < 0.72 else ("tree_fern" if tree_roll < 0.92 else "dead_tree"))
 		generated_trees.append({"type": tree_type, "position": Vector3(tree_position.x, 0.0, tree_position.y), "scale": tree_scale, "rotation": rng.randf_range(0.0, TAU)})
 		occupied.append({"position": tree_position, "radius": 0.58 * tree_scale})
 
@@ -996,13 +1192,15 @@ func _generate_world_layout() -> void:
 		generated_rocks.append({"position": Vector3(rock_position.x, 0.0, rock_position.y), "scale": rock_scale})
 		occupied.append({"position": rock_position, "radius": 0.9 * rock_scale})
 
-	for index in rng.randi_range(18, 28):
+	var log_count := rng.randi_range(3, 6) if selected_map_theme == "desert" else rng.randi_range(18, 28)
+	for index in log_count:
 		var log_scale := rng.randf_range(0.8, 1.35)
-		var log_position := _find_biome_position(rng, "forest", 3.5 * log_scale, occupied, 1.2)
+		var log_position := _find_biome_position(rng, forest_biome, 3.5 * log_scale, occupied, 1.2)
 		generated_logs.append({"position": Vector3(log_position.x, 0.0, log_position.y), "scale": log_scale, "rotation": rng.randf_range(0.0, TAU)})
 		occupied.append({"position": log_position, "radius": 3.5 * log_scale})
 
-	for index in rng.randi_range(220, 285):
+	var plant_count := rng.randi_range(55, 85) if selected_map_theme == "desert" else rng.randi_range(220, 285)
+	for index in plant_count:
 		var plant_roll := rng.randf()
 		var plant_type := "fern"
 		if plant_roll < 0.24:
@@ -1014,21 +1212,23 @@ func _generate_world_layout() -> void:
 		elif plant_roll < 0.82:
 			plant_type = "fiddlehead"
 		var plant_scale := rng.randf_range(0.75, 1.5)
-		var plant_position := _find_biome_position(rng, "forest", 0.7 * plant_scale, [], 0.0)
+		var plant_position := _find_biome_position(rng, forest_biome, 0.7 * plant_scale, [], 0.0)
 		generated_vegetation.append({"type": plant_type, "position": Vector3(plant_position.x, 0.02, plant_position.y), "scale": plant_scale, "rotation": rng.randf_range(0.0, TAU)})
 
 	# Use a separate deterministic stream so adding poisonous plants never
 	# changes the established terrain, wildlife, token, or egg layout for a seed.
 	var poison_rng := RandomNumberGenerator.new()
 	poison_rng.seed = map_seed ^ 0x70A150
-	for index in int(dinosaur_config.get_value("poison", "plant_count", 16)):
+	var poison_count := 6 if selected_map_theme == "desert" else int(dinosaur_config.get_value("poison", "plant_count", 16))
+	for index in poison_count:
 		var poison_scale := poison_rng.randf_range(0.9, 1.35)
-		var poison_position := _find_biome_position(poison_rng, "forest", 0.8 * poison_scale, [], 0.0)
+		var poison_position := _find_biome_position(poison_rng, forest_biome, 0.8 * poison_scale, [], 0.0)
 		generated_vegetation.append({"type": "poisonous", "position": Vector3(poison_position.x, 0.02, poison_position.y), "scale": poison_scale, "rotation": poison_rng.randf_range(0.0, TAU)})
 
-	for index in rng.randi_range(360, 460):
+	var grass_count := rng.randi_range(45, 75) if selected_map_theme == "desert" else rng.randi_range(360, 460)
+	for index in grass_count:
 		var grass_scale := rng.randf_range(0.7, 1.4)
-		var grass_position := _find_biome_position(rng, "grassland", 0.45 * grass_scale, [], 0.0)
+		var grass_position := _find_biome_position(rng, forest_biome if selected_map_theme == "desert" else "grassland", 0.45 * grass_scale, [], 0.0)
 		generated_vegetation.append({"type": "grass", "position": Vector3(grass_position.x, 0.015, grass_position.y), "scale": grass_scale, "rotation": rng.randf_range(0.0, TAU)})
 
 	for pack_index in rng.randi_range(6, 9):
@@ -1085,7 +1285,8 @@ func _generate_world_layout() -> void:
 		})
 		occupied.append({"position": egg_position, "radius": 2.0})
 
-	for index in rng.randi_range(8, 13):
+	var cloud_count := rng.randi_range(13, 18) if selected_map_theme == "winter" else (rng.randi_range(5, 8) if selected_map_theme == "desert" else rng.randi_range(8, 13))
+	for index in cloud_count:
 		var wind_angle := rng.randf_range(-0.25, 0.25)
 		generated_clouds.append({
 			"position": Vector3(rng.randf_range(-MAP_HALF_SIZE, MAP_HALF_SIZE), rng.randf_range(34.0, 52.0), rng.randf_range(-MAP_HALF_SIZE, MAP_HALF_SIZE)),
@@ -1095,13 +1296,40 @@ func _generate_world_layout() -> void:
 		})
 
 
+func _generate_river_layout(rng: RandomNumberGenerator) -> void:
+	var river_points := PackedVector2Array()
+	var horizontal_river := rng.randf() > 0.5
+	var river_offset := rng.randf_range(52.0, 105.0) * (-1.0 if rng.randf() < 0.5 else 1.0)
+	var river_phase := rng.randf_range(0.0, TAU)
+	for point_index in 21:
+		var along := lerpf(-MAP_HALF_SIZE - 8.0, MAP_HALF_SIZE + 8.0, float(point_index) / 20.0)
+		var across := river_offset + sin(float(point_index) * 0.62 + river_phase) * rng.randf_range(12.0, 25.0)
+		river_points.append(Vector2(along, across) if horizontal_river else Vector2(across, along))
+	generated_rivers.append({"points": river_points, "width": rng.randf_range(8.0, 13.0)})
+
+
+func _generate_volcano_layout(rng: RandomNumberGenerator) -> void:
+	volcano_data = {"position": Vector3.ZERO, "radius": 46.0, "height": 31.0, "crater_radius": 10.5}
+	var stream_count := rng.randi_range(4, 5)
+	for stream_index in stream_count:
+		var points := PackedVector2Array()
+		var angle := TAU * float(stream_index) / float(stream_count) + rng.randf_range(-0.34, 0.34)
+		var bend := rng.randf_range(-0.18, 0.18)
+		for point_index in 12:
+			var progress := float(point_index) / 11.0
+			var radius := lerpf(9.0, 180.0, progress)
+			var point_angle := angle + sin(progress * PI) * bend + sin(progress * 8.0 + float(stream_index)) * 0.035
+			points.append(Vector2(cos(point_angle), sin(point_angle)) * radius)
+		generated_lava_streams.append({"points": points, "width": rng.randf_range(6.0, 9.0), "damage_per_second": 12})
+
+
 func _random_clear_position(rng: RandomNumberGenerator, edge_padding: float) -> Vector2:
 	for attempt in 100:
 		var candidate := Vector2(
 			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding),
 			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding)
 		)
-		if candidate.length() > 35.0:
+		if candidate.length() > (50.0 if selected_map_theme == "volcano" else 35.0):
 			return candidate
 	return Vector2(80.0, 80.0)
 
@@ -1115,7 +1343,7 @@ func _find_biome_position(rng: RandomNumberGenerator, biome_type: String, radius
 		var candidate: Vector2 = biome["position"] + Vector2(cos(angle), sin(angle)) * distance
 		if absf(candidate.x) > MAP_HALF_SIZE - radius - 6.0 or absf(candidate.y) > MAP_HALF_SIZE - radius - 6.0:
 			continue
-		if candidate.length() < 28.0 + radius or _is_position_in_water(candidate, radius):
+		if candidate.length() < (46.0 if selected_map_theme == "volcano" else 28.0) + radius or _is_position_in_water(candidate, radius) or _is_position_in_lava(candidate, radius):
 			continue
 		var available := true
 		for item in occupied:
@@ -1134,7 +1362,7 @@ func _find_world_position(rng: RandomNumberGenerator, radius: float, occupied: A
 			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding),
 			rng.randf_range(-MAP_HALF_SIZE + edge_padding, MAP_HALF_SIZE - edge_padding)
 		)
-		if candidate.length() < 28.0 + radius or _is_position_in_water(candidate, radius):
+		if candidate.length() < (46.0 if selected_map_theme == "volcano" else 28.0) + radius or _is_position_in_water(candidate, radius) or _is_position_in_lava(candidate, radius):
 			continue
 		var available := true
 		for item in occupied:
@@ -1166,6 +1394,16 @@ func _is_position_in_water(candidate: Vector2, radius: float) -> bool:
 	return false
 
 
+func _is_position_in_lava(candidate: Vector2, radius: float) -> bool:
+	for stream in generated_lava_streams:
+		var points: PackedVector2Array = stream["points"]
+		var lava_radius := float(stream["width"]) * 0.5 + radius
+		for point_index in points.size() - 1:
+			if Geometry2D.get_closest_point_to_segment(candidate, points[point_index], points[point_index + 1]).distance_to(candidate) <= lava_radius:
+				return true
+	return false
+
+
 func _build_landscape() -> void:
 	_load_environment_models()
 	var ground := StaticBody3D.new()
@@ -1177,7 +1415,7 @@ func _build_landscape() -> void:
 	ground_box.size = Vector3(MAP_HALF_SIZE * 2.0, 1.0, MAP_HALF_SIZE * 2.0)
 	ground_mesh.mesh = ground_box
 	ground_mesh.position.y = -0.5
-	ground_mesh.material_override = GENERATED_MATERIALS.ground_material(1 + map_seed % 2, 0.055)
+	ground_mesh.material_override = GENERATED_MATERIALS.theme_ground_material(selected_map_theme, 1 + map_seed % 2, 0.055)
 	ground.add_child(ground_mesh)
 
 	var ground_collision := CollisionShape3D.new()
@@ -1194,6 +1432,10 @@ func _build_landscape() -> void:
 		_create_pond(pond["position"], pond["size"])
 	for river in generated_rivers:
 		_create_river(river["points"], river["width"])
+	if selected_map_theme == "volcano":
+		_create_volcano()
+		for stream in generated_lava_streams:
+			_create_lava_stream(stream)
 	for hill in generated_hills:
 		_create_hill(hill["position"], hill["scale"])
 	for formation in generated_high_ground:
@@ -1228,7 +1470,7 @@ func _create_biome_ground(biome: Dictionary) -> void:
 	var center: Vector2 = biome["position"]
 	var radius: float = biome["radius"]
 	var texture_variant: int = 0 if biome["type"] == "forest" else (1 + abs(int(center.x + center.y)) % 2)
-	var patch_material: StandardMaterial3D = GENERATED_MATERIALS.ground_material(texture_variant, 0.09)
+	var patch_material: StandardMaterial3D = GENERATED_MATERIALS.theme_ground_material(selected_map_theme, texture_variant, 0.09)
 	for patch_index in 6:
 		var patch := MeshInstance3D.new()
 		patch.mesh = mesh
@@ -1247,7 +1489,7 @@ func _build_player(dino_id: String) -> void:
 	player.set_script(PLAYER_SCRIPT)
 	player.set("dino_id", dino_id)
 	player.set("texture_variant", posmod(map_seed + DINO_IDS.find(dino_id), GENERATED_MATERIALS.dino_variant_count()))
-	player.position = Vector3(0.0, 0.1, 5.0)
+	player.position = Vector3(0.0, 0.1, 58.0) if selected_map_theme == "volcano" else Vector3(0.0, 0.1, 5.0)
 	world_root.add_child(player)
 	player.screamed.connect(_on_dino_screamed)
 	player.health_changed.connect(_on_health_changed)
@@ -1276,6 +1518,15 @@ func _build_wild_dinosaurs() -> void:
 		npc.position = data["position"]
 		wildlife.add_child(npc)
 		_register_quality_geometry(npc.get("model_root"), "actor")
+
+
+func _build_snow_footprints() -> void:
+	if selected_map_theme != "winter":
+		return
+	var footprints := MultiMeshInstance3D.new()
+	footprints.set_script(SNOW_FOOTPRINTS_SCRIPT)
+	world_root.add_child(footprints)
+	_register_quality_geometry(footprints, "small")
 
 
 func _build_powerup_tokens() -> void:
@@ -1375,7 +1626,7 @@ func is_pack_destination_clear(destination: Vector3) -> bool:
 	# Reuse the generated layout data so those goals never land in water or
 	# inside a solid landmark that the leader could not actually reach.
 	var candidate := Vector2(destination.x, destination.z)
-	return not _is_position_in_water(candidate, 4.0) and _is_token_position_clear(candidate)
+	return not _is_position_in_water(candidate, 4.0) and not _is_position_in_lava(candidate, 4.0) and _is_token_position_clear(candidate)
 
 
 func _build_hud() -> void:
@@ -1388,7 +1639,7 @@ func _build_hud() -> void:
 	game_hud.add_child(root)
 
 	var title := Label.new()
-	title.text = "DINOS4HELENA  •  %s  •  WORLD %06d" % [selected_dino_name.to_upper(), map_seed]
+	title.text = "DINOS4HELENA  •  %s  •  %s  •  WORLD %06d" % [selected_dino_name.to_upper(), selected_map_theme.to_upper(), map_seed]
 	title.position = Vector2(18, 14)
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color("f4f0cf"))
@@ -1459,7 +1710,8 @@ func _build_hud() -> void:
 	root.add_child(keyboard_hint)
 
 	var menu_button := Button.new()
-	menu_button.text = "←  MAIN MENU"
+	menu_button.name = "ReturnToFreeGameButton"
+	menu_button.text = "←  FREE GAME"
 	menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	menu_button.position = Vector2(-190, 16)
 	menu_button.size = Vector2(170, 46)
@@ -1489,7 +1741,10 @@ func _build_hud() -> void:
 		"high_ground": generated_high_ground,
 		"trees": generated_trees,
 		"rocks": generated_rocks,
-		"logs": generated_logs
+		"logs": generated_logs,
+		"theme": selected_map_theme,
+		"lava_streams": generated_lava_streams,
+		"volcano": volcano_data
 	})
 	_on_health_changed(player.health, player.max_health)
 	_on_energy_changed(player.energy, player.max_energy)
@@ -1625,14 +1880,14 @@ func _create_pond(pond_position: Vector3, pond_size: Vector2) -> void:
 	bank.mesh = _round_water_mesh()
 	bank.scale = Vector3(pond_size.x * 0.5 + 2.6, 1.0, pond_size.y * 0.5 + 2.6)
 	bank.position.y = 0.008
-	bank.material_override = _material(Color("756843"), 1.0)
+	bank.material_override = GENERATED_MATERIALS.theme_ground_material(selected_map_theme, 2, 0.12)
 	lake.add_child(bank)
 	_register_quality_geometry(bank, "landmark")
 	var water := MeshInstance3D.new()
 	water.mesh = _round_water_mesh()
 	water.scale = Vector3(pond_size.x * 0.5, 1.0, pond_size.y * 0.5)
 	water.position.y = 0.035
-	water.material_override = _water_material()
+	water.material_override = _water_surface_material()
 	lake.add_child(water)
 	_register_quality_geometry(water, "landmark")
 
@@ -1643,11 +1898,11 @@ func _create_river(points: PackedVector2Array, width: float) -> void:
 	world_root.add_child(river)
 	var bank := MeshInstance3D.new()
 	bank.mesh = _river_ribbon_mesh(points, width + 5.0, 0.012)
-	bank.material_override = _material(Color("756843"), 1.0)
+	bank.material_override = GENERATED_MATERIALS.theme_ground_material(selected_map_theme, 2, 0.12)
 	river.add_child(bank)
 	var water := MeshInstance3D.new()
 	water.mesh = _river_ribbon_mesh(points, width, 0.035)
-	water.material_override = _water_material()
+	water.material_override = _water_surface_material()
 	river.add_child(water)
 
 
@@ -1692,6 +1947,18 @@ func _river_ribbon_mesh(points: PackedVector2Array, width: float, height: float)
 	return mesh
 
 
+func _water_surface_material() -> Material:
+	if selected_map_theme == "winter":
+		var ice := StandardMaterial3D.new()
+		ice.albedo_color = Color("b8dae6")
+		ice.roughness = 0.28
+		ice.metallic_specular = 0.72
+		ice.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		ice.albedo_color.a = 0.92
+		return ice
+	return _water_material()
+
+
 func _water_material() -> ShaderMaterial:
 	var shader := Shader.new()
 	shader.code = """
@@ -1717,6 +1984,220 @@ void fragment() {
 	return material
 
 
+func _volcano_shell_mesh() -> ArrayMesh:
+	# Concentric irregular rings form a natural mountain silhouette and descend
+	# into the crater instead of capping the volcano with a flat cylinder.
+	var radii := [46.0, 40.5, 33.0, 25.0, 17.0, 10.5, 8.3]
+	var heights := [0.15, 5.8, 12.8, 20.0, 26.3, 30.2, 27.3]
+	var segments := 48
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for ring_index in radii.size():
+		for segment_index in segments:
+			var angle := TAU * float(segment_index) / float(segments)
+			var edge_noise := sin(angle * 3.0 + ring_index * 0.83) * 0.055 + sin(angle * 7.0 - ring_index * 0.41) * 0.025
+			var radius: float = radii[ring_index] * (1.0 + edge_noise)
+			var height: float = heights[ring_index]
+			if ring_index > 0 and ring_index < radii.size() - 1:
+				height += sin(angle * 5.0 + ring_index) * 0.45
+			vertices.append(Vector3(cos(angle) * radius, height, sin(angle) * radius))
+			var normal := Vector3(cos(angle), 0.7, sin(angle)).normalized()
+			if ring_index == radii.size() - 1:
+				normal = Vector3(-cos(angle), 0.28, -sin(angle)).normalized()
+			normals.append(normal)
+			uvs.append(Vector2(float(segment_index) / float(segments), float(ring_index) * 0.58))
+	for ring_index in radii.size() - 1:
+		for segment_index in segments:
+			var next_segment := (segment_index + 1) % segments
+			var current := ring_index * segments + segment_index
+			var next := ring_index * segments + next_segment
+			var inner := (ring_index + 1) * segments + segment_index
+			var inner_next := (ring_index + 1) * segments + next_segment
+			indices.append_array(PackedInt32Array([current, inner, next, next, inner, inner_next]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _create_volcano() -> void:
+	var volcano := StaticBody3D.new()
+	volcano.name = "CentralVolcano"
+	volcano.collision_layer = 1
+	volcano.collision_mask = 1
+	volcano.add_to_group("world_obstacle")
+	world_root.add_child(volcano)
+
+	var mountain := MeshInstance3D.new()
+	mountain.name = "TexturedVolcanoShell"
+	mountain.mesh = _volcano_shell_mesh()
+	mountain.material_override = GENERATED_MATERIALS.theme_ground_material("volcano", 0, 0.085)
+	volcano.add_child(mountain)
+	_register_quality_geometry(mountain, "landmark")
+
+	# Overlapping collision tiers fill the complete mountain footprint. Their
+	# radii follow the visible slope, preventing dinosaurs from entering the
+	# shell while keeping physics far cheaper than a moving concave collider.
+	_add_volcano_collision_tier(volcano, "BaseCollision", 45.0, 6.5)
+	_add_volcano_collision_tier(volcano, "LowerSlopeCollision", 39.5, 12.0)
+	_add_volcano_collision_tier(volcano, "MiddleSlopeCollision", 31.5, 19.0)
+	_add_volcano_collision_tier(volcano, "UpperSlopeCollision", 23.0, 25.5)
+	_add_volcano_collision_tier(volcano, "CraterCollision", 14.5, 30.0)
+
+	var crater := MeshInstance3D.new()
+	crater.name = "CraterLava"
+	var crater_mesh := CylinderMesh.new()
+	crater_mesh.top_radius = 8.25
+	crater_mesh.bottom_radius = 8.25
+	crater_mesh.height = 0.55
+	crater_mesh.radial_segments = 48
+	crater.mesh = crater_mesh
+	crater.position.y = 27.5
+	crater.material_override = _lava_material()
+	volcano.add_child(crater)
+	_register_quality_geometry(crater, "landmark")
+
+	var eruption := GPUParticles3D.new()
+	eruption.name = "LavaEruption"
+	eruption.add_to_group("quality_particles")
+	eruption.position.y = 29.0
+	eruption.amount = 28
+	eruption.lifetime = 2.8
+	eruption.randomness = 0.7
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	process.emission_sphere_radius = 4.5
+	process.direction = Vector3.UP
+	process.spread = 24.0
+	process.initial_velocity_min = 8.0
+	process.initial_velocity_max = 16.0
+	process.gravity = Vector3(0.0, -7.5, 0.0)
+	process.scale_min = 0.18
+	process.scale_max = 0.55
+	eruption.process_material = process
+	var chunk := SphereMesh.new()
+	chunk.radius = 0.24
+	chunk.height = 0.48
+	chunk.radial_segments = 6
+	chunk.rings = 4
+	chunk.material = _lava_material()
+	eruption.draw_pass_1 = chunk
+	volcano.add_child(eruption)
+
+
+func _add_volcano_collision_tier(parent: StaticBody3D, tier_name: String, radius: float, height: float) -> void:
+	var collision := CollisionShape3D.new()
+	collision.name = tier_name
+	var shape := CylinderShape3D.new()
+	shape.radius = radius
+	shape.height = height
+	collision.shape = shape
+	collision.position.y = height * 0.5
+	parent.add_child(collision)
+
+
+func _volcano_surface_height(point: Vector2) -> float:
+	var distance := point.length()
+	if distance <= 10.5:
+		return 27.85
+	var profile_radii := [10.5, 17.0, 25.0, 33.0, 40.5, 46.0]
+	var profile_heights := [29.7, 26.3, 20.0, 12.8, 5.8, 0.08]
+	for profile_index in profile_radii.size() - 1:
+		if distance <= profile_radii[profile_index + 1]:
+			var progress := inverse_lerp(profile_radii[profile_index], profile_radii[profile_index + 1], distance)
+			return lerpf(profile_heights[profile_index], profile_heights[profile_index + 1], progress)
+	return 0.08
+
+
+func _volcano_lava_ribbon_mesh(points: PackedVector2Array, width: float) -> ArrayMesh:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for point_index in points.size():
+		var previous := points[maxi(point_index - 1, 0)]
+		var following := points[mini(point_index + 1, points.size() - 1)]
+		var direction := (following - previous).normalized()
+		var progress := float(point_index) / float(maxi(points.size() - 1, 1))
+		var local_width := width * lerpf(0.46, 1.0, progress)
+		var side := Vector2(-direction.y, direction.x) * local_width * 0.5
+		var height := _volcano_surface_height(points[point_index]) + 0.16
+		vertices.append(Vector3(points[point_index].x + side.x, height, points[point_index].y + side.y))
+		vertices.append(Vector3(points[point_index].x - side.x, height, points[point_index].y - side.y))
+		normals.append(Vector3.UP)
+		normals.append(Vector3.UP)
+		uvs.append(Vector2(0.0, progress * 14.0))
+		uvs.append(Vector2(1.0, progress * 14.0))
+		if point_index < points.size() - 1:
+			var base := point_index * 2
+			indices.append_array(PackedInt32Array([base, base + 2, base + 1, base + 1, base + 2, base + 3]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _create_lava_stream(stream: Dictionary) -> void:
+	var area := Area3D.new()
+	area.name = "LavaStream"
+	area.set_script(LAVA_STREAM_SCRIPT)
+	area.set("damage_per_second", int(stream.get("damage_per_second", 12)))
+	area.collision_layer = 0
+	area.collision_mask = 1
+	world_root.add_child(area)
+	var points: PackedVector2Array = stream["points"]
+	var width: float = stream["width"]
+	var lava := MeshInstance3D.new()
+	lava.mesh = _volcano_lava_ribbon_mesh(points, width)
+	lava.material_override = _lava_material()
+	area.add_child(lava)
+	_register_quality_geometry(lava, "landmark")
+	for point_index in points.size() - 1:
+		var start := points[point_index]
+		var finish := points[point_index + 1]
+		var direction := finish - start
+		var collision := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(direction.length(), 0.8, width)
+		collision.shape = shape
+		var midpoint := (start + finish) * 0.5
+		collision.position = Vector3(midpoint.x, 0.25, midpoint.y)
+		collision.rotation.y = -direction.angle()
+		area.add_child(collision)
+
+
+func _lava_material() -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode cull_disabled;
+
+void fragment() {
+	float flow = sin(UV.y * 38.0 - TIME * 3.2 + sin(UV.x * 15.0)) * 0.5 + 0.5;
+	vec3 crust = vec3(0.10, 0.045, 0.025);
+	vec3 hot = vec3(1.0, 0.18, 0.015);
+	ALBEDO = mix(crust, hot, smoothstep(0.42, 0.72, flow));
+	EMISSION = hot * (0.9 + flow * 1.8);
+	ROUGHNESS = 0.62;
+}
+"""
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	return material
+
+
 func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
 	var hill_body := StaticBody3D.new()
 	hill_body.name = "HillObstacle"
@@ -1732,7 +2213,7 @@ func _create_hill(hill_position: Vector3, hill_scale: Vector3) -> void:
 	mesh.rings = 10
 	hill.mesh = mesh
 	hill.scale = hill_scale
-	hill.material_override = GENERATED_MATERIALS.ground_material(0 if int(hill_position.x) % 2 == 0 else 1, 0.11)
+	hill.material_override = GENERATED_MATERIALS.theme_ground_material(selected_map_theme, 0 if int(hill_position.x) % 2 == 0 else 1, 0.11)
 	hill_body.add_child(hill)
 	_register_quality_geometry(hill, "large")
 
@@ -1771,7 +2252,7 @@ func _create_high_ground(formation: Dictionary) -> void:
 		mesh.radial_segments = 9
 		mesh.rings = 2
 		mesh_instance.mesh = mesh
-		mesh_instance.material_override = GENERATED_MATERIALS.rock_material(tier_index + int(formation["position"].x), 0.48)
+		mesh_instance.material_override = GENERATED_MATERIALS.theme_ground_material(selected_map_theme, tier_index + int(formation["position"].x), 0.48) if selected_map_theme != "grassland" else GENERATED_MATERIALS.rock_material(tier_index + int(formation["position"].x), 0.48)
 		tier.add_child(mesh_instance)
 		_register_quality_geometry(mesh_instance, "landmark")
 		var collision := CollisionShape3D.new()
@@ -1816,6 +2297,7 @@ func _create_tree(tree_data: Dictionary) -> void:
 	model.name = tree_type.to_pascal_case()
 	tree.add_child(model)
 	GENERATED_MATERIALS.apply_bark(model, abs(int(tree_position.x * 13.0 + tree_position.z * 7.0)))
+	GENERATED_MATERIALS.tint_environment(model, selected_map_theme, "plant")
 	_register_quality_geometry(model, "large")
 
 
@@ -1832,6 +2314,7 @@ func _create_rock(rock_position: Vector3, rock_scale: float) -> void:
 	rock.name = "MossyBasaltRock"
 	rock_body.add_child(rock)
 	GENERATED_MATERIALS.apply_rock(rock, abs(int(rock_position.x * 11.0 + rock_position.z * 17.0)))
+	GENERATED_MATERIALS.tint_environment(rock, selected_map_theme, "rock")
 	_register_quality_geometry(rock, "medium")
 
 	var collision := CollisionShape3D.new()
@@ -1853,6 +2336,7 @@ func _create_fallen_log(log_data: Dictionary) -> void:
 	log_body.add_child(model)
 	var log_position: Vector3 = log_data["position"]
 	GENERATED_MATERIALS.apply_bark(model, abs(int(log_position.x * 5.0 + log_position.z * 3.0)))
+	GENERATED_MATERIALS.tint_environment(model, selected_map_theme, "plant")
 	_register_quality_geometry(model, "medium")
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
@@ -1877,6 +2361,8 @@ func _create_vegetation(vegetation: Dictionary) -> void:
 		plant.set_meta("poisonous", true)
 		_decorate_poisonous_plant(plant)
 	world_root.add_child(plant)
+	if plant_type != "poisonous":
+		GENERATED_MATERIALS.tint_environment(plant, selected_map_theme, "plant")
 	_register_quality_geometry(plant, "small")
 
 
@@ -2019,6 +2505,9 @@ func _apply_performance_tier(next_tier: int) -> void:
 			(cameras[0] as Camera3D).far = [170.0, 240.0, 360.0][performance_tier]
 	if is_instance_valid(active_minimap) and active_minimap.has_method("set_performance_tier"):
 		active_minimap.call("set_performance_tier", performance_tier)
+	for item in get_tree().get_nodes_in_group("quality_particles"):
+		if item is GPUParticles3D:
+			(item as GPUParticles3D).amount = [8, 14, 22][performance_tier]
 
 
 func _apply_geometry_quality(geometry: GeometryInstance3D) -> void:

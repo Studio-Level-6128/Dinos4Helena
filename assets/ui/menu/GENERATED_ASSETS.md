@@ -49,3 +49,14 @@ The generated file is `quests-tile.png`. The game darkens it to communicate that
 > Inviting prehistoric open-world valley with a clear winding river, grassland, cycads, conifers, distant mountains, soft clouds, and a majestic T-Rex surveying the landscape. Photorealistic natural-history concept art, wide 3:2 composition, vibrant morning light, adventurous and family-friendly. No text, logos, borders, UI, watermark, or gore.
 
 The generated file is `free-game-tile.png`. Godot applies brighter hover and darker pressed states while rendering the tile label natively for clarity.
+
+## Free Game map-theme previews
+
+Generated on 2026-09-25 with Codex's built-in image-generation tool, then cropped and resized to 512 by 288 pixels for compact Android menu tiles.
+
+All four prompts requested polished, photorealistic natural-history game key art in a wide 3:2 elevated landscape composition, with readable foreground/middle/background layers and no dinosaurs, people, buildings, text, logos, borders, UI, or watermark.
+
+- `theme-grassland.png`: a lush prehistoric valley with green meadow, ancient conifers, tree ferns, rocks, and a winding blue river in warm daylight.
+- `theme-desert.png`: sandy dunes and sun-baked rocks with sparse cycads and dry plants gathered around turquoise water holes under hot sunlight.
+- `theme-winter.png`: a snow-covered prehistoric valley, snowy conifers and tree ferns, frozen water, and a dark overcast sky in icy blue-gray tones.
+- `theme-volcano.png`: an erupting central volcano with glowing lava streams crossing a green fern meadow beneath a smoky late-afternoon sky.

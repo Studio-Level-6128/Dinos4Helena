@@ -16,5 +16,8 @@ All prompts requested a perfectly tileable, flat orthographic, neutrally lit, re
 - `ground_forest_loam.png`: damp dark forest loam; decomposed leaf fragments, tiny fern fragments, and sparse moss.
 - `ground_grassland.png`: short muted-green grassland; brown soil patches and scattered dry blades.
 - `ground_floodplain.png`: muted ochre silt and pale sand; fine dark grains and subtle dried-mud cracks.
+- `ground_desert_sand.png`: wind-rippled warm ochre sand, tiny pebbles, and subtle dried-sediment cracks.
+- `ground_winter_snow.png`: windswept powder snow, icy granules, and pale blue-grey compacted patches.
+- `ground_volcanic_basalt.png`: cracked charcoal basalt, cooled ropy lava crust, ash, and restrained mineral-orange fissures.
 
 The original generator outputs were 1254×1254 PNG files. Project copies were resized to 512×512 and stripped of metadata to reduce Android download and GPU memory cost.
