@@ -79,8 +79,19 @@ func _run() -> void:
 	assert(theme_cards != null and theme_cards.get_child_count() == 4, "Visual map-theme cards are incomplete")
 	for theme_button in theme_cards.get_children():
 		assert((theme_button as Button).get_theme_stylebox("normal") is StyleBoxTexture, "Map theme card has no preview image")
+		var theme_rim := (theme_button as Button).find_child("ThemeRim", false, false) as Panel
+		assert(theme_rim != null, "Map theme card has no border rim")
+	var grassland_rim := (app.map_theme_buttons["grassland"] as Button).find_child("ThemeRim", false, false) as Panel
+	var desert_rim := (app.map_theme_buttons["desert"] as Button).find_child("ThemeRim", false, false) as Panel
+	assert((grassland_rim.get_theme_stylebox("panel") as StyleBoxFlat).border_width_top == 4, "Selected map theme should have a thick rim")
+	(app.map_theme_buttons["desert"] as Button).pressed.emit()
+	assert((desert_rim.get_theme_stylebox("panel") as StyleBoxFlat).border_width_top == 4, "Map theme rim did not follow selection")
+	assert((grassland_rim.get_theme_stylebox("panel") as StyleBoxFlat).border_width_top == 2, "Unselected map theme rim stayed highlighted")
+	(app.map_theme_buttons["grassland"] as Button).pressed.emit()
 	var start_button := app.menu_layer.find_child("StartGameButton", true, false) as Button
 	assert(start_button != null and "T-REX" in start_button.text, "Shared Start Game button is missing or stale")
+	assert(is_equal_approx(start_button.anchor_left, 1.0) and is_equal_approx(start_button.anchor_top, 1.0), "Start Game button is not anchored to the bottom-right corner")
+	assert(start_button.position.x >= 800.0 and start_button.position.y >= 630.0, "Start Game button is not positioned in the bottom-right safe area")
 	var back_button := app.menu_layer.find_child("BackToLandingButton", true, false) as Button
 	assert(back_button != null, "Free Game back button is missing")
 	back_button.pressed.emit()

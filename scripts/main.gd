@@ -431,6 +431,12 @@ func _build_main_menu() -> void:
 		theme_button.tooltip_text = "Select the %s map" % MAP_THEME_LABELS[theme_index].capitalize()
 		theme_button.pressed.connect(_select_map_theme.bind(theme_id))
 		theme_row.add_child(theme_button)
+		var rim := Panel.new()
+		rim.name = "ThemeRim"
+		rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rim.add_theme_stylebox_override("panel", _theme_tile_rim_style(theme_id == selected_map_theme))
+		theme_button.add_child(rim)
 		map_theme_buttons[theme_id] = theme_button
 
 	var seed_row := HBoxContainer.new()
@@ -471,8 +477,8 @@ func _build_main_menu() -> void:
 
 	start_game_button = Button.new()
 	start_game_button.name = "StartGameButton"
-	start_game_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	start_game_button.position = Vector2(-210, 579)
+	start_game_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	start_game_button.position = Vector2(-440, -74)
 	start_game_button.size = Vector2(420, 54)
 	start_game_button.focus_mode = Control.FOCUS_NONE
 	start_game_button.add_theme_font_size_override("font_size", 20)
@@ -487,7 +493,7 @@ func _build_main_menu() -> void:
 	footer.text = "Select a dinosaur and map, then start your adventure"
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footer.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	footer.position = Vector2(-350, 640)
+	footer.position = Vector2(-350, 600)
 	footer.size = Vector2(700, 28)
 	footer.add_theme_font_size_override("font_size", 15)
 	footer.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
@@ -574,6 +580,9 @@ func _update_map_theme_selection() -> void:
 		button.add_theme_stylebox_override("normal", _tile_image_style(art, Color(1.0, 1.0, 1.0, 1.0) if selected else Color(0.54, 0.56, 0.53, 1.0)))
 		button.add_theme_stylebox_override("hover", _tile_image_style(art, Color(0.9, 0.92, 0.88, 1.0)))
 		button.add_theme_stylebox_override("pressed", _tile_image_style(art, Color(0.72, 0.74, 0.68, 1.0)))
+		var rim := button.find_child("ThemeRim", false, false) as Panel
+		if rim:
+			rim.add_theme_stylebox_override("panel", _theme_tile_rim_style(selected))
 
 
 func _update_start_button() -> void:
@@ -987,6 +996,15 @@ func _card_style(selected := false) -> StyleBoxFlat:
 	style.content_margin_right = 7
 	style.content_margin_top = 7
 	style.content_margin_bottom = 9
+	return style
+
+
+func _theme_tile_rim_style(selected := false) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_color = Color("ffe778") if selected else Color(0.82, 0.72, 0.35, 0.72)
+	style.set_border_width_all(4 if selected else 2)
+	style.set_corner_radius_all(10)
 	return style
 
 
@@ -2016,6 +2034,15 @@ func _volcano_shell_mesh() -> ArrayMesh:
 			var inner := (ring_index + 1) * segments + segment_index
 			var inner_next := (ring_index + 1) * segments + next_segment
 			indices.append_array(PackedInt32Array([current, inner, next, next, inner, inner_next]))
+	# Seal the underside as well. It normally sits below the ground plane, but a
+	# closed mesh avoids holes when cameras use low angles or aggressive clipping.
+	var base_center := vertices.size()
+	vertices.append(Vector3(0.0, -0.35, 0.0))
+	normals.append(Vector3.DOWN)
+	uvs.append(Vector2(0.5, 0.5))
+	for segment_index in segments:
+		var next_segment := (segment_index + 1) % segments
+		indices.append_array(PackedInt32Array([base_center, next_segment, segment_index]))
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -2038,7 +2065,9 @@ func _create_volcano() -> void:
 	var mountain := MeshInstance3D.new()
 	mountain.name = "TexturedVolcanoShell"
 	mountain.mesh = _volcano_shell_mesh()
-	mountain.material_override = GENERATED_MATERIALS.theme_ground_material("volcano", 0, 0.085)
+	var volcano_material := GENERATED_MATERIALS.theme_ground_material("volcano", 0, 0.085)
+	volcano_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mountain.material_override = volcano_material
 	volcano.add_child(mountain)
 	_register_quality_geometry(mountain, "landmark")
 

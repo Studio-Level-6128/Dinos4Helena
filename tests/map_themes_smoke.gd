@@ -54,8 +54,10 @@ func _run() -> void:
 	assert(volcano != null, "Central volcano is missing")
 	var shell := volcano.get_node_or_null("TexturedVolcanoShell") as MeshInstance3D
 	assert(shell != null and shell.mesh is ArrayMesh, "Volcano does not use the complex cratered mesh")
+	assert(shell.mesh.get_aabb().position.y < 0.0, "Volcano shell is still open underneath")
 	var shell_material := shell.material_override as StandardMaterial3D
 	assert(shell_material != null and shell_material.albedo_texture.resource_path.ends_with("ground_volcanic_basalt.png"), "Volcano shell is missing its basalt texture")
+	assert(shell_material.cull_mode == BaseMaterial3D.CULL_DISABLED, "Volcano shell can disappear through one-sided face culling")
 	var crater_lava := volcano.get_node_or_null("CraterLava") as MeshInstance3D
 	assert(crater_lava != null and crater_lava.position.y > 25.0, "Volcano crater is not filled with elevated lava")
 	assert(volcano.find_children("*", "CollisionShape3D", true, false).size() >= 5, "Volcano does not have a solid layered collider")
