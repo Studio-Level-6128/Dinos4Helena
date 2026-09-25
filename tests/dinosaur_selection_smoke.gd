@@ -75,6 +75,15 @@ func _run() -> void:
 		assert(player.animation_player != null, "Missing animations for: " + dino_id)
 		var minimum_animation_count := 4 if dino_id == "spinosaurus" else 5
 		assert(player.animation_player.get_animation_list().size() >= minimum_animation_count, "Incomplete animation set for: " + dino_id)
+		if dino_id == "spinosaurus":
+			var meshes: Array[Node] = player.model_root.find_children("*", "MeshInstance3D", true, false)
+			assert(not meshes.is_empty(), "Spinosaurus render mesh is missing")
+			var mesh_instance := meshes[0] as MeshInstance3D
+			assert(mesh_instance.mesh.get_surface_count() == 1, "Spinosaurus should retain its single render surface")
+			var skin := mesh_instance.get_surface_override_material(0) as StandardMaterial3D
+			assert(skin != null, "Spinosaurus optimized material is missing")
+			assert(skin.albedo_texture.resource_path.ends_with("spinosaurus_skin.png"), "Spinosaurus albedo is not species-specific")
+			assert(skin.normal_enabled and skin.normal_texture.resource_path.ends_with("spinosaurus_skin_normal.png"), "Spinosaurus normal detail is missing")
 		var death_animation: String = player._find_animation("death")
 		assert(death_animation != "", "Missing death animation for: " + dino_id)
 		assert(player.animation_player.get_animation(death_animation).loop_mode == Animation.LOOP_NONE, "Death animation loops for: " + dino_id)

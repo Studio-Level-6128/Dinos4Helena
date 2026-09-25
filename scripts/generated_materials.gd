@@ -7,6 +7,17 @@ const DINO_TEXTURES: Array[Texture2D] = [
 	preload("res://assets/textures/generated/dino_skin_russet.png"),
 	preload("res://assets/textures/generated/dino_skin_sand.png")
 ]
+# Spinosaurus keeps the single-surface, single-draw-call layout of the CC0
+# source model, but uses a dedicated high-detail hide and normal map. Tinting
+# one neutral texture supplies the three visual variants without loading three
+# separate albedo maps on memory-constrained phones.
+const SPINOSAURUS_SKIN: Texture2D = preload("res://assets/textures/generated/spinosaurus_skin.png")
+const SPINOSAURUS_NORMAL: Texture2D = preload("res://assets/textures/generated/spinosaurus_skin_normal.png")
+const SPINOSAURUS_TINTS: Array[Color] = [
+	Color("9aaa82"),
+	Color("bd856f"),
+	Color("c8b68f")
+]
 const BARK_TEXTURES: Array[Texture2D] = [
 	preload("res://assets/textures/generated/bark_dark_moss.png"),
 	preload("res://assets/textures/generated/bark_pale_lichen.png")
@@ -26,14 +37,30 @@ static func dino_variant_count() -> int:
 	return DINO_TEXTURES.size()
 
 
-static func apply_dino_skin(model_root: Node, variant: int) -> void:
-	var material := _triplanar_material(DINO_TEXTURES[posmod(variant, DINO_TEXTURES.size())], 0.94, 1.45)
+static func apply_dino_skin(model_root: Node, variant: int, species_id := "") -> void:
+	var material: StandardMaterial3D
+	if species_id == "spinosaurus":
+		material = _spinosaurus_material(variant)
+	else:
+		material = _triplanar_material(DINO_TEXTURES[posmod(variant, DINO_TEXTURES.size())], 0.94, 1.45)
 	# The first surface is the hide on all seven source models. Leaving the other
 	# surfaces untouched preserves eyes, teeth, claws, horns, and markings.
 	for child in model_root.find_children("*", "MeshInstance3D", true, false):
 		var mesh_instance := child as MeshInstance3D
 		if mesh_instance.mesh != null and mesh_instance.mesh.get_surface_count() > 0:
 			mesh_instance.set_surface_override_material(0, material)
+
+
+static func _spinosaurus_material(variant: int) -> StandardMaterial3D:
+	var material := _triplanar_material(SPINOSAURUS_SKIN, 0.82, 1.7)
+	material.albedo_color = SPINOSAURUS_TINTS[posmod(variant, SPINOSAURUS_TINTS.size())]
+	material.normal_enabled = true
+	material.normal_texture = SPINOSAURUS_NORMAL
+	material.normal_scale = 0.58
+	# A small specular response makes the scales readable in sunlight without
+	# giving the animal a wet or plastic appearance.
+	material.metallic_specular = 0.32
+	return material
 
 
 static func apply_bark(model_root: Node, variant: int) -> void:

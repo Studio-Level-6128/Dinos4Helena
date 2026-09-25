@@ -11,5 +11,8 @@
 
 The checked-in `Spinosaurus.glb` is a lossless scene-flattened derivative made with glTF Transform 3.10.1. Flattening bakes the source mesh node transform that Godot 4.7 otherwise drops when importing the skinned mesh; geometry, rig, texture data, and animation clips remain from the CC0 source.
 The model is rigged and contains the named `idle`, `walk`, `attack`, and
-`dead` clips at 24 fps. Dinos4Helena uses the project triplanar skin variants and plays its
-walk clip at a higher playback speed while running. Attribution is optional.
+`dead` clips at 24 fps. Dinos4Helena adds a project-specific, generated 512 px
+triplanar albedo and normal map while retaining the original low-poly geometry,
+single render surface, skeleton, and animation clips. Three skin variants are
+produced with material tinting instead of duplicate textures, and the walk clip
+is played at a higher speed while running. Attribution is optional.

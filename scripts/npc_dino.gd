@@ -817,7 +817,7 @@ func _build_model(model_path: String) -> void:
 	model_root.scale = Vector3.ONE * model_scale
 	model_root.rotation.y = PI
 	add_child(model_root)
-	GENERATED_MATERIALS.apply_dino_skin(model_root, texture_variant)
+	GENERATED_MATERIALS.apply_dino_skin(model_root, texture_variant, dino_id)
 	animation_player = model_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if animation_player:
 		for keyword in ["idle", "walk", "run"]:

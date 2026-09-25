@@ -245,7 +245,7 @@ func _build_model() -> void:
 	# The source dinosaur assets face +Z. Gameplay convention uses -Z as forward.
 	model_root.rotation.y = PI
 	add_child(model_root)
-	GENERATED_MATERIALS.apply_dino_skin(model_root, texture_variant)
+	GENERATED_MATERIALS.apply_dino_skin(model_root, texture_variant, dino_id)
 	animation_player = model_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if animation_player:
 		for key in ["idle", "walk", "run"]:
