@@ -56,6 +56,9 @@ var starvation_damage_accumulator := 0.0
 var collision_radius := 0.8
 var collision_height := 2.8
 var dead := false
+var can_retreat := true
+var ignore_combat_odds := false
+var last_attacker: Node3D
 var state := "wandering"
 var attack_cooldown := 0.0
 var wander_time := 0.0
@@ -138,7 +141,7 @@ func _physics_process(delta: float) -> void:
 	# Carnivore priority: retreat when critically hurt, feed when hungry, then
 	# hunt only targets that pass the combat-odds calculation.
 	if diet == "carnivore":
-		var retreat_threat := _nearest_opponent(AVOID_DANGER_RANGE * 1.6) if _is_heavily_injured() else null
+		var retreat_threat := _nearest_opponent(AVOID_DANGER_RANGE * 1.6) if can_retreat and _is_heavily_injured() else null
 		if is_instance_valid(retreat_threat):
 			state = "retreating"
 			var retreat_offset := global_position - retreat_threat.global_position
@@ -237,7 +240,7 @@ func _hunt_direction(delta: float) -> Vector3:
 func _choose_prey() -> Node3D:
 	if is_instance_valid(forced_target) and not bool(forced_target.get("dead")) and not _is_same_species(forced_target):
 		var forced_minimum := BABY_MINIMUM_HUNT_ODDS if forced_target.is_in_group("baby_dinosaur") else MINIMUM_STALK_ODDS
-		if global_position.distance_to(forced_target.global_position) <= HUNTER_SIGHT_RANGE * 1.35 and _combat_odds(forced_target) >= forced_minimum:
+		if global_position.distance_to(forced_target.global_position) <= HUNTER_SIGHT_RANGE * 1.35 and (ignore_combat_odds or _combat_odds(forced_target) >= forced_minimum):
 			return forced_target
 	forced_target = null
 	var nearest: Node3D
@@ -668,6 +671,7 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if amount <= 0 or dead or (is_instance_valid(attacker) and _is_same_species(attacker)):
 		return
 	health = maxi(health - amount, 0)
+	last_attacker = attacker
 	_show_health()
 	if is_instance_valid(attacker) and diet == "carnivore":
 		forced_target = attacker

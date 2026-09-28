@@ -4,7 +4,7 @@ A mobile-first 3D Android game built with Godot 4 and GDScript. The current play
 
 See the [player guide](docs/PLAY_GUIDE.md) for the complete game rules and the [development guide](docs/DEVELOPMENT.md) for architecture, setup, extension points, testing, and Android builds.
 
-The game opens with a generated cinematic dinosaur-fight splash, followed by a clean **DINOS4HELENA** landing page with `QUESTS`, `FREE GAME`, and `CREDITS`. Quests are marked as coming later. `FREE GAME` opens a separate setup page where the player chooses T-Rex, Spinosaurus, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus and sets the world seed. `HOW TO PLAY` is available there, and the top-right `MAIN MENU` button returns from gameplay to the landing page at any time.
+The game opens with a generated cinematic dinosaur-fight splash, followed by a clean **DINOS4HELENA** landing page with `QUESTS`, `FREE GAME`, and `CREDITS`. `QUESTS` opens a config-driven campaign browser. Its first campaign, **Getting Started**, contains six grassland missions covering grazing, exploration, herd behavior, breeding, hunting, and pack defense. `FREE GAME` opens a separate setup page where the player chooses T-Rex, Spinosaurus, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus and sets the world seed. `HOW TO PLAY` is available there, and the top-right menu button returns from gameplay to the appropriate setup page.
 
 ## Play the prototype
 
@@ -104,6 +104,8 @@ Use `Terminal > Run Task`:
 - `Godot: Pack movement test` verifies roaming leaders, staggered formations, trailing individuals, collision exceptions, and deadlock recovery.
 - `Godot: Herd shelter test` verifies same-species peace, welcoming behavior, ally alerts, and defense of the player.
 - `Godot: Power-up token test` verifies placement, animation, healing, doubled stats, HUD timers, consumption, and same-type respawning.
+- `Godot: Quest UI test` verifies the catalog, overview, Getting Started page, six mission cards, and a complete mission launch.
+- `Godot: Quest missions test` boots every Getting Started setup/event pair and checks its mission-specific world additions.
 - `Audio: Generate missing sounds` uses the local ElevenLabs key to fill any missing audio assets.
 - `Assets: Download environment models` restores the CC0 environment model library if needed.
 - `Android: Build debug APK` creates `build/android/Dinos4Helena-debug.apk`.

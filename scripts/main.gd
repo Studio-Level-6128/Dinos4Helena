@@ -23,6 +23,7 @@ const MAP_HALF_SIZE := 200.0
 const MAP_THEMES := ["grassland", "desert", "winter", "volcano"]
 const MAP_THEME_LABELS := ["GRASSLAND", "DESERT", "WINTER", "VOLCANO"]
 const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x71A7E2, "volcano": 0xB01CA0}
+const QUEST_PROGRESS_PATH := "user://quest_progress.cfg"
 # Adaptive performance starts at full quality. It only reduces expensive
 # rendering features after several sustained low-frame-rate samples, and uses
 # a deliberately slower recovery threshold to avoid quality oscillation.
@@ -75,6 +76,8 @@ var game_hud: CanvasLayer
 var menu_layer: CanvasLayer
 var landing_page: Control
 var free_game_page: Control
+var quest_overview_page: Control
+var quest_detail_page: Control
 var credits_overlay: Control
 var play_guide_overlay: Control
 var splash_layer: CanvasLayer
@@ -93,6 +96,14 @@ var dino_cards: Dictionary = {}
 var map_theme_buttons: Dictionary = {}
 var start_game_button: Button
 var dinosaur_config := ConfigFile.new()
+var quest_config := ConfigFile.new()
+var mission_config := ConfigFile.new()
+var quest_progress := ConfigFile.new()
+var quest_progress_path := QUEST_PROGRESS_PATH
+var active_quest_id := ""
+var active_mission_id := ""
+var active_mission_event: Node
+var mission_objective_label: Label
 var seed_input: LineEdit
 var map_seed := 0
 var generated_ponds: Array = []
@@ -129,6 +140,10 @@ func _ready() -> void:
 	add_to_group("world_controller")
 	var config_error := dinosaur_config.load("res://config/dinosaurs.cfg")
 	assert(config_error == OK, "Could not load dinosaur configuration")
+	assert(quest_config.load("res://config/quests.cfg") == OK, "Could not load quest configuration")
+	var progress_error := quest_progress.load(quest_progress_path)
+	if progress_error != OK and progress_error != ERR_FILE_NOT_FOUND:
+		push_warning("Could not load quest progress: %s" % error_string(progress_error))
 	_create_input_actions()
 	_build_main_menu()
 	_build_splash_screen()
@@ -186,6 +201,7 @@ func _start_game(dino_id: String) -> void:
 	sun_light = null
 	active_minimap = null
 	_generate_world_layout()
+	_apply_mission_setup()
 	_build_environment()
 	_build_clouds()
 	_build_ambient_audio()
@@ -196,10 +212,15 @@ func _start_game(dino_id: String) -> void:
 	_build_wild_dinosaurs()
 	_build_snow_footprints()
 	_build_hud()
+	_start_mission_event()
 	_reset_adaptive_performance()
 
 
 func _return_to_main_menu() -> void:
+	var return_to_quest := active_quest_id != ""
+	if is_instance_valid(active_mission_event):
+		active_mission_event.queue_free()
+	active_mission_event = null
 	if is_instance_valid(game_hud):
 		game_hud.queue_free()
 	if is_instance_valid(world_root):
@@ -212,12 +233,17 @@ func _return_to_main_menu() -> void:
 	energy_label = null
 	bonus_label = null
 	poison_label = null
+	mission_objective_label = null
 	companions_spawned = 0
 	quality_geometry.clear()
 	sun_light = null
 	active_minimap = null
 	get_viewport().scaling_3d_scale = 1.0
-	_show_free_game_page()
+	if return_to_quest:
+		_show_quest_page(active_quest_id)
+	else:
+		_show_free_game_page()
+	active_mission_id = ""
 	menu_layer.show()
 
 
@@ -322,16 +348,21 @@ func _build_main_menu() -> void:
 
 	var quests_tile := Button.new()
 	quests_tile.name = "QuestsTile"
-	quests_tile.text = "QUESTS\nCOMING LATER"
+	quests_tile.text = "QUESTS\nBEGIN YOUR ADVENTURE"
 	quests_tile.custom_minimum_size = Vector2(330, 220)
-	quests_tile.disabled = true
 	quests_tile.focus_mode = Control.FOCUS_NONE
-	quests_tile.tooltip_text = "Quests will be added in a future update"
+	quests_tile.tooltip_text = "Choose a quest"
 	quests_tile.add_theme_font_size_override("font_size", 25)
-	quests_tile.add_theme_color_override("font_disabled_color", Color(0.92, 0.92, 0.82, 0.92))
+	quests_tile.add_theme_color_override("font_color", Color("fff2c2"))
+	quests_tile.add_theme_color_override("font_hover_color", Color.WHITE)
 	quests_tile.add_theme_color_override("font_outline_color", Color(0.01, 0.025, 0.015, 0.96))
 	quests_tile.add_theme_constant_override("outline_size", 8)
-	quests_tile.add_theme_stylebox_override("disabled", _tile_image_style(load("res://assets/ui/menu/quests-tile.png"), Color(0.44, 0.47, 0.42, 1.0)))
+	var quests_art: Texture2D = load("res://assets/ui/menu/quests-tile.png")
+	quests_tile.add_theme_stylebox_override("normal", _tile_image_style(quests_art, Color(0.76, 0.76, 0.70, 1.0)))
+	quests_tile.add_theme_stylebox_override("hover", _tile_image_style(quests_art, Color(0.95, 0.95, 0.88, 1.0)))
+	quests_tile.add_theme_stylebox_override("pressed", _tile_image_style(quests_art, Color(0.58, 0.60, 0.54, 1.0)))
+	quests_tile.pressed.connect(_show_quest_overview)
+	_add_tile_rim(quests_tile)
 	mode_tiles.add_child(quests_tile)
 
 	var free_game_tile := Button.new()
@@ -350,6 +381,7 @@ func _build_main_menu() -> void:
 	free_game_tile.add_theme_stylebox_override("hover", _tile_image_style(free_game_art, Color(0.92, 0.92, 0.86, 1.0)))
 	free_game_tile.add_theme_stylebox_override("pressed", _tile_image_style(free_game_art, Color(0.58, 0.6, 0.54, 1.0)))
 	free_game_tile.pressed.connect(_show_free_game_page)
+	_add_tile_rim(free_game_tile)
 	mode_tiles.add_child(free_game_tile)
 
 	var free_game_title := Label.new()
@@ -531,6 +563,7 @@ func _build_main_menu() -> void:
 	free_game_page.add_child(guide_button)
 	_build_credits_overlay(root)
 	_build_play_guide_overlay(root)
+	_build_quest_pages(root)
 
 
 func _select_dino(dino_id: String) -> void:
@@ -598,6 +631,8 @@ func _show_free_game_page() -> void:
 	if is_instance_valid(play_guide_overlay):
 		play_guide_overlay.hide()
 	landing_page.hide()
+	quest_overview_page.hide()
+	quest_detail_page.hide()
 	free_game_page.show()
 	_update_dino_card_selection()
 	_update_map_theme_selection()
@@ -610,7 +645,288 @@ func _show_landing_page() -> void:
 	if is_instance_valid(play_guide_overlay):
 		play_guide_overlay.hide()
 	free_game_page.hide()
+	quest_overview_page.hide()
+	quest_detail_page.hide()
 	landing_page.show()
+
+
+func _build_quest_pages(root: Control) -> void:
+	quest_overview_page = Control.new()
+	quest_overview_page.name = "QuestOverviewPage"
+	quest_overview_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(quest_overview_page)
+	quest_overview_page.hide()
+
+	quest_detail_page = Control.new()
+	quest_detail_page.name = "QuestDetailPage"
+	quest_detail_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(quest_detail_page)
+	quest_detail_page.hide()
+	_populate_quest_overview()
+
+
+func _add_quest_background(page: Control, texture_path: String) -> void:
+	var background := TextureRect.new()
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.texture = load(texture_path)
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	page.add_child(background)
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.01, 0.025, 0.015, 0.52)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	page.add_child(shade)
+
+
+func _quest_back_button(parent: Control, callback: Callable) -> void:
+	var button := Button.new()
+	button.name = "QuestBackButton"
+	button.text = "← BACK"
+	button.position = Vector2(20, 18)
+	button.size = Vector2(126, 42)
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 16)
+	button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.9), Color(0.72, 0.83, 0.42, 0.8)))
+	button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.97), Color("f7f2d0")))
+	button.pressed.connect(callback)
+	parent.add_child(button)
+
+
+func _populate_quest_overview() -> void:
+	_add_quest_background(quest_overview_page, str(quest_config.get_value("quests", "overview_background")))
+	_quest_back_button(quest_overview_page, _show_landing_page)
+	var title := Label.new()
+	title.text = "QUESTS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	title.position = Vector2(-350, 34)
+	title.size = Vector2(700, 58)
+	title.add_theme_font_size_override("font_size", 44)
+	title.add_theme_color_override("font_color", Color("fff2c2"))
+	title.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.01, 0.94))
+	title.add_theme_constant_override("outline_size", 8)
+	quest_overview_page.add_child(title)
+
+	var quest_grid := GridContainer.new()
+	quest_grid.name = "QuestTiles"
+	quest_grid.columns = 2
+	quest_grid.set_anchors_preset(Control.PRESET_CENTER)
+	quest_grid.position = Vector2(-390, -220)
+	quest_grid.size = Vector2(780, 450)
+	quest_grid.add_theme_constant_override("h_separation", 24)
+	quest_grid.add_theme_constant_override("v_separation", 24)
+	quest_overview_page.add_child(quest_grid)
+	for quest_value in quest_config.get_value("quests", "quest_ids", []):
+		var quest_id := str(quest_value)
+		var button := Button.new()
+		button.name = "Quest_%s" % quest_id
+		button.text = "%s\n%s" % [str(quest_config.get_value(quest_id, "title", quest_id.capitalize())).to_upper(), str(quest_config.get_value(quest_id, "description", ""))]
+		button.custom_minimum_size = Vector2(378, 245)
+		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		button.add_theme_font_size_override("font_size", 21)
+		button.add_theme_color_override("font_color", Color("fff2c2"))
+		button.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.01, 0.96))
+		button.add_theme_constant_override("outline_size", 7)
+		var art: Texture2D = load(str(quest_config.get_value(quest_id, "image")))
+		button.add_theme_stylebox_override("normal", _tile_image_style(art, Color(0.78, 0.78, 0.72, 1.0)))
+		button.add_theme_stylebox_override("hover", _tile_image_style(art, Color(1.0, 1.0, 0.94, 1.0)))
+		button.add_theme_stylebox_override("pressed", _tile_image_style(art, Color(0.62, 0.64, 0.58, 1.0)))
+		button.pressed.connect(_show_quest_page.bind(quest_id))
+		_add_tile_rim(button)
+		quest_grid.add_child(button)
+
+
+func _clear_control(parent: Control) -> void:
+	for child in parent.get_children():
+		parent.remove_child(child)
+		child.queue_free()
+
+
+func _show_quest_overview() -> void:
+	if is_instance_valid(credits_overlay):
+		credits_overlay.hide()
+	if is_instance_valid(play_guide_overlay):
+		play_guide_overlay.hide()
+	landing_page.hide()
+	free_game_page.hide()
+	quest_detail_page.hide()
+	quest_overview_page.show()
+
+
+func _show_quest_page(quest_id: String) -> void:
+	var config_path := str(quest_config.get_value(quest_id, "mission_config", ""))
+	if config_path.is_empty() or mission_config.load(config_path) != OK:
+		push_error("Could not load missions for quest %s" % quest_id)
+		return
+	active_quest_id = quest_id
+	_clear_control(quest_detail_page)
+	_add_quest_background(quest_detail_page, str(quest_config.get_value("quests", "overview_background")))
+	_quest_back_button(quest_detail_page, _show_quest_overview)
+	var title := Label.new()
+	title.text = str(quest_config.get_value(quest_id, "title", quest_id.capitalize())).to_upper()
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	title.position = Vector2(-400, 22)
+	title.size = Vector2(800, 50)
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", Color("fff2c2"))
+	title.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.01, 0.96))
+	title.add_theme_constant_override("outline_size", 7)
+	quest_detail_page.add_child(title)
+
+	var mission_grid := GridContainer.new()
+	mission_grid.name = "MissionTiles"
+	mission_grid.columns = 3
+	mission_grid.set_anchors_preset(Control.PRESET_CENTER)
+	mission_grid.position = Vector2(-465, -242)
+	mission_grid.size = Vector2(930, 500)
+	mission_grid.add_theme_constant_override("h_separation", 15)
+	mission_grid.add_theme_constant_override("v_separation", 15)
+	quest_detail_page.add_child(mission_grid)
+	var mission_ids: Array = mission_config.get_value("quest", "mission_ids", [])
+	for index in mission_ids.size():
+		var mission_id := str(mission_ids[index])
+		var completed := _is_mission_completed(quest_id, mission_id)
+		var unlocked := _is_mission_unlocked(quest_id, mission_ids, index)
+		var dino_id := str(mission_config.get_value(mission_id, "dinosaur"))
+		var dino_name := str(dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize()))
+		var button := Button.new()
+		button.name = "Mission_%s" % mission_id
+		var status_text := "✓ COMPLETED" if completed else ("AVAILABLE" if unlocked else "LOCKED")
+		button.text = "%d. %s\n%s\n%s  •  Play as %s" % [index + 1, str(mission_config.get_value(mission_id, "title")).to_upper(), str(mission_config.get_value(mission_id, "description")), status_text, dino_name]
+		button.custom_minimum_size = Vector2(300, 220)
+		button.disabled = not unlocked
+		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		button.add_theme_font_size_override("font_size", 16)
+		button.add_theme_color_override("font_color", Color("fff5d2"))
+		button.add_theme_color_override("font_disabled_color", Color(0.72, 0.72, 0.69, 0.92))
+		button.add_theme_color_override("font_outline_color", Color(0.01, 0.015, 0.01, 0.98))
+		button.add_theme_constant_override("outline_size", 6)
+		var art: Texture2D = load(str(mission_config.get_value(mission_id, "image")))
+		button.add_theme_stylebox_override("normal", _tile_image_style(art, Color(0.78, 0.84, 0.70, 1.0) if completed else Color(0.72, 0.72, 0.68, 1.0)))
+		button.add_theme_stylebox_override("hover", _tile_image_style(art, Color(0.96, 0.96, 0.91, 1.0)))
+		button.add_theme_stylebox_override("pressed", _tile_image_style(art, Color(0.58, 0.60, 0.54, 1.0)))
+		button.add_theme_stylebox_override("disabled", _tile_image_style(art, Color(0.30, 0.30, 0.29, 1.0)))
+		button.tooltip_text = "Replay completed mission" if completed else ("Start this mission" if unlocked else "Complete mission %d first" % index)
+		button.pressed.connect(_start_quest_mission.bind(quest_id, mission_id))
+		_add_tile_rim(button, "completed" if completed else ("available" if unlocked else "locked"))
+		mission_grid.add_child(button)
+	landing_page.hide()
+	free_game_page.hide()
+	quest_overview_page.hide()
+	quest_detail_page.show()
+
+
+func _start_quest_mission(quest_id: String, mission_id: String) -> void:
+	var mission_ids: Array = mission_config.get_value("quest", "mission_ids", [])
+	var mission_index := mission_ids.find(mission_id)
+	if mission_index < 0 or not _is_mission_unlocked(quest_id, mission_ids, mission_index):
+		return
+	active_quest_id = quest_id
+	active_mission_id = mission_id
+	selected_dino_id = str(mission_config.get_value(mission_id, "dinosaur"))
+	selected_map_theme = str(mission_config.get_value(mission_id, "map_theme", "grassland"))
+	_start_game(selected_dino_id)
+
+
+func _is_mission_completed(quest_id: String, mission_id: String) -> bool:
+	return bool(quest_progress.get_value(quest_id, mission_id, false))
+
+
+func _is_mission_unlocked(quest_id: String, mission_ids: Array, mission_index: int) -> bool:
+	return mission_index == 0 or _is_mission_completed(quest_id, str(mission_ids[mission_index - 1]))
+
+
+func _mark_mission_completed(quest_id: String, mission_id: String) -> void:
+	quest_progress.set_value(quest_id, mission_id, true)
+	var save_error := quest_progress.save(quest_progress_path)
+	if save_error != OK:
+		push_error("Could not save quest progress: %s" % error_string(save_error))
+
+
+func _mission_objective() -> Dictionary:
+	var data := {}
+	if active_mission_id.is_empty():
+		return data
+	for key in mission_config.get_section_keys(active_mission_id):
+		data[key] = mission_config.get_value(active_mission_id, key)
+	return data
+
+
+func _apply_mission_setup() -> void:
+	if active_mission_id.is_empty():
+		return
+	var setup_path := str(mission_config.get_value(active_mission_id, "setup_script", ""))
+	var setup_script: Script = load(setup_path)
+	assert(setup_script != null, "Could not load mission setup script: %s" % setup_path)
+	var setup_instance = setup_script.new()
+	setup_instance.call("setup", self)
+
+
+func _start_mission_event() -> void:
+	if active_mission_id.is_empty():
+		return
+	var event_path := str(mission_config.get_value(active_mission_id, "event_script", ""))
+	var event_script: Script = load(event_path)
+	assert(event_script != null, "Could not load mission event script: %s" % event_path)
+	active_mission_event = event_script.new()
+	active_mission_event.name = "ActiveMissionEvent"
+	add_child(active_mission_event)
+	active_mission_event.progress_changed.connect(_on_mission_progress)
+	active_mission_event.mission_completed.connect(_on_mission_completed)
+	active_mission_event.mission_failed.connect(_on_mission_failed)
+	active_mission_event.call("setup", self, _mission_objective())
+
+
+func _on_mission_progress(message: String) -> void:
+	if is_instance_valid(mission_objective_label):
+		mission_objective_label.text = message
+
+
+func _on_mission_completed() -> void:
+	_mark_mission_completed(active_quest_id, active_mission_id)
+	_show_mission_result(true, "Mission complete!")
+
+
+func _on_mission_failed(reason: String) -> void:
+	_show_mission_result(false, reason)
+
+
+func _show_mission_result(success: bool, detail: String) -> void:
+	if not is_instance_valid(game_hud) or game_hud.find_child("MissionResult", true, false):
+		return
+	var overlay := ColorRect.new()
+	overlay.name = "MissionResult"
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.015, 0.02, 0.01, 0.82)
+	game_hud.add_child(overlay)
+	var panel := VBoxContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-250, -110)
+	panel.size = Vector2(500, 220)
+	panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_theme_constant_override("separation", 18)
+	overlay.add_child(panel)
+	var heading := Label.new()
+	heading.text = "QUEST COMPLETE" if success else "MISSION FAILED"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 44)
+	heading.add_theme_color_override("font_color", Color("bfe46a") if success else Color("ef6655"))
+	panel.add_child(heading)
+	var message := Label.new()
+	message.text = detail
+	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.add_theme_font_size_override("font_size", 21)
+	message.add_theme_color_override("font_color", Color("fff2c2"))
+	panel.add_child(message)
+	var return_button := Button.new()
+	return_button.text = "RETURN TO MISSIONS"
+	return_button.custom_minimum_size = Vector2(340, 52)
+	return_button.add_theme_font_size_override("font_size", 18)
+	return_button.pressed.connect(_return_to_main_menu)
+	panel.add_child(return_button)
 
 
 func _build_splash_screen() -> void:
@@ -1004,6 +1320,32 @@ func _theme_tile_rim_style(selected := false) -> StyleBoxFlat:
 	style.bg_color = Color(0, 0, 0, 0)
 	style.border_color = Color("ffe778") if selected else Color(0.82, 0.72, 0.35, 0.72)
 	style.set_border_width_all(4 if selected else 2)
+	style.set_corner_radius_all(10)
+	return style
+
+
+func _add_tile_rim(button: Button, state := "available") -> void:
+	var rim := Panel.new()
+	rim.name = "TileRim"
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rim.add_theme_stylebox_override("panel", _tile_rim_style(state))
+	button.add_child(rim)
+
+
+func _tile_rim_style(state: String) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	match state:
+		"completed":
+			style.border_color = Color("9be36d")
+			style.set_border_width_all(4)
+		"locked":
+			style.border_color = Color(0.55, 0.56, 0.54, 0.82)
+			style.set_border_width_all(3)
+		_:
+			style.border_color = Color(0.82, 0.72, 0.35, 0.82)
+			style.set_border_width_all(3)
 	style.set_corner_radius_all(10)
 	return style
 
@@ -1533,6 +1875,10 @@ func _build_wild_dinosaurs() -> void:
 		npc.set("patrol_center", data["patrol_center"])
 		npc.set("rng_seed", data["rng_seed"])
 		npc.set("texture_variant", data.get("texture_variant", index))
+		npc.set("can_retreat", data.get("can_retreat", true))
+		npc.set("ignore_combat_odds", data.get("ignore_combat_odds", false))
+		if data.has("mission_role"):
+			npc.set_meta("mission_role", data["mission_role"])
 		npc.position = data["position"]
 		wildlife.add_child(npc)
 		_register_quality_geometry(npc.get("model_root"), "actor")
@@ -1728,8 +2074,8 @@ func _build_hud() -> void:
 	root.add_child(keyboard_hint)
 
 	var menu_button := Button.new()
-	menu_button.name = "ReturnToFreeGameButton"
-	menu_button.text = "←  FREE GAME"
+	menu_button.name = "ReturnToMissionButton" if not active_mission_id.is_empty() else "ReturnToFreeGameButton"
+	menu_button.text = "←  MISSIONS" if not active_mission_id.is_empty() else "←  FREE GAME"
 	menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	menu_button.position = Vector2(-190, 16)
 	menu_button.size = Vector2(170, 46)
@@ -1741,6 +2087,32 @@ func _build_hud() -> void:
 	menu_button.add_theme_stylebox_override("pressed", _button_style(Color(0.48, 0.6, 0.24, 1.0), Color.WHITE))
 	menu_button.pressed.connect(_return_to_main_menu)
 	root.add_child(menu_button)
+
+	if not active_mission_id.is_empty():
+		var mission_title := Label.new()
+		mission_title.name = "MissionTitle"
+		mission_title.text = str(mission_config.get_value(active_mission_id, "title", active_mission_id.capitalize())).to_upper()
+		mission_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		mission_title.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		mission_title.position = Vector2(-300, 56)
+		mission_title.size = Vector2(600, 26)
+		mission_title.add_theme_font_size_override("font_size", 19)
+		mission_title.add_theme_color_override("font_color", Color("d8ed7b"))
+		mission_title.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.01, 0.95))
+		mission_title.add_theme_constant_override("outline_size", 5)
+		root.add_child(mission_title)
+		mission_objective_label = Label.new()
+		mission_objective_label.name = "MissionObjective"
+		mission_objective_label.text = str(mission_config.get_value(active_mission_id, "description", ""))
+		mission_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		mission_objective_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		mission_objective_label.position = Vector2(-350, 82)
+		mission_objective_label.size = Vector2(700, 26)
+		mission_objective_label.add_theme_font_size_override("font_size", 16)
+		mission_objective_label.add_theme_color_override("font_color", Color("fff2c2"))
+		mission_objective_label.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.01, 0.95))
+		mission_objective_label.add_theme_constant_override("outline_size", 4)
+		root.add_child(mission_objective_label)
 
 	var minimap: Control = MINIMAP_SCRIPT.new()
 	minimap.name = "MiniMap"

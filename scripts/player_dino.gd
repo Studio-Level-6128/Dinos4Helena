@@ -12,6 +12,7 @@ signal bonuses_changed(speed_seconds: float, strength_seconds: float)
 signal poisoning_changed(active: bool)
 signal died
 signal status_requested(message: String)
+signal food_consumed(food_kind: String)
 
 var dino_id := "trex"
 var texture_variant := 0
@@ -538,6 +539,7 @@ func _update_eating(delta: float, wants_eat: bool) -> void:
 	if not eat_was_pressed:
 		status_requested.emit("Grazing..." if diet == "herbivore" else "Eating meat...")
 	if food_remaining <= 0.0:
+		food_consumed.emit("plant" if diet == "herbivore" else "meat")
 		eating_target.queue_free()
 		eating_target = null
 		eating_active = false

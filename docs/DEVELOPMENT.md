@@ -36,20 +36,47 @@ Run `./scripts/setup-dev.sh` if the ignored local Godot/Android toolchain under 
 | `scripts/powerup_token.gd` | Health, speed and strength collectibles. |
 | `scripts/generated_materials.gd` | Shared textured-material construction. |
 | `config/dinosaurs.cfg` | Species balance plus energy, token and breeding settings. |
+| `config/quests.cfg` | Available quest catalog and quest-level art/config paths. |
+| `quests/<quest>/` | Mission config plus one setup and one event script per mission. |
 | `tests/` | Headless integration/smoke tests. |
 | `assets/` | Models, generated artwork/textures, audio and license metadata. |
 
 ## Runtime lifecycle
 
-`main.gd` loads configuration and builds a two-stage menu, then places the startup splash above it. Dismissing the splash reveals `LandingPage`, which contains the Quests placeholder, Free Game tile, and Credits button. Free Game switches to `FreeGamePage`, which owns the seed controls, two-row dinosaur selection, play guide, and back button. Starting a game performs this sequence:
+`main.gd` loads configuration and builds the menu, then places the startup splash above it. Dismissing the splash reveals `LandingPage`, which contains the Quests and Free Game tiles plus Credits. Quests switches through the catalog and mission pages; Free Game switches to `FreeGamePage`, which owns the seed controls, two-row dinosaur selection, play guide, and back button. Starting a game performs this sequence:
 
 1. Validate and commit the six-digit seed.
 2. Generate deterministic layout dictionaries.
-3. Build lighting, weather, terrain, water and solid scenery.
-4. Spawn tokens, the player, egg nests and wildlife.
-5. Build the HUD and initialize the minimap.
+3. Apply an active mission's setup script to the generated layout.
+4. Build lighting, weather, terrain, water and solid scenery.
+5. Spawn tokens, the player, egg nests and wildlife.
+6. Build the HUD and initialize the minimap.
+7. Start the mission event loop, when playing a quest.
 
 Returning to the menu frees the world and HUD, resets the UI to `LandingPage`, and retains the already-built menu. Keep world-owned nodes below `world_root`; otherwise they may survive between sessions.
+
+## Quests and missions
+
+`config/quests.cfg` is the catalog used by the overview page. Add a quest ID
+to `[quests].quest_ids`, then give it a title, description, cover image and
+mission-config path. Each quest's `missions.cfg` defines ordered mission IDs
+and, for every mission, the dinosaur, map theme, objective values, tile art,
+setup script and event script.
+
+Setup scripts extend `RefCounted` and implement `setup(controller)`. They run
+after deterministic world layout generation but before any world nodes are
+built, so they can add, replace or mark entries in `generated_vegetation`,
+`generated_eggs` and `generated_dinosaurs`.
+
+Event scripts extend `quests/mission_event.gd` and implement `setup()`,
+`_process()`, or signal callbacks. Use `set_progress()`, `complete()` and
+`fail(reason)` to update the objective HUD and finish the mission. Keep
+mission-only tuning in its mission config rather than `main.gd`.
+
+Mission order is sequential. The first mission is always available; completing
+one unlocks the next. Completion is stored by quest and mission ID in
+`user://quest_progress.cfg`, which maps to private persistent application
+storage on desktop and Android. Completed missions remain replayable.
 
 ## Configuration and balancing
 
@@ -109,6 +136,7 @@ Babies join the prey and NPC groups so predators can target them, but use a sepa
 The project uses a 1280×720 reference canvas with `canvas_items` stretching. Anchor controls before applying offsets so layouts scale correctly on Android. Action buttons call `player.set_mobile_action()` and share names with `InputMap`; the right-hand `virtual_joystick.gd` emits proportional throttle and steering through `player.set_mobile_movement()`.
 
 The splash and menu artwork are project assets under `assets/ui/menu/`. Keep generated-asset prompts and dates in `GENERATED_ASSETS.md`. Overlay important text in Godot rather than baking it into images.
+Quest artwork and its generation notes live under `assets/ui/quests/`.
 
 ## Tests
 
