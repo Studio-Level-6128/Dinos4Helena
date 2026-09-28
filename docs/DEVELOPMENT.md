@@ -57,6 +57,10 @@ Returning to the menu frees the world and HUD, resets the UI to `LandingPage`, a
 
 ## Quests and missions
 
+For a complete step-by-step workflow, configuration reference, script
+templates, and testing checklist, see the
+[quest and mission authoring guide](QUEST_AUTHORING.md).
+
 `config/quests.cfg` is the catalog used by the overview page. Add a quest ID
 to `[quests].quest_ids`, then give it a title, description, cover image and
 mission-config path. Each quest's `missions.cfg` defines ordered mission IDs
