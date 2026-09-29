@@ -15,7 +15,7 @@ var mouse_active := false
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	tooltip_text = "Drag in any direction to move and steer"
+	tooltip_text = Localization.text("joystick.tooltip")
 	queue_redraw()
 
 

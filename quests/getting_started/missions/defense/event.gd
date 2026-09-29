@@ -17,7 +17,7 @@ func setup(world_controller: Node, mission_objective: Dictionary) -> void:
 			npc.died.connect(_on_defender_died)
 	if is_instance_valid(attacker):
 		attacker.set("forced_target", defended_pack_member)
-	set_progress("Defeat the Velociraptor — keep every pack member alive")
+	set_progress(Localization.text("mission.defeat_velociraptor"))
 
 
 func _process(_delta: float) -> void:
@@ -30,4 +30,4 @@ func _on_attacker_died(_npc: CharacterBody3D) -> void:
 
 
 func _on_defender_died(_npc: CharacterBody3D) -> void:
-	fail("A member of your pack was killed")
+	fail(Localization.text("mission.pack_member_killed"))

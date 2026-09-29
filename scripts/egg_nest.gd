@@ -37,14 +37,14 @@ func _physics_process(delta: float) -> void:
 		if incubation_progress > 0.0:
 			incubation_progress = 0.0
 			last_second_shown = -1
-			_update_instruction("DUCK TO HATCH")
+			_update_instruction(Localization.text("egg.duck_to_hatch"))
 		return
 	incubation_progress = minf(incubation_progress + delta, incubation_seconds)
 	var seconds_left := maxi(int(ceil(incubation_seconds - incubation_progress)), 0)
 	if seconds_left != last_second_shown:
 		last_second_shown = seconds_left
-		_update_instruction("HATCHING… %d" % seconds_left)
-		status_changed.emit("Keep ducking — the egg is hatching!" if seconds_left > 0 else "A baby dinosaur is hatching!")
+		_update_instruction(Localization.text("egg.hatching", [seconds_left]))
+		status_changed.emit(Localization.text("egg.keep_ducking") if seconds_left > 0 else Localization.text("egg.baby_hatching"))
 	if incubation_progress >= incubation_seconds:
 		_hatch()
 
@@ -109,7 +109,7 @@ func _build_nest() -> void:
 		egg_root.add_child(spot)
 
 	instruction_label = Label3D.new()
-	instruction_label.text = "DUCK TO HATCH"
+	instruction_label.text = Localization.text("egg.duck_to_hatch")
 	instruction_label.position = Vector3(0.0, 1.65, 0.0)
 	instruction_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	instruction_label.no_depth_test = true
@@ -125,8 +125,8 @@ func _on_body_entered(body: Node3D) -> void:
 	if hatching or not body.is_in_group("player_dinosaur"):
 		return
 	nearby_player = body as CharacterBody3D
-	_update_instruction("DUCK TO HATCH")
-	status_changed.emit("You found a dinosaur egg — stand over it and hold DUCK")
+	_update_instruction(Localization.text("egg.duck_to_hatch"))
+	status_changed.emit(Localization.text("egg.found"))
 
 
 func _on_body_exited(body: Node3D) -> void:

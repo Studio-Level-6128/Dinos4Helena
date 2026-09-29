@@ -9,10 +9,10 @@ const COLORS := {
 	"speed": Color("42cfee"),
 	"strength": Color("f2a43a")
 }
-const LABELS := {
-	"health": "HEALTH",
-	"speed": "SPEED ×2",
-	"strength": "STRENGTH ×2"
+const LABEL_KEYS := {
+	"health": "token.health",
+	"speed": "token.speed",
+	"strength": "token.strength"
 }
 
 var token_type := "health"
@@ -77,7 +77,7 @@ func _build_visual() -> void:
 	ring.material_override = material
 	visual_root.add_child(ring)
 	var label := Label3D.new()
-	label.text = LABELS.get(token_type, token_type.to_upper())
+	label.text = Localization.text(LABEL_KEYS.get(token_type, "token." + token_type))
 	label.position = Vector3(0.0, 1.35, 0.0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true

@@ -37,7 +37,7 @@ var pack_slot := -1
 var rng_seed := 1
 var patrol_center := Vector3.ZERO
 var diet := "herbivore"
-var display_name := "Dinosaur"
+var display_name := ""
 var model_scale := 0.2
 var walk_speed := 3.0
 var run_speed := 6.0
@@ -91,7 +91,7 @@ func _ready() -> void:
 	var config := ConfigFile.new()
 	assert(config.load(CONFIG_PATH) == OK, "Could not load dinosaur configuration")
 	diet = config.get_value(dino_id, "diet", "herbivore")
-	display_name = config.get_value(dino_id, "display_name", dino_id.capitalize())
+	display_name = Localization.text(str(config.get_value(dino_id, "display_name_key", "dino." + dino_id)))
 	model_scale = config.get_value(dino_id, "model_scale", 0.2)
 	walk_speed = config.get_value(dino_id, "walk_speed", 3.0)
 	run_speed = config.get_value(dino_id, "run_speed", 6.0)
@@ -861,7 +861,7 @@ func _show_health() -> void:
 
 func _update_health_label() -> void:
 	if is_instance_valid(health_label):
-		health_label.text = "%s  %d/%d" % [display_name, health, max_health]
+		health_label.text = Localization.text("dino.health_label", [display_name, health, max_health])
 
 
 func _update_animation(moving: bool, running: bool) -> void:

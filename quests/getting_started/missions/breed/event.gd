@@ -11,11 +11,11 @@ func _process(_delta: float) -> void:
 			tracked_babies.append(baby)
 			baby.died.connect(_on_baby_died)
 	var target := int(objective.get("target_children", 2))
-	set_progress("Children hatched: %d / %d" % [tracked_babies.size(), target])
+	set_progress(Localization.text("mission.children_hatched", [tracked_babies.size(), target]))
 	if tracked_babies.size() >= target:
 		complete()
 
 
 func _on_baby_died(_baby: CharacterBody3D) -> void:
-	fail("One of your children was killed")
+	fail(Localization.text("mission.child_killed"))
 

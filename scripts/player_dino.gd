@@ -460,19 +460,19 @@ func collect_token(token_type: String) -> void:
 			var restored := mini(token_health_restore, max_health - health)
 			restore_health(token_health_restore)
 			if poison_cured:
-				status_requested.emit("Poison cured! +%d health" % restored if restored > 0 else "Poison cured!")
+				status_requested.emit(Localization.text("status.poison_cured_health", [restored]) if restored > 0 else Localization.text("status.poison_cured"))
 			else:
-				status_requested.emit("Health token: +%d health" % restored if restored > 0 else "Health is already full")
+				status_requested.emit(Localization.text("status.health_token", [restored]) if restored > 0 else Localization.text("status.health_full"))
 		"speed":
 			speed_bonus_time = token_bonus_duration
 			walk_speed = base_walk_speed * 2.0
 			run_speed = base_run_speed * 2.0
 			duck_speed = base_duck_speed * 2.0
-			status_requested.emit("Speed doubled for %d seconds" % int(token_bonus_duration))
+			status_requested.emit(Localization.text("status.speed_doubled", [int(token_bonus_duration)]))
 		"strength":
 			strength_bonus_time = token_bonus_duration
 			strength = base_strength * 2
-			status_requested.emit("Strength doubled for %d seconds" % int(token_bonus_duration))
+			status_requested.emit(Localization.text("status.strength_doubled", [int(token_bonus_duration)]))
 	bonuses_changed.emit(speed_bonus_time, strength_bonus_time)
 
 
@@ -499,7 +499,7 @@ func apply_poison() -> void:
 	poisoned = true
 	poison_damage_accumulator = 0.0
 	poisoning_changed.emit(true)
-	status_requested.emit("POISONED! Find a red health token!")
+	status_requested.emit(Localization.text("status.poisoned"))
 
 
 func _update_poison(delta: float) -> void:
@@ -519,14 +519,14 @@ func _update_eating(delta: float, wants_eat: bool) -> void:
 		return
 	if energy >= max_energy:
 		if not eat_was_pressed:
-			status_requested.emit("Energy is already full")
+			status_requested.emit(Localization.text("status.energy_full"))
 		return
 	var food_group := "edible_plant" if diet == "herbivore" else "edible_meat"
 	if not is_instance_valid(eating_target) or not eating_target.is_in_group(food_group) or global_position.distance_to(eating_target.global_position) > food_reach:
 		eating_target = _nearest_food(food_group)
 	if not is_instance_valid(eating_target):
 		if not eat_was_pressed:
-			status_requested.emit("Find a nearby plant to graze" if diet == "herbivore" else "Hunt prey for meat — coming later")
+			status_requested.emit(Localization.text("status.find_plant") if diet == "herbivore" else Localization.text("status.hunt_meat"))
 		return
 	eating_active = true
 	if bool(eating_target.get_meta("poisonous", false)):
@@ -537,7 +537,7 @@ func _update_eating(delta: float, wants_eat: bool) -> void:
 	food_remaining -= rate * delta
 	eating_target.set_meta("energy_remaining", food_remaining)
 	if not eat_was_pressed:
-		status_requested.emit("Grazing..." if diet == "herbivore" else "Eating meat...")
+		status_requested.emit(Localization.text("status.grazing") if diet == "herbivore" else Localization.text("status.eating_meat"))
 	if food_remaining <= 0.0:
 		food_consumed.emit("plant" if diet == "herbivore" else "meat")
 		eating_target.queue_free()

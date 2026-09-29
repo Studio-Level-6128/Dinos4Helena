@@ -21,7 +21,6 @@ const HERBIVORE_IDS := ["triceratops", "stegosaurus", "parasaurolophus", "apatos
 const CARNIVORE_IDS := ["trex", "velociraptor"]
 const MAP_HALF_SIZE := 200.0
 const MAP_THEMES := ["grassland", "desert", "winter", "volcano"]
-const MAP_THEME_LABELS := ["GRASSLAND", "DESERT", "WINTER", "VOLCANO"]
 const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x71A7E2, "volcano": 0xB01CA0}
 const QUEST_PROGRESS_PATH := "user://quest_progress.cfg"
 # Adaptive performance starts at full quality. It only reduces expensive
@@ -35,26 +34,6 @@ const PERFORMANCE_SAMPLE_SECONDS := 2.0
 const PERFORMANCE_DOWNGRADE_FPS := 42.0
 const PERFORMANCE_UPGRADE_FPS := 56.0
 const PERFORMANCE_CHANGE_COOLDOWN := 10.0
-const PLAY_GUIDE_TEXT := """[b]MOVEMENT AND ACTIONS[/b]
-Drag the right-hand movement wheel in any direction to combine forward/backward movement and steering. Use the left-hand buttons to jump, run, duck, attack, eat, or scream. Keyboard controls are WASD/arrows, Space, Shift, C/Ctrl, F, E, and R.
-
-[b]HEALTH, ENERGY, AND FOOD[/b]
-Every action costs energy; running, jumping, and fighting cost more. At zero energy, health starts to fall. Herbivores regain energy by holding EAT near plants. Avoid the glowing purple plants: eating one causes continuous poison damage until a red health token cures it. Carnivores eat meat left by defeated dinosaurs. Red tokens restore health and cure poison; blue and orange tokens temporarily double speed or strength.
-
-[b]WILDLIFE[/b]
-Herbivores travel in moving packs. They flee hunters, but fight back and defend members of their own species. A matching herbivore player can shelter with a pack. Carnivores stalk prey, avoid fights they are unlikely to win, feed after a kill, and retreat when badly injured. Dinosaurs never attack their own species.
-
-[b]EGGS AND BABIES[/b]
-Egg nests are hidden throughout the valley. Stand over an egg and hold DUCK until it hatches. The baby matches your species, follows beside you, and has its own health. Protect it from predators.
-
-[b]EXPLORING THE WORLD[/b]
-Trees, rocks, fallen logs, hills, and raised ledges are solid. Rivers and lakes divide the forest and grassland areas. Invisible walls keep dinosaurs inside the valley. The minimap reveals terrain as you explore, marks predators red and herbivores green, and marks meat from defeated dinosaurs. Each herbivore pack uses one green marker.
-
-[b]MAP TOPICS[/b]
-Choose Grassland, Desert, Winter, or Volcano in Free Game. Desert vegetation clusters around scarce water holes. Winter water is frozen and every moving dinosaur leaves tracks in the snow. Volcano maps contain an erupting central mountain and glowing lava streams; touching lava continuously damages health.
-
-[b]WORLD SEEDS[/b]
-The six-digit seed and selected map topic control the complete layout. Reuse both to replay the same world or generate a new random seed."""
 const ENVIRONMENT_MODEL_PATHS := {
 	"tree": "res://assets/models/environment/araucaria_conifer.glb",
 	"fern": "res://assets/models/environment/forest_fern.glb",
@@ -89,7 +68,7 @@ var health_label: Label
 var energy_label: Label
 var bonus_label: Label
 var poison_label: Label
-var selected_dino_name := "T-Rex"
+var selected_dino_name := ""
 var selected_dino_id := "trex"
 var selected_map_theme := "grassland"
 var dino_cards: Dictionary = {}
@@ -134,6 +113,22 @@ var performance_change_cooldown := 0.0
 var quality_geometry: Array[GeometryInstance3D] = []
 var sun_light: DirectionalLight3D
 var active_minimap: Control
+
+
+func _t(key: String, values: Array = []) -> String:
+	return Localization.text(key, values)
+
+
+func _dino_name(dino_id: String) -> String:
+	return _t(str(dinosaur_config.get_value(dino_id, "display_name_key", "dino." + dino_id)))
+
+
+func _theme_name(theme_id: String) -> String:
+	return _t("theme." + theme_id)
+
+
+func _config_text(config: ConfigFile, section: String, field: String) -> String:
+	return _t(str(config.get_value(section, field + "_key", section + "." + field)))
 
 
 func _ready() -> void:
@@ -188,7 +183,7 @@ func _start_game(dino_id: String) -> void:
 	_dismiss_splash(true)
 	_commit_world_seed()
 	selected_dino_id = dino_id
-	selected_dino_name = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
+	selected_dino_name = _dino_name(dino_id)
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
 	if is_instance_valid(play_guide_overlay):
@@ -312,7 +307,7 @@ func _build_main_menu() -> void:
 	free_game_page.hide()
 
 	var title := Label.new()
-	title.text = "DINOS4HELENA"
+	title.text = _t("app.title")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	title.position = Vector2(-440, 62)
@@ -325,7 +320,7 @@ func _build_main_menu() -> void:
 	landing_page.add_child(title)
 
 	var subtitle := Label.new()
-	subtitle.text = "Helena's Dino game - made by dad"
+	subtitle.text = _t("app.subtitle")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	subtitle.position = Vector2(-350, 136)
@@ -348,10 +343,10 @@ func _build_main_menu() -> void:
 
 	var quests_tile := Button.new()
 	quests_tile.name = "QuestsTile"
-	quests_tile.text = "QUESTS\nBEGIN YOUR ADVENTURE"
+	quests_tile.text = _t("menu.quests")
 	quests_tile.custom_minimum_size = Vector2(330, 220)
 	quests_tile.focus_mode = Control.FOCUS_NONE
-	quests_tile.tooltip_text = "Choose a quest"
+	quests_tile.tooltip_text = _t("menu.quests_tooltip")
 	quests_tile.add_theme_font_size_override("font_size", 25)
 	quests_tile.add_theme_color_override("font_color", Color("fff2c2"))
 	quests_tile.add_theme_color_override("font_hover_color", Color.WHITE)
@@ -367,7 +362,7 @@ func _build_main_menu() -> void:
 
 	var free_game_tile := Button.new()
 	free_game_tile.name = "FreeGameTile"
-	free_game_tile.text = "FREE GAME\nCHOOSE YOUR DINOSAUR"
+	free_game_tile.text = _t("menu.free_game_tile")
 	free_game_tile.custom_minimum_size = Vector2(330, 220)
 	free_game_tile.focus_mode = Control.FOCUS_NONE
 	free_game_tile.add_theme_font_size_override("font_size", 25)
@@ -385,7 +380,7 @@ func _build_main_menu() -> void:
 	mode_tiles.add_child(free_game_tile)
 
 	var free_game_title := Label.new()
-	free_game_title.text = "FREE GAME"
+	free_game_title.text = _t("menu.free_game")
 	free_game_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	free_game_title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	free_game_title.position = Vector2(-260, 8)
@@ -396,7 +391,7 @@ func _build_main_menu() -> void:
 
 	var back_button := Button.new()
 	back_button.name = "BackToLandingButton"
-	back_button.text = "← BACK"
+	back_button.text = _t("menu.back")
 	back_button.position = Vector2(20, 14)
 	back_button.size = Vector2(126, 40)
 	back_button.focus_mode = Control.FOCUS_NONE
@@ -407,7 +402,7 @@ func _build_main_menu() -> void:
 	free_game_page.add_child(back_button)
 
 	var prompt := Label.new()
-	prompt.text = "CHOOSE YOUR DINOSAUR"
+	prompt.text = _t("menu.choose_dinosaur")
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	prompt.position = Vector2(-260, 45)
@@ -438,7 +433,7 @@ func _build_main_menu() -> void:
 
 	for dino_index in DINO_IDS.size():
 		var dino_id: String = DINO_IDS[dino_index]
-		var display_name: String = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
+		var display_name: String = _dino_name(dino_id)
 		card_rows[0 if dino_index < 4 else 1].add_child(_create_dino_card(dino_id, display_name))
 
 	map_theme_buttons.clear()
@@ -460,7 +455,7 @@ func _build_main_menu() -> void:
 		theme_button.add_theme_color_override("font_color", Color("fff4d0"))
 		theme_button.add_theme_color_override("font_outline_color", Color(0.01, 0.015, 0.01, 0.98))
 		theme_button.add_theme_constant_override("outline_size", 6)
-		theme_button.tooltip_text = "Select the %s map" % MAP_THEME_LABELS[theme_index].capitalize()
+		theme_button.tooltip_text = _t("theme.select_tooltip", [_theme_name(theme_id).capitalize()])
 		theme_button.pressed.connect(_select_map_theme.bind(theme_id))
 		theme_row.add_child(theme_button)
 		var rim := Panel.new()
@@ -480,7 +475,7 @@ func _build_main_menu() -> void:
 	free_game_page.add_child(seed_row)
 
 	var seed_label := Label.new()
-	seed_label.text = "WORLD SEED"
+	seed_label.text = _t("menu.world_seed")
 	seed_label.add_theme_font_size_override("font_size", 16)
 	seed_label.add_theme_color_override("font_color", Color("fff2c2"))
 	seed_row.add_child(seed_label)
@@ -492,12 +487,12 @@ func _build_main_menu() -> void:
 	seed_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	seed_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
 	seed_input.add_theme_font_size_override("font_size", 18)
-	seed_input.tooltip_text = "Enter any six-digit number to replay the same world"
+	seed_input.tooltip_text = _t("menu.seed_tooltip")
 	seed_input.text_changed.connect(_on_seed_text_changed)
 	seed_row.add_child(seed_input)
 
 	var random_seed_button := Button.new()
-	random_seed_button.text = "NEW RANDOM SEED"
+	random_seed_button.text = _t("menu.random_seed")
 	random_seed_button.custom_minimum_size = Vector2(176, 36)
 	random_seed_button.focus_mode = Control.FOCUS_NONE
 	random_seed_button.add_theme_font_size_override("font_size", 14)
@@ -505,7 +500,10 @@ func _build_main_menu() -> void:
 	random_seed_button.add_theme_stylebox_override("hover", _button_style(Color(0.24, 0.43, 0.22, 0.96), Color("f7f2d0")))
 	random_seed_button.pressed.connect(_set_random_world_seed)
 	seed_row.add_child(random_seed_button)
-	_set_random_world_seed()
+	if map_seed == 0:
+		_set_random_world_seed()
+	else:
+		seed_input.text = "%06d" % map_seed
 
 	start_game_button = Button.new()
 	start_game_button.name = "StartGameButton"
@@ -522,7 +520,7 @@ func _build_main_menu() -> void:
 	free_game_page.add_child(start_game_button)
 
 	var footer := Label.new()
-	footer.text = "Select a dinosaur and map, then start your adventure"
+	footer.text = _t("menu.footer")
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footer.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	footer.position = Vector2(-350, 600)
@@ -536,7 +534,7 @@ func _build_main_menu() -> void:
 
 	var credits_button := Button.new()
 	credits_button.name = "CreditsButton"
-	credits_button.text = "CREDITS"
+	credits_button.text = _t("menu.credits")
 	credits_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	credits_button.position = Vector2(-170, -66)
 	credits_button.size = Vector2(150, 44)
@@ -547,10 +545,11 @@ func _build_main_menu() -> void:
 	credits_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
 	credits_button.pressed.connect(_open_credits)
 	landing_page.add_child(credits_button)
+	_build_language_selector(landing_page)
 
 	var guide_button := Button.new()
 	guide_button.name = "PlayGuideButton"
-	guide_button.text = "HOW TO PLAY"
+	guide_button.text = _t("menu.how_to_play")
 	guide_button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	guide_button.position = Vector2(20, -66)
 	guide_button.size = Vector2(170, 44)
@@ -566,11 +565,56 @@ func _build_main_menu() -> void:
 	_build_quest_pages(root)
 
 
+func _build_language_selector(parent: Control) -> void:
+	var selector := HBoxContainer.new()
+	selector.name = "LanguageSelector"
+	selector.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	selector.position = Vector2(-178, 18)
+	selector.size = Vector2(158, 42)
+	selector.alignment = BoxContainer.ALIGNMENT_END
+	selector.add_theme_constant_override("separation", 8)
+	parent.add_child(selector)
+	var languages := [
+		["en", "🇬🇧", "language.english"],
+		["de", "🇩🇪", "language.german"],
+		["fr", "🇫🇷", "language.french"]
+	]
+	for data in languages:
+		var button := Button.new()
+		button.name = "Language_" + str(data[0])
+		button.text = str(data[1])
+		button.tooltip_text = _t(str(data[2]))
+		button.custom_minimum_size = Vector2(46, 40)
+		button.focus_mode = Control.FOCUS_NONE
+		button.disabled = Localization.language == str(data[0])
+		button.add_theme_font_size_override("font_size", 22)
+		button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
+		button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
+		button.pressed.connect(_select_language.bind(str(data[0])))
+		selector.add_child(button)
+
+
+func _select_language(locale: String) -> void:
+	if locale == Localization.language:
+		return
+	Localization.set_language(locale)
+	_rebuild_menu_for_language.call_deferred()
+
+
+func _rebuild_menu_for_language() -> void:
+	var menu_was_visible := is_instance_valid(menu_layer) and menu_layer.visible
+	if is_instance_valid(menu_layer):
+		menu_layer.free()
+	_build_main_menu()
+	if not splash_dismissed or not menu_was_visible:
+		menu_layer.hide()
+
+
 func _select_dino(dino_id: String) -> void:
 	if dino_id not in DINO_IDS:
 		return
 	selected_dino_id = dino_id
-	selected_dino_name = dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize())
+	selected_dino_name = _dino_name(dino_id)
 	_update_dino_card_selection()
 	_update_start_button()
 
@@ -607,8 +651,7 @@ func _update_map_theme_selection() -> void:
 	for theme_id in map_theme_buttons:
 		var button := map_theme_buttons[theme_id] as Button
 		var selected := str(theme_id) == selected_map_theme
-		var label_index := MAP_THEMES.find(str(theme_id))
-		button.text = ("✓ " if selected else "") + MAP_THEME_LABELS[label_index]
+		button.text = ("✓ " if selected else "") + _theme_name(str(theme_id))
 		var art: Texture2D = load("res://assets/ui/menu/theme-%s.png" % theme_id)
 		button.add_theme_stylebox_override("normal", _tile_image_style(art, Color(1.0, 1.0, 1.0, 1.0) if selected else Color(0.54, 0.56, 0.53, 1.0)))
 		button.add_theme_stylebox_override("hover", _tile_image_style(art, Color(0.9, 0.92, 0.88, 1.0)))
@@ -621,8 +664,8 @@ func _update_map_theme_selection() -> void:
 func _update_start_button() -> void:
 	if not is_instance_valid(start_game_button):
 		return
-	var dino_name: String = dinosaur_config.get_value(selected_dino_id, "display_name", selected_dino_id.capitalize())
-	start_game_button.text = "START AS %s  •  %s" % [dino_name.to_upper(), selected_map_theme.to_upper()]
+	var dino_name: String = _dino_name(selected_dino_id)
+	start_game_button.text = _t("menu.start_as", [dino_name.to_upper(), _theme_name(selected_map_theme).to_upper()])
 
 
 func _show_free_game_page() -> void:
@@ -683,7 +726,7 @@ func _add_quest_background(page: Control, texture_path: String) -> void:
 func _quest_back_button(parent: Control, callback: Callable) -> void:
 	var button := Button.new()
 	button.name = "QuestBackButton"
-	button.text = "← BACK"
+	button.text = _t("menu.back")
 	button.position = Vector2(20, 18)
 	button.size = Vector2(126, 42)
 	button.focus_mode = Control.FOCUS_NONE
@@ -698,7 +741,7 @@ func _populate_quest_overview() -> void:
 	_add_quest_background(quest_overview_page, str(quest_config.get_value("quests", "overview_background")))
 	_quest_back_button(quest_overview_page, _show_landing_page)
 	var title := Label.new()
-	title.text = "QUESTS"
+	title.text = _t("quest.heading")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	title.position = Vector2(-350, 34)
@@ -722,7 +765,7 @@ func _populate_quest_overview() -> void:
 		var quest_id := str(quest_value)
 		var button := Button.new()
 		button.name = "Quest_%s" % quest_id
-		button.text = "%s\n%s" % [str(quest_config.get_value(quest_id, "title", quest_id.capitalize())).to_upper(), str(quest_config.get_value(quest_id, "description", ""))]
+		button.text = "%s\n%s" % [_config_text(quest_config, quest_id, "title").to_upper(), _config_text(quest_config, quest_id, "description")]
 		button.custom_minimum_size = Vector2(378, 245)
 		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		button.add_theme_font_size_override("font_size", 21)
@@ -765,7 +808,7 @@ func _show_quest_page(quest_id: String) -> void:
 	_add_quest_background(quest_detail_page, str(quest_config.get_value("quests", "overview_background")))
 	_quest_back_button(quest_detail_page, _show_quest_overview)
 	var title := Label.new()
-	title.text = str(quest_config.get_value(quest_id, "title", quest_id.capitalize())).to_upper()
+	title.text = _config_text(quest_config, quest_id, "title").to_upper()
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	title.position = Vector2(-400, 22)
@@ -791,11 +834,11 @@ func _show_quest_page(quest_id: String) -> void:
 		var completed := _is_mission_completed(quest_id, mission_id)
 		var unlocked := _is_mission_unlocked(quest_id, mission_ids, index)
 		var dino_id := str(mission_config.get_value(mission_id, "dinosaur"))
-		var dino_name := str(dinosaur_config.get_value(dino_id, "display_name", dino_id.capitalize()))
+		var dino_name := str(_dino_name(dino_id))
 		var button := Button.new()
 		button.name = "Mission_%s" % mission_id
-		var status_text := "✓ COMPLETED" if completed else ("AVAILABLE" if unlocked else "LOCKED")
-		button.text = "%d. %s\n%s\n%s  •  Play as %s" % [index + 1, str(mission_config.get_value(mission_id, "title")).to_upper(), str(mission_config.get_value(mission_id, "description")), status_text, dino_name]
+		var status_text := _t("mission.completed") if completed else (_t("mission.available") if unlocked else _t("mission.locked"))
+		button.text = "%d. %s\n%s\n%s  •  %s" % [index + 1, _config_text(mission_config, mission_id, "title").to_upper(), _config_text(mission_config, mission_id, "description"), status_text, _t("mission.play_as", [dino_name])]
 		button.custom_minimum_size = Vector2(300, 220)
 		button.disabled = not unlocked
 		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -809,7 +852,7 @@ func _show_quest_page(quest_id: String) -> void:
 		button.add_theme_stylebox_override("hover", _tile_image_style(art, Color(0.96, 0.96, 0.91, 1.0)))
 		button.add_theme_stylebox_override("pressed", _tile_image_style(art, Color(0.58, 0.60, 0.54, 1.0)))
 		button.add_theme_stylebox_override("disabled", _tile_image_style(art, Color(0.30, 0.30, 0.29, 1.0)))
-		button.tooltip_text = "Replay completed mission" if completed else ("Start this mission" if unlocked else "Complete mission %d first" % index)
+		button.tooltip_text = _t("mission.replay_tooltip") if completed else (_t("mission.start_tooltip") if unlocked else _t("mission.unlock_tooltip", [index]))
 		button.pressed.connect(_start_quest_mission.bind(quest_id, mission_id))
 		_add_tile_rim(button, "completed" if completed else ("available" if unlocked else "locked"))
 		mission_grid.add_child(button)
@@ -887,7 +930,7 @@ func _on_mission_progress(message: String) -> void:
 
 func _on_mission_completed() -> void:
 	_mark_mission_completed(active_quest_id, active_mission_id)
-	_show_mission_result(true, "Mission complete!")
+	_show_mission_result(true, _t("mission.complete_detail"))
 
 
 func _on_mission_failed(reason: String) -> void:
@@ -910,7 +953,7 @@ func _show_mission_result(success: bool, detail: String) -> void:
 	panel.add_theme_constant_override("separation", 18)
 	overlay.add_child(panel)
 	var heading := Label.new()
-	heading.text = "QUEST COMPLETE" if success else "MISSION FAILED"
+	heading.text = _t("mission.quest_complete") if success else _t("mission.failed")
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 44)
 	heading.add_theme_color_override("font_color", Color("bfe46a") if success else Color("ef6655"))
@@ -922,7 +965,7 @@ func _show_mission_result(success: bool, detail: String) -> void:
 	message.add_theme_color_override("font_color", Color("fff2c2"))
 	panel.add_child(message)
 	var return_button := Button.new()
-	return_button.text = "RETURN TO MISSIONS"
+	return_button.text = _t("mission.return")
 	return_button.custom_minimum_size = Vector2(340, 52)
 	return_button.add_theme_font_size_override("font_size", 18)
 	return_button.pressed.connect(_return_to_main_menu)
@@ -958,7 +1001,7 @@ func _build_splash_screen() -> void:
 	splash_root.add_child(shade)
 
 	var title := Label.new()
-	title.text = "DINOS4HELENA"
+	title.text = _t("app.title")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	title.position = Vector2(-480, 38)
@@ -971,7 +1014,7 @@ func _build_splash_screen() -> void:
 	splash_root.add_child(title)
 
 	var subtitle := Label.new()
-	subtitle.text = "A PREHISTORIC ADVENTURE"
+	subtitle.text = _t("splash.subtitle")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	subtitle.position = Vector2(-350, 116)
@@ -985,7 +1028,7 @@ func _build_splash_screen() -> void:
 
 	var continue_button := Button.new()
 	continue_button.name = "ContinueButton"
-	continue_button.text = "TAP TO CONTINUE"
+	continue_button.text = _t("splash.continue")
 	continue_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	continue_button.position = Vector2(-150, -78)
 	continue_button.size = Vector2(300, 52)
@@ -1044,7 +1087,7 @@ func _build_credits_overlay(parent: Control) -> void:
 	panel.add_child(column)
 
 	var heading := Label.new()
-	heading.text = "CREDITS"
+	heading.text = _t("menu.credits")
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 38)
 	heading.add_theme_color_override("font_color", Color("fff2c2"))
@@ -1052,7 +1095,7 @@ func _build_credits_overlay(parent: Control) -> void:
 
 	var dedication := Label.new()
 	dedication.name = "Dedication"
-	dedication.text = "For Helena - have fun. Dad."
+	dedication.text = _t("credits.dedication")
 	dedication.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dedication.add_theme_font_size_override("font_size", 23)
 	dedication.add_theme_color_override("font_color", Color.WHITE)
@@ -1060,7 +1103,7 @@ func _build_credits_overlay(parent: Control) -> void:
 
 	var author := Label.new()
 	author.name = "AuthorCredit"
-	author.text = "Open Souce Game by Janis Keuper."
+	author.text = _t("credits.author")
 	author.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	author.add_theme_font_size_override("font_size", 19)
 	author.add_theme_color_override("font_color", Color("f5dc9d"))
@@ -1068,7 +1111,7 @@ func _build_credits_overlay(parent: Control) -> void:
 
 	var license := Label.new()
 	license.name = "LicenseCredit"
-	license.text = "License: GPL v3"
+	license.text = _t("credits.license")
 	license.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	license.add_theme_font_size_override("font_size", 18)
 	license.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
@@ -1076,7 +1119,7 @@ func _build_credits_overlay(parent: Control) -> void:
 
 	var github := LinkButton.new()
 	github.name = "GithubLink"
-	github.text = "Github: https://github.com/keuperj/Dinos4Helena"
+	github.text = _t("credits.github")
 	github.set_meta("uri", "https://github.com/keuperj/Dinos4Helena")
 	github.custom_minimum_size = Vector2(600, 34)
 	github.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1088,7 +1131,7 @@ func _build_credits_overlay(parent: Control) -> void:
 
 	var close_button := Button.new()
 	close_button.name = "CloseCreditsButton"
-	close_button.text = "BACK"
+	close_button.text = _t("menu.back")
 	close_button.custom_minimum_size = Vector2(210, 48)
 	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close_button.focus_mode = Control.FOCUS_NONE
@@ -1134,7 +1177,7 @@ func _build_play_guide_overlay(parent: Control) -> void:
 	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
 	var heading := Label.new()
-	heading.text = "HOW TO PLAY"
+	heading.text = _t("menu.how_to_play")
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 36)
 	heading.add_theme_color_override("font_color", Color("fff2c2"))
@@ -1143,7 +1186,7 @@ func _build_play_guide_overlay(parent: Control) -> void:
 	var guide_text := RichTextLabel.new()
 	guide_text.name = "PlayGuideText"
 	guide_text.bbcode_enabled = true
-	guide_text.text = PLAY_GUIDE_TEXT
+	guide_text.text = _t("guide.text")
 	guide_text.custom_minimum_size = Vector2(850, 430)
 	guide_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	guide_text.scroll_active = true
@@ -1154,7 +1197,7 @@ func _build_play_guide_overlay(parent: Control) -> void:
 
 	var close_button := Button.new()
 	close_button.name = "ClosePlayGuideButton"
-	close_button.text = "BACK"
+	close_button.text = _t("menu.back")
 	close_button.custom_minimum_size = Vector2(210, 46)
 	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close_button.focus_mode = Control.FOCUS_NONE
@@ -1252,10 +1295,10 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stats.visible = dino_id == selected_dino_id
 	content.add_child(stats)
-	_add_stat(stats, "SPEED", "%.1f" % float(dinosaur_config.get_value(dino_id, "run_speed", 0.0)))
-	_add_stat(stats, "STRENGTH", "%d/10" % int(dinosaur_config.get_value(dino_id, "strength", 0)))
-	_add_stat(stats, "CAN JUMP", "YES" if dinosaur_config.get_value(dino_id, "can_jump", false) else "NO")
-	_add_stat(stats, "HEALTH", str(int(dinosaur_config.get_value(dino_id, "max_health", 0))))
+	_add_stat(stats, _t("stat.speed"), "%.1f" % float(dinosaur_config.get_value(dino_id, "run_speed", 0.0)))
+	_add_stat(stats, _t("stat.strength"), "%d/10" % int(dinosaur_config.get_value(dino_id, "strength", 0)))
+	_add_stat(stats, _t("stat.can_jump"), _t("common.yes") if dinosaur_config.get_value(dino_id, "can_jump", false) else _t("common.no"))
+	_add_stat(stats, _t("stat.health"), str(int(dinosaur_config.get_value(dino_id, "max_health", 0))))
 
 	var marker := Label.new()
 	marker.name = "SelectedMarker"
@@ -1279,7 +1322,7 @@ func _create_dino_card(dino_id: String, display_name: String) -> Control:
 	selector.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	selector.flat = true
 	selector.focus_mode = Control.FOCUS_NONE
-	selector.tooltip_text = "Select " + display_name
+	selector.tooltip_text = _t("menu.select_dinosaur", [display_name])
 	selector.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	for state in ["normal", "hover", "pressed", "focus"]:
 		selector.add_theme_stylebox_override(state, StyleBoxEmpty.new())
@@ -1926,7 +1969,7 @@ func _on_egg_hatched(parent_dino: CharacterBody3D, hatch_position: Vector3) -> v
 	world_root.add_child(baby)
 	_register_quality_geometry(baby.get("model_root"), "actor")
 	companions_spawned += 1
-	_show_status_message("A baby %s hatched and joined you!" % selected_dino_name)
+	_show_status_message(_t("egg.hatched", [selected_dino_name]))
 
 
 func _spawn_powerup_token(token_type: String, token_position: Vector3) -> void:
@@ -2003,7 +2046,7 @@ func _build_hud() -> void:
 	game_hud.add_child(root)
 
 	var title := Label.new()
-	title.text = "DINOS4HELENA  •  %s  •  %s  •  WORLD %06d" % [selected_dino_name.to_upper(), selected_map_theme.to_upper(), map_seed]
+	title.text = _t("hud.title", [selected_dino_name.to_upper(), _theme_name(selected_map_theme).to_upper(), map_seed])
 	title.position = Vector2(18, 14)
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color("f4f0cf"))
@@ -2011,7 +2054,7 @@ func _build_hud() -> void:
 	_build_vital_bars(root)
 
 	status_label = Label.new()
-	status_label.text = "Explore the valley"
+	status_label.text = _t("hud.explore")
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	status_label.position = Vector2(-150, 18)
@@ -2025,18 +2068,18 @@ func _build_hud() -> void:
 	left_panel.position = Vector2(18, -208)
 	left_panel.size = Vector2(370, 190)
 	root.add_child(left_panel)
-	var jump_button := _add_action_button(left_panel, "JUMP", "jump", Vector2(0, 58), Vector2(92, 54))
+	var jump_button := _add_action_button(left_panel, _t("action.jump"), "jump", Vector2(0, 58), Vector2(92, 54))
 	jump_button.disabled = not bool(dinosaur_config.get_value(selected_dino_id, "can_jump", false))
 	if jump_button.disabled:
-		jump_button.tooltip_text = selected_dino_name + " cannot jump"
-	_add_action_button(left_panel, "RUN", "run", Vector2(98, 58), Vector2(84, 54))
-	_add_action_button(left_panel, "DUCK", "duck", Vector2(188, 58), Vector2(84, 54))
-	_add_action_button(left_panel, "ATTACK", "attack", Vector2(0, 118), Vector2(110, 54))
-	_add_action_button(left_panel, "EAT", "eat", Vector2(116, 118), Vector2(92, 54))
-	_add_action_button(left_panel, "SCREAM", "scream", Vector2(214, 118), Vector2(116, 54))
+		jump_button.tooltip_text = _t("action.cannot_jump", [selected_dino_name])
+	_add_action_button(left_panel, _t("action.run"), "run", Vector2(98, 58), Vector2(84, 54))
+	_add_action_button(left_panel, _t("action.duck"), "duck", Vector2(188, 58), Vector2(84, 54))
+	_add_action_button(left_panel, _t("action.attack"), "attack", Vector2(0, 118), Vector2(110, 54))
+	_add_action_button(left_panel, _t("action.eat"), "eat", Vector2(116, 118), Vector2(92, 54))
+	_add_action_button(left_panel, _t("action.scream"), "scream", Vector2(214, 118), Vector2(116, 54))
 
 	var action_hint := Label.new()
-	action_hint.text = "LEFT HAND • ACTIONS"
+	action_hint.text = _t("hud.left_actions")
 	action_hint.position = Vector2(4, 18)
 	action_hint.add_theme_font_size_override("font_size", 14)
 	action_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.72))
@@ -2055,7 +2098,7 @@ func _build_hud() -> void:
 	right_panel.add_child(movement_wheel)
 
 	var move_hint := Label.new()
-	move_hint.text = "RIGHT HAND • MOVE + STEER"
+	move_hint.text = _t("hud.right_move")
 	move_hint.position = Vector2(22, 2)
 	move_hint.size = Vector2(200, 22)
 	move_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2064,7 +2107,7 @@ func _build_hud() -> void:
 	right_panel.add_child(move_hint)
 
 	var keyboard_hint := Label.new()
-	keyboard_hint.text = "Keyboard: WASD / arrows • Space jump • Shift run • C duck • F attack • E eat • R scream"
+	keyboard_hint.text = _t("hud.keyboard")
 	keyboard_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	keyboard_hint.position = Vector2(-350, -30)
 	keyboard_hint.size = Vector2(700, 24)
@@ -2075,7 +2118,7 @@ func _build_hud() -> void:
 
 	var menu_button := Button.new()
 	menu_button.name = "ReturnToMissionButton" if not active_mission_id.is_empty() else "ReturnToFreeGameButton"
-	menu_button.text = "←  MISSIONS" if not active_mission_id.is_empty() else "←  FREE GAME"
+	menu_button.text = _t("hud.return_missions") if not active_mission_id.is_empty() else _t("hud.return_free_game")
 	menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	menu_button.position = Vector2(-190, 16)
 	menu_button.size = Vector2(170, 46)
@@ -2091,7 +2134,7 @@ func _build_hud() -> void:
 	if not active_mission_id.is_empty():
 		var mission_title := Label.new()
 		mission_title.name = "MissionTitle"
-		mission_title.text = str(mission_config.get_value(active_mission_id, "title", active_mission_id.capitalize())).to_upper()
+		mission_title.text = _config_text(mission_config, active_mission_id, "title").to_upper()
 		mission_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		mission_title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 		mission_title.position = Vector2(-300, 56)
@@ -2103,7 +2146,7 @@ func _build_hud() -> void:
 		root.add_child(mission_title)
 		mission_objective_label = Label.new()
 		mission_objective_label.name = "MissionObjective"
-		mission_objective_label.text = str(mission_config.get_value(active_mission_id, "description", ""))
+		mission_objective_label.text = _config_text(mission_config, active_mission_id, "description")
 		mission_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		mission_objective_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 		mission_objective_label.position = Vector2(-350, 82)
@@ -2159,7 +2202,7 @@ func _build_vital_bars(parent: Control) -> void:
 	parent.add_child(bonus_label)
 	poison_label = Label.new()
 	poison_label.name = "PoisonWarning"
-	poison_label.text = "POISONED • HEALTH FALLING • FIND RED TOKEN"
+	poison_label.text = _t("hud.poison_warning")
 	poison_label.position = Vector2(18, 116)
 	poison_label.size = Vector2(430, 26)
 	poison_label.add_theme_font_size_override("font_size", 15)
@@ -2973,7 +3016,7 @@ func _add_key_action(action: StringName, keys: Array) -> void:
 
 
 func _on_dino_screamed() -> void:
-	_show_status_message("R O A R !")
+	_show_status_message(_t("status.roar"))
 
 
 func _show_status_message(message: String) -> void:
@@ -2984,7 +3027,7 @@ func _show_status_message(message: String) -> void:
 	tween.tween_interval(1.0)
 	tween.tween_callback(func() -> void:
 		if is_instance_valid(status_label) and status_label.text == message:
-			status_label.text = "POISONED — FIND A HEALTH TOKEN" if is_instance_valid(player) and bool(player.get("poisoned")) else "Explore the valley"
+			status_label.text = _t("hud.poison_short") if is_instance_valid(player) and bool(player.get("poisoned")) else _t("hud.explore")
 	)
 
 
@@ -2992,7 +3035,7 @@ func _on_poisoning_changed(active: bool) -> void:
 	if is_instance_valid(poison_label):
 		poison_label.visible = active
 	if is_instance_valid(status_label):
-		status_label.text = "POISONED — FIND A HEALTH TOKEN" if active else "Explore the valley"
+		status_label.text = _t("hud.poison_short") if active else _t("hud.explore")
 
 
 func _on_health_changed(current_health: int, maximum_health: int) -> void:
@@ -3000,7 +3043,7 @@ func _on_health_changed(current_health: int, maximum_health: int) -> void:
 		return
 	health_bar.max_value = maximum_health
 	health_bar.value = current_health
-	health_label.text = "HEALTH  %d / %d" % [current_health, maximum_health]
+	health_label.text = _t("hud.health", [current_health, maximum_health])
 
 
 func _on_energy_changed(current_energy: float, maximum_energy: float) -> void:
@@ -3008,7 +3051,7 @@ func _on_energy_changed(current_energy: float, maximum_energy: float) -> void:
 		return
 	energy_bar.max_value = maximum_energy
 	energy_bar.value = current_energy
-	energy_label.text = "ENERGY  %d%%" % int(round(current_energy / maximum_energy * 100.0))
+	energy_label.text = _t("hud.energy", [int(round(current_energy / maximum_energy * 100.0))])
 
 
 func _on_bonuses_changed(speed_seconds: float, strength_seconds: float) -> void:
@@ -3016,14 +3059,14 @@ func _on_bonuses_changed(speed_seconds: float, strength_seconds: float) -> void:
 		return
 	var bonuses: Array[String] = []
 	if speed_seconds > 0.0:
-		bonuses.append("SPEED ×2  %ds" % int(ceil(speed_seconds)))
+		bonuses.append(_t("hud.speed_bonus", [int(ceil(speed_seconds))]))
 	if strength_seconds > 0.0:
-		bonuses.append("STRENGTH ×2  %ds" % int(ceil(strength_seconds)))
+		bonuses.append(_t("hud.strength_bonus", [int(ceil(strength_seconds))]))
 	bonus_label.text = "   •   ".join(bonuses)
 
 
 func _on_player_died() -> void:
-	_show_status_message("Your dinosaur has fallen")
+	_show_status_message(_t("game_over.fallen"))
 	var overlay := ColorRect.new()
 	overlay.name = "GameOver"
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -3037,19 +3080,19 @@ func _on_player_died() -> void:
 	panel.add_theme_constant_override("separation", 20)
 	overlay.add_child(panel)
 	var heading := Label.new()
-	heading.text = "GAME OVER"
+	heading.text = _t("game_over.heading")
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 52)
 	heading.add_theme_color_override("font_color", Color("ef6655"))
 	panel.add_child(heading)
 	var detail := Label.new()
-	detail.text = "%s ran out of health" % selected_dino_name
+	detail.text = _t("game_over.detail", [selected_dino_name])
 	detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	detail.add_theme_font_size_override("font_size", 20)
 	detail.add_theme_color_override("font_color", Color("fff2c2"))
 	panel.add_child(detail)
 	var return_button := Button.new()
-	return_button.text = "RETURN TO DINOSAUR SELECTION"
+	return_button.text = _t("game_over.return")
 	return_button.custom_minimum_size = Vector2(340, 52)
 	return_button.add_theme_font_size_override("font_size", 18)
 	return_button.pressed.connect(_return_to_main_menu)

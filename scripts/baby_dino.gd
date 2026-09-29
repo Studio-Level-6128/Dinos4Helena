@@ -14,7 +14,7 @@ var pack_id := -2
 var pack_slot := -1
 var parent_dino: CharacterBody3D
 var diet := "herbivore"
-var display_name := "Baby Dinosaur"
+var display_name := ""
 var model_scale := 0.1
 var run_animation_speed_scale := 1.0
 var walk_speed := 2.5
@@ -39,7 +39,7 @@ func _ready() -> void:
 	var config := ConfigFile.new()
 	assert(config.load(CONFIG_PATH) == OK, "Could not load dinosaur configuration")
 	diet = config.get_value(dino_id, "diet", "herbivore")
-	display_name = "Baby %s" % config.get_value(dino_id, "display_name", dino_id.capitalize())
+	display_name = Localization.text("dino.baby_named", [Localization.text(str(config.get_value(dino_id, "display_name_key", "dino." + dino_id)))])
 	var baby_scale := float(config.get_value("breeding", "baby_scale", 0.42))
 	var speed_factor := float(config.get_value("breeding", "baby_speed_factor", 0.84))
 	model_scale = float(config.get_value(dino_id, "model_scale", 0.2)) * baby_scale
@@ -192,7 +192,7 @@ func _build_health_label() -> void:
 
 func _update_health_label() -> void:
 	if is_instance_valid(health_label):
-		health_label.text = "%s  %d/%d" % [display_name, health, max_health]
+		health_label.text = Localization.text("dino.health_label", [display_name, health, max_health])
 
 
 func _face_direction(direction: Vector3, delta: float) -> void:

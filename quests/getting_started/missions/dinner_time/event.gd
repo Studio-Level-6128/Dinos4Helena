@@ -6,7 +6,7 @@ var plants_eaten := 0
 func setup(world_controller: Node, mission_objective: Dictionary) -> void:
 	super.setup(world_controller, mission_objective)
 	controller.player.food_consumed.connect(_on_food_consumed)
-	set_progress("Plants eaten: 0 / %d" % int(objective.get("target_count", 2)))
+	set_progress(Localization.text("mission.plants_eaten", [0, int(objective.get("target_count", 2))]))
 
 
 func _on_food_consumed(food_kind: String) -> void:
@@ -14,7 +14,7 @@ func _on_food_consumed(food_kind: String) -> void:
 		return
 	plants_eaten += 1
 	var target := int(objective.get("target_count", 2))
-	set_progress("Plants eaten: %d / %d" % [plants_eaten, target])
+	set_progress(Localization.text("mission.plants_eaten", [plants_eaten, target]))
 	if plants_eaten >= target:
 		complete()
 

@@ -20,7 +20,7 @@ func _process(delta: float) -> void:
 	if update_time <= 0.0:
 		update_time = 0.5
 		var target := float(objective.get("pack_seconds", 180.0))
-		set_progress("Stay with the pack: %d / %d seconds" % [int(together_seconds), int(target)])
+		set_progress(Localization.text("mission.stay_with_pack", [int(together_seconds), int(target)]))
 	if together_seconds >= float(objective.get("pack_seconds", 180.0)):
 		complete()
 

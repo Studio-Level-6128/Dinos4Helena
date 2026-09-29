@@ -11,7 +11,7 @@ func _process(delta: float) -> void:
 		return
 	update_time = 0.5
 	var explored := float(controller.active_minimap.call("get_explored_fraction"))
-	set_progress("Map explored: %d%%" % int(round(explored * 100.0)))
+	set_progress(Localization.text("mission.map_explored", [int(round(explored * 100.0))]))
 	if explored >= float(objective.get("target_fraction", 1.0)):
 		complete()
 

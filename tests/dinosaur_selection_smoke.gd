@@ -24,7 +24,7 @@ func _run() -> void:
 	var free_game_tile := app.menu_layer.find_child("FreeGameTile", true, false) as Button
 	assert(landing_page != null and landing_page.visible, "Landing page should be visible at startup")
 	assert(free_game_page != null and not free_game_page.visible, "Free Game page should start hidden")
-	assert(quests_tile != null and quests_tile.disabled, "Unavailable Quests tile is missing or enabled")
+	assert(quests_tile != null and not quests_tile.disabled, "Quests tile is missing or disabled")
 	assert(free_game_tile != null, "Free Game tile is missing")
 	assert(ResourceLoader.exists("res://assets/ui/menu/quests-tile.png"), "Quests tile background is missing")
 	assert(ResourceLoader.exists("res://assets/ui/menu/free-game-tile.png"), "Free Game tile background is missing")
@@ -42,7 +42,7 @@ func _run() -> void:
 	var license := app.credits_overlay.find_child("LicenseCredit", true, false) as Label
 	var github := app.credits_overlay.find_child("GithubLink", true, false) as LinkButton
 	assert(dedication.text == "For Helena - have fun. Dad.", "Credits dedication is incorrect")
-	assert(author.text == "Open Souce Game by Janis Keuper.", "Credits author line is incorrect")
+	assert(author.text == "Open Source Game by Janis Keuper.", "Credits author line is incorrect")
 	assert(license.text == "License: GPL v3", "Credits license line is incorrect")
 	assert(github.get_meta("uri") == "https://github.com/keuperj/Dinos4Helena", "Credits GitHub link is incorrect")
 	app._close_credits()
