@@ -83,6 +83,7 @@ var active_quest_id := ""
 var active_mission_id := ""
 var active_mission_event: Node
 var mission_objective_label: Label
+var mission_intro_player: AudioStreamPlayer
 var seed_input: LineEdit
 var map_seed := 0
 var generated_ponds: Array = []
@@ -207,6 +208,7 @@ func _start_game(dino_id: String) -> void:
 	_build_wild_dinosaurs()
 	_build_snow_footprints()
 	_build_hud()
+	_play_mission_intro()
 	_start_mission_event()
 	_reset_adaptive_performance()
 
@@ -229,6 +231,7 @@ func _return_to_main_menu() -> void:
 	bonus_label = null
 	poison_label = null
 	mission_objective_label = null
+	mission_intro_player = null
 	companions_spawned = 0
 	quality_geometry.clear()
 	sun_light = null
@@ -906,6 +909,24 @@ func _apply_mission_setup() -> void:
 	assert(setup_script != null, "Could not load mission setup script: %s" % setup_path)
 	var setup_instance = setup_script.new()
 	setup_instance.call("setup", self)
+
+
+func _play_mission_intro() -> void:
+	if active_mission_id.is_empty() or not is_instance_valid(game_hud):
+		return
+	var locale := Localization.language
+	var audio_path := "res://assets/audio/missions/%s/%s.mp3" % [active_mission_id, locale]
+	if not ResourceLoader.exists(audio_path):
+		audio_path = "res://assets/audio/missions/%s/en.mp3" % active_mission_id
+	if not ResourceLoader.exists(audio_path):
+		push_warning("Mission introduction audio is missing: %s" % audio_path)
+		return
+	mission_intro_player = AudioStreamPlayer.new()
+	mission_intro_player.name = "MissionIntroduction"
+	mission_intro_player.stream = load(audio_path) as AudioStream
+	mission_intro_player.volume_db = 3.0
+	game_hud.add_child(mission_intro_player)
+	mission_intro_player.play()
 
 
 func _start_mission_event() -> void:

@@ -4,6 +4,7 @@ The audio in this directory was generated for Dinos4Helena with ElevenLabs' `ele
 
 - Dinosaur one-shots: species-specific scream, walk, run, jump, duck, attack, and hurt sounds
 - Ambience: seamless prehistoric jungle and distant-dinosaur loops
+- Mission narration: localized English, German, and French introductions under `missions/` (see `missions/GENERATED_ASSETS.md` for voices and reproduction)
 - Output: MP3, 44.1 kHz, 128 kbps
 
 The dinosaur sounds are cinematic, plausible interpretations. There are no recordings of non-avian dinosaur vocalizations, so they should not be presented as scientifically established reconstructions.

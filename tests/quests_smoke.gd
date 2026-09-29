@@ -71,6 +71,8 @@ func _run() -> void:
 	assert(game.selected_map_theme == "grassland", "Dinner Time did not select grassland")
 	assert(is_instance_valid(game.player), "Mission player was not created")
 	assert(is_instance_valid(game.active_mission_event), "Mission event loop was not created")
+	assert(is_instance_valid(game.mission_intro_player) and game.mission_intro_player.playing, "Mission introduction audio did not start")
+	assert(game.mission_intro_player.stream.resource_path.ends_with("/dinner_time/en.mp3"), "Wrong localized mission introduction was selected")
 	assert(is_instance_valid(game.mission_objective_label), "Mission objective HUD is missing")
 	assert(game.generated_vegetation.size() >= 2, "Dinner Time setup did not populate edible plants")
 

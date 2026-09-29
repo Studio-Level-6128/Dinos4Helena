@@ -20,6 +20,13 @@ func _run() -> void:
 		else:
 			assert(keys == expected_keys, "Translation keys differ for: %s" % locale)
 
+	for mission in ["dinner_time", "explore_the_world", "family", "breed", "hunt", "defense"]:
+		for locale in ["en", "de", "fr"]:
+			var audio_path := "res://assets/audio/missions/%s/%s.mp3" % [mission, locale]
+			assert(ResourceLoader.exists(audio_path), "Mission narration is missing: %s" % audio_path)
+			var stream := load(audio_path) as AudioStream
+			assert(stream != null and stream.get_length() > 2.0, "Mission narration is invalid: %s" % audio_path)
+
 	localization.call("set_language", "en", false)
 	var scene := load("res://scenes/main.tscn") as PackedScene
 	var app := scene.instantiate()
@@ -38,6 +45,11 @@ func _run() -> void:
 	assert(localization.get("language") == "fr", "Language selector did not switch to French")
 	assert((app.find_child("FreeGameTile", true, false) as Button).text.begins_with("JEU LIBRE"), "French menu text was not applied")
 	assert((app.find_child("Language_fr", true, false) as Button).disabled, "Active language is not indicated")
+	app.active_mission_id = "dinner_time"
+	app.game_hud = CanvasLayer.new()
+	app.add_child(app.game_hud)
+	app._play_mission_intro()
+	assert(app.mission_intro_player.stream.resource_path.ends_with("/dinner_time/fr.mp3"), "Mission narration did not follow the selected language")
 
 	localization.call("set_language", "en")
 	print("Localization smoke test passed for English, German, and French")
