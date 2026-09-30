@@ -6,10 +6,11 @@ func _init() -> void:
 
 
 func _run() -> void:
+	root.get_node("Localization").call("set_language", "en", false)
 	var quest_config := ConfigFile.new()
 	assert(quest_config.load("res://config/quests.cfg") == OK, "Quest catalog did not load")
 	var quest_ids: Array = quest_config.get_value("quests", "quest_ids", [])
-	assert(quest_ids == ["getting_started"], "Getting Started quest is missing from the catalog")
+	assert(quest_ids == ["getting_started", "sand_land"], "Quest catalog order is wrong")
 	assert(ResourceLoader.exists(str(quest_config.get_value("quests", "overview_background"))), "Quest overview background is missing")
 
 	var missions := ConfigFile.new()
@@ -23,6 +24,18 @@ func _run() -> void:
 		assert(str(missions.get_value(mission_id, "dinosaur")) == expected_dinosaurs[index], "%s uses the wrong dinosaur" % mission_id)
 		for key in ["image", "setup_script", "event_script"]:
 			assert(ResourceLoader.exists(str(missions.get_value(mission_id, key))), "%s has a missing %s" % [mission_id, key])
+
+	var sand_missions := ConfigFile.new()
+	assert(sand_missions.load(str(quest_config.get_value("sand_land", "mission_config"))) == OK, "Sand Land mission config did not load")
+	var sand_ids: Array = sand_missions.get_value("quest", "mission_ids", [])
+	assert(sand_ids == ["poison", "water", "prey", "kingpin", "lost_baby", "eat_the_baby"], "Sand Land mission order is wrong")
+	var sand_dinosaurs := ["parasaurolophus", "parasaurolophus", "trex", "trex", "apatosaurus", "velociraptor"]
+	for index in sand_ids.size():
+		var mission_id := str(sand_ids[index])
+		assert(str(sand_missions.get_value(mission_id, "map_theme")) == "desert", "%s is not a desert mission" % mission_id)
+		assert(str(sand_missions.get_value(mission_id, "dinosaur")) == sand_dinosaurs[index], "%s uses the wrong dinosaur" % mission_id)
+		for key in ["image", "setup_script", "event_script"]:
+			assert(ResourceLoader.exists(str(sand_missions.get_value(mission_id, key))), "%s has a missing %s" % [mission_id, key])
 
 	var scene := load("res://scenes/main.tscn") as PackedScene
 	var game := scene.instantiate()
@@ -42,8 +55,11 @@ func _run() -> void:
 	game.call("_show_quest_overview")
 	assert(game.quest_overview_page.visible, "Quest overview did not open")
 	var quest_button := game.find_child("Quest_getting_started", true, false) as Button
+	var sand_button := game.find_child("Quest_sand_land", true, false) as Button
 	assert(is_instance_valid(quest_button), "Getting Started tile is missing")
+	assert(is_instance_valid(sand_button), "Sand Land tile is missing")
 	assert(is_instance_valid(quest_button.get_node_or_null("TileRim")), "Quest overview tile has no rim")
+	assert(is_instance_valid(sand_button.get_node_or_null("TileRim")), "Sand Land tile has no rim")
 	game.call("_show_quest_page", "getting_started")
 	assert(game.quest_detail_page.visible, "Getting Started page did not open")
 	for index in mission_ids.size():
@@ -60,7 +76,7 @@ func _run() -> void:
 	var dinner_button := game.find_child("Mission_dinner_time", true, false) as Button
 	var explore_button := game.find_child("Mission_explore_the_world", true, false) as Button
 	var family_button := game.find_child("Mission_family", true, false) as Button
-	assert("COMPLETED" in dinner_button.text and not dinner_button.disabled, "Completed mission is not marked")
+	assert(str(game.call("_t", "mission.completed")) in dinner_button.text and not dinner_button.disabled, "Completed mission is not marked")
 	assert(not explore_button.disabled, "Completing mission 1 did not unlock mission 2")
 	assert(family_button.disabled, "Mission 3 unlocked before mission 2 was completed")
 
@@ -76,7 +92,7 @@ func _run() -> void:
 	assert(is_instance_valid(game.mission_objective_label), "Mission objective HUD is missing")
 	assert(game.generated_vegetation.size() >= 2, "Dinner Time setup did not populate edible plants")
 
-	print("Quest smoke test passed: catalog, pages, six missions, setup, event loop, and HUD")
+	print("Quest smoke test passed: two campaigns, twelve missions, progression, audio, and HUD")
 	game.queue_free()
 	await process_frame
 	if FileAccess.file_exists(progress_path):

@@ -58,6 +58,7 @@ var collision_height := 2.8
 var dead := false
 var can_retreat := true
 var ignore_combat_odds := false
+var allow_same_species_combat := false
 var last_attacker: Node3D
 var state := "wandering"
 var attack_cooldown := 0.0
@@ -702,7 +703,7 @@ func _alert_same_species_pack(attacker: Node3D) -> void:
 
 
 func _is_same_species(other: Node) -> bool:
-	return is_instance_valid(other) and str(other.get("dino_id")) == dino_id
+	return is_instance_valid(other) and str(other.get("dino_id")) == dino_id and not allow_same_species_combat
 
 
 func _die(attacker: Node3D = null) -> void:

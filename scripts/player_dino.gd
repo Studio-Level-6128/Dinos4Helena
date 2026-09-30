@@ -56,6 +56,7 @@ var food_reach := 4.5
 var starvation_damage_accumulator := 0.0
 var poison_damage_accumulator := 0.0
 var poisoned := false
+var allow_same_species_combat := false
 var eating_target: Node3D
 var eating_active := false
 var eating_pose_time := 0.0
@@ -344,7 +345,7 @@ func _perform_attack_hit() -> void:
 	var closest_target: Node3D
 	var closest_distance := collision_radius + 3.8
 	for candidate in get_tree().get_nodes_in_group("npc_dinosaur"):
-		if not candidate is Node3D or bool(candidate.get("dead")) or str(candidate.get("dino_id")) == dino_id:
+		if not candidate is Node3D or bool(candidate.get("dead")) or (str(candidate.get("dino_id")) == dino_id and not allow_same_species_combat):
 			continue
 		var target := candidate as Node3D
 		var offset := target.global_position - global_position
@@ -389,7 +390,7 @@ func _start_scream() -> void:
 func take_damage(amount: int, play_hurt_sound := true, attacker: Node3D = null) -> void:
 	if amount <= 0 or health <= 0 or dead:
 		return
-	if is_instance_valid(attacker) and str(attacker.get("dino_id")) == dino_id:
+	if is_instance_valid(attacker) and str(attacker.get("dino_id")) == dino_id and not allow_same_species_combat:
 		return
 	health = maxi(health - amount, 0)
 	if play_hurt_sound:

@@ -20,6 +20,21 @@ stricter anatomical constraints after review: a solid-frilled three-horned
 Triceratops; long-necked Apatosaurus adults and hatchlings; and three plated,
 spike-tailed Stegosaurus facing one feathered Velociraptor.
 
+Sand Land artwork was generated on 2026-09-30 with the same built-in tool and
+mobile optimization:
+
+- `sand-land.png`: a Parasaurolophus herd crossing a desert toward an oasis
+  under the watch of a distant T-Rex.
+- `sand_land/poison.png`: a Parasaurolophus eating a luminous toxic plant.
+- `sand_land/water.png`: a Parasaurolophus herd and two children crossing
+  dangerous ground toward water.
+- `sand_land/prey.png`: a T-Rex pursuing the herd leader toward the oasis.
+- `sand_land/kingpin.png`: two rival T-Rex confronting each other at water.
+- `sand_land/lost-baby.png`: an Apatosaurus searching desert rocks for its
+  hidden child while Velociraptors search nearby.
+- `sand_land/eat-the-baby.png`: a Velociraptor pack racing an Apatosaurus herd
+  to reach a lost baby.
+
 All tile prompts requested polished, photorealistic, family-friendly
 natural-history game key art in a wide 3:2 composition with no text, logos,
 borders, UI, watermark, humans, blood, injuries, or gore. Scene-specific

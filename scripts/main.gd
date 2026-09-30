@@ -97,8 +97,10 @@ var generated_clouds: Array = []
 var generated_high_ground: Array = []
 var generated_logs: Array = []
 var generated_dinosaurs: Array = []
+var generated_babies: Array = []
 var generated_tokens: Array = []
 var generated_eggs: Array = []
+var mission_player_start := Vector3(0.0, 0.1, 5.0)
 var generated_lava_streams: Array = []
 var volcano_data: Dictionary = {}
 var environment_models: Dictionary = {}
@@ -206,6 +208,7 @@ func _start_game(dino_id: String) -> void:
 	_build_player(dino_id)
 	_build_egg_nests()
 	_build_wild_dinosaurs()
+	_build_mission_babies()
 	_build_snow_footprints()
 	_build_hud()
 	_play_mission_intro()
@@ -808,7 +811,7 @@ func _show_quest_page(quest_id: String) -> void:
 		return
 	active_quest_id = quest_id
 	_clear_control(quest_detail_page)
-	_add_quest_background(quest_detail_page, str(quest_config.get_value("quests", "overview_background")))
+	_add_quest_background(quest_detail_page, str(quest_config.get_value(quest_id, "background", quest_config.get_value("quests", "overview_background"))))
 	_quest_back_button(quest_detail_page, _show_quest_overview)
 	var title := Label.new()
 	title.text = _config_text(quest_config, quest_id, "title").to_upper()
@@ -1536,8 +1539,10 @@ func _generate_world_layout() -> void:
 	generated_high_ground.clear()
 	generated_logs.clear()
 	generated_dinosaurs.clear()
+	generated_babies.clear()
 	generated_tokens.clear()
 	generated_eggs.clear()
+	mission_player_start = Vector3(0.0, 0.1, 5.0)
 	generated_lava_streams.clear()
 	volcano_data.clear()
 	var rng := RandomNumberGenerator.new()
@@ -1913,7 +1918,7 @@ func _build_player(dino_id: String) -> void:
 	player.set_script(PLAYER_SCRIPT)
 	player.set("dino_id", dino_id)
 	player.set("texture_variant", posmod(map_seed + DINO_IDS.find(dino_id), GENERATED_MATERIALS.dino_variant_count()))
-	player.position = Vector3(0.0, 0.1, 58.0) if selected_map_theme == "volcano" else Vector3(0.0, 0.1, 5.0)
+	player.position = Vector3(0.0, 0.1, 58.0) if selected_map_theme == "volcano" else mission_player_start
 	world_root.add_child(player)
 	player.screamed.connect(_on_dino_screamed)
 	player.health_changed.connect(_on_health_changed)
@@ -1941,6 +1946,7 @@ func _build_wild_dinosaurs() -> void:
 		npc.set("texture_variant", data.get("texture_variant", index))
 		npc.set("can_retreat", data.get("can_retreat", true))
 		npc.set("ignore_combat_odds", data.get("ignore_combat_odds", false))
+		npc.set("allow_same_species_combat", data.get("allow_same_species_combat", false))
 		if data.has("mission_role"):
 			npc.set_meta("mission_role", data["mission_role"])
 		npc.position = data["position"]
@@ -1955,6 +1961,28 @@ func _build_snow_footprints() -> void:
 	footprints.set_script(SNOW_FOOTPRINTS_SCRIPT)
 	world_root.add_child(footprints)
 	_register_quality_geometry(footprints, "small")
+
+
+func _build_mission_babies() -> void:
+	for index in generated_babies.size():
+		var data: Dictionary = generated_babies[index]
+		var baby := CharacterBody3D.new()
+		baby.name = "MissionBaby_%02d_%s" % [index, data.get("species", "apatosaurus")]
+		baby.set_script(BABY_DINO_SCRIPT)
+		baby.set("dino_id", data.get("species", "apatosaurus"))
+		baby.set("companion_index", index)
+		baby.set("texture_variant", data.get("texture_variant", index))
+		var parent_role := str(data.get("parent_role", ""))
+		if not parent_role.is_empty():
+			for npc in get_tree().get_nodes_in_group("npc_dinosaur"):
+				if str(npc.get_meta("mission_role", "")) == parent_role:
+					baby.set("parent_dino", npc)
+					break
+		if data.has("mission_role"):
+			baby.set_meta("mission_role", data["mission_role"])
+		baby.position = data["position"]
+		world_root.add_child(baby)
+		_register_quality_geometry(baby.get("model_root"), "actor")
 
 
 func _build_powerup_tokens() -> void:

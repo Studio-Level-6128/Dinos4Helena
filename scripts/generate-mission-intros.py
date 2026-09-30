@@ -24,6 +24,12 @@ MISSIONS = (
     "breed",
     "hunt",
     "defense",
+    "poison",
+    "water",
+    "prey",
+    "kingpin",
+    "lost_baby",
+    "eat_the_baby",
 )
 VOICES = {
     "en": "en-GB-SoniaNeural",
