@@ -13,6 +13,9 @@ const PACK_COHESION_RANGE := 11.0
 const PACK_WELCOME_RANGE := 30.0
 const PACK_DEFENSE_RANGE := 42.0
 const PACK_DEFENSE_SECONDS := 10.0
+const HELP_CALL_SECONDS := 14.0
+const PANIC_MIN_SECONDS := 4.5
+const PANIC_MAX_SECONDS := 7.5
 const RETALIATION_SECONDS := 7.0
 const HUNGER_THRESHOLD := 45.0
 const HEAVY_INJURY_RATIO := 0.50
@@ -76,6 +79,12 @@ var retaliation_target: Node3D
 var retaliation_time := 0.0
 var ally_defense_target: Node3D
 var ally_defense_time := 0.0
+var rally_target: Node3D
+var rally_time := 0.0
+var panic_source: Node3D
+var panic_time := 0.0
+var panic_turn_time := 0.0
+var panic_direction := Vector3.ZERO
 var food_target: Node3D
 var model_root: Node3D
 var animation_player: AnimationPlayer
@@ -135,6 +144,12 @@ func _physics_process(delta: float) -> void:
 	ally_defense_time = maxf(ally_defense_time - delta, 0.0)
 	if ally_defense_time <= 0.0 or (is_instance_valid(ally_defense_target) and bool(ally_defense_target.get("dead"))):
 		ally_defense_target = null
+	rally_time = maxf(rally_time - delta, 0.0)
+	if rally_time <= 0.0 or not is_instance_valid(rally_target) or bool(rally_target.get("dead")):
+		rally_target = null
+	panic_time = maxf(panic_time - delta, 0.0)
+	if panic_time <= 0.0:
+		panic_source = null
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	var move_direction := Vector3.ZERO
@@ -172,7 +187,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		# Herbivore priority: defend alerted allies, respond to a direct threat,
 		# then resume the moving pack formation.
-		if is_instance_valid(ally_defense_target):
+		if panic_time > 0.0:
+			state = "panicked"
+			move_direction = _panic_move_direction(delta)
+			move_speed = run_speed
+		elif is_instance_valid(ally_defense_target):
 			var defense_offset := ally_defense_target.global_position - global_position
 			var defense_distance := Vector2(defense_offset.x, defense_offset.z).length()
 			_face_direction(defense_offset, delta)
@@ -196,6 +215,9 @@ func _physics_process(delta: float) -> void:
 					var escape := global_position - threat.global_position
 					move_direction = Vector3(escape.x, 0.0, escape.z).normalized()
 					move_speed = run_speed
+			elif is_instance_valid(rally_target):
+				move_direction = _rally_direction()
+				move_speed = run_speed if move_direction.length_squared() > 0.01 else walk_speed
 			else:
 				move_direction = _pack_direction(delta)
 				if state == "regrouping":
@@ -693,6 +715,61 @@ func receive_ally_alert(ally: Node3D, attacker: Node3D) -> void:
 		return
 	ally_defense_target = attacker
 	ally_defense_time = PACK_DEFENSE_SECONDS
+
+
+func receive_help_call(caller: Node3D, attacker: Node3D = null) -> void:
+	if dead or diet != "herbivore" or not is_instance_valid(caller) or not _is_same_species(caller):
+		return
+	rally_target = caller
+	rally_time = HELP_CALL_SECONDS
+	if is_instance_valid(attacker) and not _is_same_species(attacker) and not bool(attacker.get("dead")):
+		ally_defense_target = attacker
+		ally_defense_time = HELP_CALL_SECONDS
+
+
+func receive_predator_roar(source: Node3D) -> void:
+	if dead or diet != "herbivore" or not is_instance_valid(source) or _is_same_species(source):
+		return
+	panic_source = source
+	panic_time = rng.randf_range(PANIC_MIN_SECONDS, PANIC_MAX_SECONDS)
+	panic_turn_time = 0.0
+	_choose_panic_direction()
+	pack_goal_initialized = false
+
+
+func _rally_direction() -> Vector3:
+	if not is_instance_valid(rally_target):
+		return Vector3.ZERO
+	var slot := maxi(pack_slot, 0)
+	var angle := TAU * float(posmod(slot * 5 + pack_id * 3, 11)) / 11.0
+	var ring_radius := float(rally_target.get("collision_radius")) + collision_radius + 2.2
+	var rally_position := rally_target.global_position + Vector3(cos(angle), 0.0, sin(angle)) * ring_radius
+	var offset := rally_position - global_position
+	offset.y = 0.0
+	if offset.length() <= 1.25:
+		state = "guarding_player"
+		return Vector3.ZERO
+	state = "rallying_to_player"
+	return (offset.normalized() + _pack_separation() * 1.2).normalized()
+
+
+func _panic_move_direction(delta: float) -> Vector3:
+	panic_turn_time = maxf(panic_turn_time - delta, 0.0)
+	if panic_turn_time <= 0.0:
+		_choose_panic_direction()
+	return panic_direction
+
+
+func _choose_panic_direction() -> void:
+	var away := Vector3.FORWARD
+	if is_instance_valid(panic_source):
+		away = global_position - panic_source.global_position
+		away.y = 0.0
+		if away.length_squared() > 0.01:
+			away = away.normalized()
+	var jitter := rng.randf_range(-1.25, 1.25)
+	panic_direction = away.rotated(Vector3.UP, jitter).normalized()
+	panic_turn_time = rng.randf_range(0.45, 1.15)
 
 
 func _alert_same_species_pack(attacker: Node3D) -> void:

@@ -27,6 +27,11 @@ var collision_radius := 0.4
 var collision_height := 1.3
 var dead := false
 var state := "following"
+var panic_source: Node3D
+var panic_time := 0.0
+var panic_turn_time := 0.0
+var panic_direction := Vector3.ZERO
+var rng := RandomNumberGenerator.new()
 var model_root: Node3D
 var animation_player: AnimationPlayer
 var collision_shape: CollisionShape3D
@@ -50,6 +55,7 @@ func _ready() -> void:
 	strength = maxi(int(round(float(config.get_value(dino_id, "strength", 5)) * 0.45)), 1)
 	max_health = maxi(int(round(float(config.get_value(dino_id, "max_health", 100)) * 0.55)), 1)
 	health = max_health
+	rng.seed = hash("%s:%d:%d" % [dino_id, companion_index, get_instance_id()])
 	collision_radius = float(config.get_value(dino_id, "collision_radius", 0.8)) * baby_scale
 	collision_height = float(config.get_value(dino_id, "collision_height", 2.8)) * baby_scale
 	add_to_group("baby_dinosaur")
@@ -74,7 +80,31 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= gravity * delta
 	var direction := Vector3.ZERO
 	var speed := walk_speed
-	if is_instance_valid(parent_dino) and not bool(parent_dino.get("dead")):
+	panic_time = maxf(panic_time - delta, 0.0)
+	if panic_time > 0.0:
+		panic_turn_time = maxf(panic_turn_time - delta, 0.0)
+		if panic_turn_time <= 0.0:
+			_choose_panic_direction()
+		direction = panic_direction
+		speed = run_speed
+		state = "panicked"
+		_face_direction(direction, delta)
+	elif is_instance_valid(parent_dino) and not bool(parent_dino.get("dead")) and bool(parent_dino.get("eating_active")) and is_instance_valid(parent_dino.get("eating_target")):
+		var food := parent_dino.get("eating_target") as Node3D
+		var angle := TAU * float(posmod(companion_index * 5 + 2, 13)) / 13.0
+		var meal_radius := collision_radius + 0.9 + float(companion_index / 2) * 0.35
+		var meal_position := food.global_position + Vector3(cos(angle), 0.0, sin(angle)) * meal_radius
+		var meal_offset := meal_position - global_position
+		meal_offset.y = 0.0
+		if meal_offset.length() > 0.55:
+			direction = meal_offset.normalized()
+			speed = run_speed if meal_offset.length() > 5.0 else walk_speed
+			state = "gathering_to_eat"
+			_face_direction(direction, delta)
+		else:
+			state = "eating_with_parent"
+			_face_direction(food.global_position - global_position, delta)
+	elif is_instance_valid(parent_dino) and not bool(parent_dino.get("dead")):
 		# Alternate companions left/right and place later babies slightly farther
 		# back. A short catch-up boost prevents permanent loss behind obstacles.
 		var side_sign := 1.0 if companion_index % 2 == 0 else -1.0
@@ -99,6 +129,28 @@ func _physics_process(delta: float) -> void:
 	velocity.z = move_toward(velocity.z, direction.z * speed, speed * 6.0 * delta)
 	move_and_slide()
 	_update_animation(direction.length_squared() > 0.01, speed > walk_speed)
+	if state == "eating_with_parent" and animation_player:
+		animation_player.speed_scale = 0.58
+
+
+func receive_predator_roar(source: Node3D) -> void:
+	if dead or diet != "herbivore" or not is_instance_valid(source) or str(source.get("dino_id")) == dino_id:
+		return
+	panic_source = source
+	panic_time = rng.randf_range(4.5, 7.5)
+	panic_turn_time = 0.0
+	_choose_panic_direction()
+
+
+func _choose_panic_direction() -> void:
+	var away := Vector3.FORWARD
+	if is_instance_valid(panic_source):
+		away = global_position - panic_source.global_position
+		away.y = 0.0
+		if away.length_squared() > 0.01:
+			away = away.normalized()
+	panic_direction = away.rotated(Vector3.UP, rng.randf_range(-1.35, 1.35)).normalized()
+	panic_turn_time = rng.randf_range(0.4, 1.0)
 
 
 func take_damage(amount: int, attacker: Node3D = null) -> void:

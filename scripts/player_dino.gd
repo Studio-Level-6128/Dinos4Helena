@@ -57,6 +57,7 @@ var starvation_damage_accumulator := 0.0
 var poison_damage_accumulator := 0.0
 var poisoned := false
 var allow_same_species_combat := false
+var last_attacker: Node3D
 var eating_target: Node3D
 var eating_active := false
 var eating_pose_time := 0.0
@@ -392,6 +393,8 @@ func take_damage(amount: int, play_hurt_sound := true, attacker: Node3D = null) 
 		return
 	if is_instance_valid(attacker) and str(attacker.get("dino_id")) == dino_id and not allow_same_species_combat:
 		return
+	if is_instance_valid(attacker):
+		last_attacker = attacker
 	health = maxi(health - amount, 0)
 	if play_hurt_sound:
 		_play_action_sound("hurt")

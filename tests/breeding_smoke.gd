@@ -55,6 +55,27 @@ func _run() -> void:
 	assert(baby.global_position.distance_to(player.global_position) < initial_distance + 5.0, "Baby did not follow its moving parent")
 	assert(baby.state in ["following", "catching_up", "beside_parent"], "Baby entered an invalid follow state")
 
+	# A child joins the parent's meal at the same food source. It only performs
+	# the visual/follow behavior, so it does not multiply food consumption.
+	var plant := Node3D.new()
+	plant.add_to_group("edible_plant")
+	world.world_root.add_child(plant)
+	plant.global_position = Vector3(45.0, 0.1, 45.0)
+	player.set_physics_process(false)
+	player.global_position = plant.global_position + Vector3(0.0, 0.0, 1.5)
+	player.eating_target = plant
+	player.eating_active = true
+	baby.global_position = plant.global_position + Vector3(7.0, 0.0, 0.0)
+	for frame in 140:
+		await physics_frame
+	assert(baby.state == "eating_with_parent", "Baby did not settle around the parent's food")
+	assert(baby.global_position.distance_to(plant.global_position) < 2.5, "Baby did not gather at the parent's plant")
+	player.eating_active = false
+	player.eating_target = null
+	player.set_physics_process(true)
+	plant.queue_free()
+	await process_frame
+
 	var hunters := world.get_tree().get_nodes_in_group("hunter_dinosaur")
 	assert(not hunters.is_empty(), "Test world has no predator")
 	var hunter = hunters[0]
@@ -94,9 +115,7 @@ func _run() -> void:
 	assert(not hunter._is_heavily_injured(), "Hunter retreated at exactly half health")
 	hunter.health = 49
 	assert(hunter._is_heavily_injured(), "Hunter did not retreat below half health")
-	hunter.set_physics_process(true)
-	await physics_frame
-	hunter.set_physics_process(false)
+	hunter._physics_process(1.0 / 60.0)
 	assert(hunter.state == "retreating", "Injured baby hunter did not abandon the attack")
 	var baby_health_before: int = baby.health
 	hunter.strength = 1
@@ -107,7 +126,7 @@ func _run() -> void:
 	assert(baby.dead, "Baby could not be killed by a predator")
 	assert(not baby.is_in_group("prey_dinosaur"), "Dead baby remained available as living prey")
 
-	print("Breeding smoke test passed: nests, duck incubation, hatching, following, health, and predator damage")
+	print("Breeding smoke test passed: nests, hatching, following, shared meals, health, and predator damage")
 	world.queue_free()
 	await process_frame
 	quit()

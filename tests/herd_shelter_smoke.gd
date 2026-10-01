@@ -56,6 +56,16 @@ func _run() -> void:
 	var welcome_direction: Vector3 = defender._pack_direction(0.1)
 	assert(welcome_direction.dot(Vector3.RIGHT) > 0.8 and defender.state == "welcoming", "Pack did not welcome a matching herbivore player")
 
+	# A herbivore scream calls every nearby same-species animal into a ring,
+	# even when it belongs to another pack.
+	player.last_attacker = null
+	defender.global_position = player.global_position + Vector3(-24.0, 0.0, 0.0)
+	packmate.global_position = player.global_position + Vector3(20.0, 0.0, 4.0)
+	world._on_dino_screamed()
+	assert(defender.rally_target == player and defender.rally_time > 0.0, "Herbivore scream did not call a nearby same-species dinosaur")
+	assert(packmate.rally_target == player and packmate.rally_time > 0.0, "Herbivore scream did not call the whole nearby herd")
+	assert(defender._rally_direction().dot((player.global_position - defender.global_position).normalized()) > 0.7, "Called herd member did not converge on the player")
+
 	# When that player is attacked, nearby members converge and retaliate.
 	hunter.global_position = player.global_position + Vector3(0.0, 0.0, 1.2)
 	defender.global_position = player.global_position + Vector3(-1.2, 0.0, 0.0)
@@ -71,7 +81,24 @@ func _run() -> void:
 	defender.set_physics_process(false)
 	assert(hunter.health < hunter_health, "Pack defender did not fight the player's attacker")
 
-	print("Herd shelter smoke test passed: species peace, welcome, ally alerts, and pack defense")
+	# A predator scream overrides formation and gives each prey animal an
+	# independently jittered escape direction, breaking the pack apart.
+	player.dino_id = hunter.dino_id
+	player.diet = "carnivore"
+	player.global_position = Vector3(40.0, 0.1, 40.0)
+	defender.global_position = player.global_position + Vector3(-8.0, 0.0, 0.0)
+	packmate.global_position = player.global_position + Vector3(-8.0, 0.0, 2.0)
+	world._on_dino_screamed()
+	assert(defender.panic_time > 0.0 and packmate.panic_time > 0.0, "Predator scream did not frighten nearby prey")
+	assert(defender.panic_direction.dot(packmate.panic_direction) < 0.999, "Frightened pack members fled in a coordinated direction")
+	defender.set_physics_process(true)
+	packmate.set_physics_process(true)
+	await physics_frame
+	defender.set_physics_process(false)
+	packmate.set_physics_process(false)
+	assert(defender.state == "panicked" and packmate.state == "panicked", "Fear did not override normal pack behavior")
+
+	print("Herd shelter smoke test passed: species peace, rally, pack defense, and predator fear")
 	world.queue_free()
 	await process_frame
 	quit()

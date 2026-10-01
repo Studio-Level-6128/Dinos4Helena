@@ -23,6 +23,7 @@ const MAP_HALF_SIZE := 200.0
 const MAP_THEMES := ["grassland", "desert", "winter", "volcano"]
 const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x71A7E2, "volcano": 0xB01CA0}
 const QUEST_PROGRESS_PATH := "user://quest_progress.cfg"
+const SCREAM_RESPONSE_RANGE := 72.0
 # Adaptive performance starts at full quality. It only reduces expensive
 # rendering features after several sustained low-frame-rate samples, and uses
 # a deliberately slower recovery threshold to avoid quality oscillation.
@@ -3065,7 +3066,27 @@ func _add_key_action(action: StringName, keys: Array) -> void:
 
 
 func _on_dino_screamed() -> void:
-	_show_status_message(_t("status.roar"))
+	if not is_instance_valid(player):
+		return
+	if str(player.get("diet")) == "herbivore":
+		_show_status_message(_t("status.call_for_help"))
+		var attacker = player.get("last_attacker")
+		if not attacker is Node3D or not is_instance_valid(attacker) or bool(attacker.get("dead")) or player.global_position.distance_to(attacker.global_position) > SCREAM_RESPONSE_RANGE:
+			attacker = null
+		for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+			if not candidate is Node3D or candidate == player or not candidate.has_method("receive_help_call"):
+				continue
+			if str(candidate.get("dino_id")) != str(player.get("dino_id")):
+				continue
+			if player.global_position.distance_to(candidate.global_position) <= SCREAM_RESPONSE_RANGE:
+				candidate.call("receive_help_call", player, attacker)
+	else:
+		_show_status_message(_t("status.fear_roar"))
+		for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
+			if not candidate is Node3D or candidate == player or not candidate.has_method("receive_predator_roar"):
+				continue
+			if player.global_position.distance_to(candidate.global_position) <= SCREAM_RESPONSE_RANGE:
+				candidate.call("receive_predator_roar", player)
 
 
 func _show_status_message(message: String) -> void:
