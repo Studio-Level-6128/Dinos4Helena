@@ -4,10 +4,14 @@ import asyncio
 import base64
 import json
 import os
+import shutil
+import ssl
 import struct
+import tempfile
 import unittest
+from pathlib import Path
 
-from server import GameServer
+from server import GameServer, ensure_tls_certificates
 
 
 async def connect(port, dino):
@@ -94,6 +98,20 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response, {"type": "rejected", "reason": "full"})
         writer.close()
         self.assertEqual(len(self.game.players), 10)
+
+
+class CertificateTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("openssl"), "OpenSSL is required for automatic certificates")
+    def test_self_signed_pair_is_created_and_reused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            certificate, key = ensure_tls_certificates(Path(directory) / "certs", "127.0.0.1")
+            self.assertTrue(certificate.is_file() and key.is_file())
+            self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(certificate, key)
+            original = (certificate.read_bytes(), key.read_bytes())
+            self.assertEqual((certificate, key), ensure_tls_certificates(Path(directory) / "certs", "127.0.0.1"))
+            self.assertEqual(original, (certificate.read_bytes(), key.read_bytes()))
 
 
 if __name__ == "__main__":

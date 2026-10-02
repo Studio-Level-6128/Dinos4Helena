@@ -6,7 +6,7 @@ Choose **Free Game** on the landing page, then select one of seven dinosaurs. Ea
 
 ## Play together
 
-Choose **Multiplayer** on the landing page, select a dinosaur, and enter the server computer's IP address or host name and its port. On a local network, use the host computer's LAN address (for example `192.168.1.50`) and the default port `8765`; leave **Secure connection** unchecked. Check it when the server uses TLS. The app remembers these settings. Up to ten players can share the grassland map.
+Choose **Multiplayer** on the landing page, select a dinosaur, and enter the server computer's IP address or host name and its port. On a local network, use the host computer's LAN address (for example `192.168.1.50`) and the default port `8765`. The server uses TLS by default, so check **Secure connection**. For the server's automatically generated certificate, also check **Allow self-signed certificate**; this encrypts the connection but does not verify the server's identity. The app remembers these settings. Up to ten players can share the grassland map.
 
 The server runs separately from the game. Whoever hosts it can follow the [server setup guide](../server/README.md). `127.0.0.1` works only when the game and server run on the same device.
 

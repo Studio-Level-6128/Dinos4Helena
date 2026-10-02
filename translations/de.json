@@ -16,6 +16,7 @@
   "menu.server_host_placeholder": "z. B. 192.168.1.50",
   "menu.server_port": "PORT",
   "menu.server_secure": "Sichere Verbindung (TLS / wss)",
+  "menu.server_self_signed": "Selbstsigniertes Zertifikat erlauben (Serveridentität ungeprüft)",
   "menu.server_host_invalid": "Gib eine Server-IP oder einen Namen ohne ws:// ein.",
   "menu.server_port_invalid": "Gib einen Port zwischen 1 und 65535 ein.",
   "menu.connect": "VERBINDEN UND SPIELEN",

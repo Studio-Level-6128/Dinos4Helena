@@ -17,11 +17,12 @@ var elapsed := 0.0
 var connect_time := 0.0
 
 
-func connect_to_server(url: String, dino_id: String) -> Error:
+func connect_to_server(url: String, dino_id: String, allow_self_signed := false) -> Error:
 	disconnect_from_server()
 	selected_dino = dino_id
 	socket = WebSocketPeer.new()
-	var result := socket.connect_to_url(url)
+	var tls_options: TLSOptions = TLSOptions.client_unsafe() if allow_self_signed and url.begins_with("wss://") else null
+	var result := socket.connect_to_url(url, tls_options)
 	if result != OK:
 		socket = null
 		return result

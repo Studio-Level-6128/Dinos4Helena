@@ -26,7 +26,7 @@ const MAP_THEMES := ["grassland", "desert", "winter", "volcano"]
 const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x71A7E2, "volcano": 0xB01CA0}
 const QUEST_PROGRESS_PATH := "user://quest_progress.cfg"
 const MULTIPLAYER_SETTINGS_PATH := "user://multiplayer.cfg"
-const DEFAULT_SERVER_URL := "ws://127.0.0.1:8765/"
+const DEFAULT_SERVER_URL := "wss://127.0.0.1:8765/"
 const DEFAULT_SERVER_HOST := "127.0.0.1"
 const DEFAULT_SERVER_PORT := 8765
 const SCREAM_RESPONSE_RANGE := 72.0
@@ -85,6 +85,7 @@ var multiplayer_settings := ConfigFile.new()
 var multiplayer_host_input: LineEdit
 var multiplayer_port_input: LineEdit
 var multiplayer_secure_checkbox: CheckBox
+var multiplayer_self_signed_checkbox: CheckBox
 var multiplayer_status_label: Label
 var multiplayer_connect_button: Button
 var multiplayer_client: Node
@@ -813,11 +814,25 @@ func _build_multiplayer_page() -> void:
 	multiplayer_secure_checkbox.add_theme_font_size_override("font_size", 17)
 	multiplayer_secure_checkbox.add_theme_color_override("font_color", Color("fff2c2"))
 	multiplayer_page.add_child(multiplayer_secure_checkbox)
+	multiplayer_self_signed_checkbox = CheckBox.new()
+	multiplayer_self_signed_checkbox.name = "AllowSelfSignedCertificate"
+	multiplayer_self_signed_checkbox.text = _t("menu.server_self_signed")
+	multiplayer_self_signed_checkbox.button_pressed = bool(connection["allow_self_signed"])
+	multiplayer_self_signed_checkbox.disabled = not multiplayer_secure_checkbox.button_pressed
+	multiplayer_self_signed_checkbox.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_self_signed_checkbox.position = Vector2(-250, 523)
+	multiplayer_self_signed_checkbox.size = Vector2(690, 38)
+	multiplayer_self_signed_checkbox.add_theme_font_size_override("font_size", 16)
+	multiplayer_self_signed_checkbox.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(multiplayer_self_signed_checkbox)
+	multiplayer_secure_checkbox.toggled.connect(func(active: bool) -> void:
+		multiplayer_self_signed_checkbox.disabled = not active
+	)
 	multiplayer_connect_button = Button.new()
 	multiplayer_connect_button.name = "ConnectToServerButton"
 	multiplayer_connect_button.text = _t("menu.connect")
 	multiplayer_connect_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_connect_button.position = Vector2(-190, 545)
+	multiplayer_connect_button.position = Vector2(-190, 569)
 	multiplayer_connect_button.size = Vector2(380, 54)
 	multiplayer_connect_button.add_theme_font_size_override("font_size", 21)
 	multiplayer_connect_button.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
@@ -828,7 +843,7 @@ func _build_multiplayer_page() -> void:
 	multiplayer_status_label.text = _t("menu.multiplayer_hint")
 	multiplayer_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	multiplayer_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_status_label.position = Vector2(-450, 610)
+	multiplayer_status_label.position = Vector2(-450, 640)
 	multiplayer_status_label.size = Vector2(900, 42)
 	multiplayer_status_label.add_theme_font_size_override("font_size", 16)
 	multiplayer_status_label.add_theme_color_override("font_color", Color("fff2c2"))
@@ -857,16 +872,18 @@ func _connect_multiplayer() -> void:
 		return
 	var port := int(port_text)
 	var secure := multiplayer_secure_checkbox.button_pressed
+	var allow_self_signed := secure and multiplayer_self_signed_checkbox.button_pressed
 	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
 	multiplayer_settings.set_value("server", "host", host)
 	multiplayer_settings.set_value("server", "port", port)
 	multiplayer_settings.set_value("server", "secure", secure)
+	multiplayer_settings.set_value("server", "allow_self_signed", allow_self_signed)
 	multiplayer_settings.set_value("server", "url", url)
 	if multiplayer_settings.save(MULTIPLAYER_SETTINGS_PATH) != OK:
 		push_warning("Could not save multiplayer server URL")
 	multiplayer_connect_button.disabled = true
 	multiplayer_status_label.text = _t("menu.connecting")
-	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id)
+	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id, allow_self_signed)
 	if result != OK:
 		_on_multiplayer_failed(error_string(result))
 
@@ -881,7 +898,8 @@ func _saved_multiplayer_connection() -> Dictionary:
 	return {
 		"host": str(multiplayer_settings.get_value("server", "host", old_host if not old_host.is_empty() else DEFAULT_SERVER_HOST)),
 		"port": int(multiplayer_settings.get_value("server", "port", old_port if old_port > 0 else DEFAULT_SERVER_PORT)),
-		"secure": secure
+		"secure": secure,
+		"allow_self_signed": bool(multiplayer_settings.get_value("server", "allow_self_signed", false))
 	}
 
 

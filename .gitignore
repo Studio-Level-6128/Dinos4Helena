@@ -19,6 +19,7 @@ android/
 .DS_Store
 __pycache__/
 *.pyc
+/server/certs/
 # Local secrets
 .env
 .env.*

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Standalone asyncio WebSocket server for one Dinos4Helena grassland world.
 
-Uses only the Python standard library. See README.md for protocol and hosting.
+Uses the Python standard library at runtime and OpenSSL to create a TLS
+certificate on first launch. See README.md for protocol and hosting.
 """
 
 from __future__ import annotations
@@ -11,13 +12,19 @@ import asyncio
 import base64
 import binascii
 import hashlib
+import ipaddress
 import json
 import math
+import os
 import secrets
+import shutil
 import ssl
 import struct
+import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 SPECIES = {
@@ -30,10 +37,51 @@ MAX_PLAYERS = 10
 MAX_MESSAGE_BYTES = 4096
 WORLD_LIMIT = 194.0
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+DEFAULT_CERT_DIR = Path(__file__).resolve().parent / "certs"
 
 
 class ProtocolError(Exception):
     pass
+
+
+def ensure_tls_certificates(cert_dir: Path, certificate_host: str = "localhost") -> tuple[Path, Path]:
+    """Create a persistent self-signed keypair on first run; never overwrite it."""
+    cert_dir = Path(cert_dir)
+    certificate = cert_dir / "server.crt"
+    key = cert_dir / "server.key"
+    if certificate.exists() != key.exists():
+        raise ValueError(f"Incomplete TLS keypair in {cert_dir}; restore the missing file")
+    if certificate.exists():
+        return certificate, key
+    if not certificate_host or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-:" for char in certificate_host):
+        raise ValueError("--cert-host must be an IP address or DNS name")
+    try:
+        ipaddress.ip_address(certificate_host)
+        subject_name = f"IP:{certificate_host}"
+    except ValueError:
+        if ":" in certificate_host:
+            raise ValueError("--cert-host must be an IP address or DNS name") from None
+        subject_name = f"DNS:{certificate_host}"
+    openssl = shutil.which("openssl")
+    if openssl is None:
+        raise RuntimeError("OpenSSL is required once to generate a self-signed certificate; install it or pass --cert and --key")
+    cert_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Temporary files prevent a failed OpenSSL run from leaving a partial pair.
+    with tempfile.TemporaryDirectory(dir=cert_dir) as temporary:
+        temp_cert = Path(temporary) / "server.crt"
+        temp_key = Path(temporary) / "server.key"
+        subprocess.run([
+            openssl, "req", "-x509", "-newkey", "rsa:3072", "-sha256",
+            "-nodes", "-days", "365", "-keyout", str(temp_key),
+            "-out", str(temp_cert), "-subj", f"/CN={certificate_host}",
+            "-addext", f"subjectAltName=DNS:localhost,IP:127.0.0.1,{subject_name}",
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        os.chmod(temp_key, 0o600)
+        os.chmod(temp_cert, 0o644)
+        temp_key.replace(key)
+        temp_cert.replace(certificate)
+    print(f"Created self-signed TLS certificate: {certificate}", flush=True)
+    return certificate, key
 
 
 async def read_frame(reader: asyncio.StreamReader) -> tuple[int, bytes]:
@@ -254,15 +302,24 @@ async def main() -> None:
     parser.add_argument("--seed", type=int, default=424242)
     parser.add_argument("--cert", help="TLS certificate for wss://")
     parser.add_argument("--key", help="TLS private key for wss://")
+    parser.add_argument("--cert-dir", type=Path, default=DEFAULT_CERT_DIR,
+                        help="directory for the automatically generated TLS keypair")
+    parser.add_argument("--cert-host", default="localhost",
+                        help="IP address or DNS name to include in a new certificate")
+    parser.add_argument("--no-tls", action="store_true", help="serve unencrypted ws:// instead of wss://")
     args = parser.parse_args()
     if not 100000 <= args.seed <= 999999:
         parser.error("--seed must be a six-digit world seed")
     if bool(args.cert) != bool(args.key):
         parser.error("--cert and --key must be supplied together")
+    if args.no_tls and args.cert:
+        parser.error("--no-tls cannot be used with --cert and --key")
     context = None
-    if args.cert:
+    if not args.no_tls:
+        cert_path, key_path = (Path(args.cert), Path(args.key)) if args.cert else ensure_tls_certificates(args.cert_dir, args.cert_host)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(args.cert, args.key)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(cert_path, key_path)
     game = GameServer(args.seed)
     server = await asyncio.start_server(game.handle, args.host, args.port, ssl=context)
     print(f"Dinos4Helena server listening on {'wss' if context else 'ws'}://{args.host}:{args.port}/; seed {args.seed}; max {MAX_PLAYERS}", flush=True)

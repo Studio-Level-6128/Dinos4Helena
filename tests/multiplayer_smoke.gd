@@ -26,11 +26,13 @@ func _run() -> void:
 	world._connect_multiplayer()
 	assert(world.multiplayer_status_label.text == world._t("menu.server_port_invalid"), "Invalid server port was accepted")
 	world.multiplayer_port_input.text = "8765"
-	world.multiplayer_secure_checkbox.button_pressed = false
+	world.multiplayer_secure_checkbox.button_pressed = true
+	world.multiplayer_self_signed_checkbox.button_pressed = true
 	world._connect_multiplayer()
 	assert(world.multiplayer_settings.get_value("server", "host") == "127.0.0.1", "Server IP was not saved")
 	assert(int(world.multiplayer_settings.get_value("server", "port")) == 8765, "Server port was not saved")
-	assert(world.multiplayer_settings.get_value("server", "url") == "ws://127.0.0.1:8765/", "Host and port did not produce the expected WebSocket URL")
+	assert(world.multiplayer_settings.get_value("server", "url") == "wss://127.0.0.1:8765/", "Host and port did not produce the expected secure WebSocket URL")
+	assert(bool(world.multiplayer_settings.get_value("server", "allow_self_signed")), "Self-signed certificate choice was not saved")
 	for frame in 900:
 		await process_frame
 		if world.multiplayer_active and is_instance_valid(world.player):
@@ -40,7 +42,7 @@ func _run() -> void:
 	assert(world.player.dino_id == "stegosaurus", "Selected multiplayer dinosaur was not used")
 	assert(world.generated_dinosaurs.is_empty() or world.world_root.find_child("WildDinosaurs", false, false) == null, "Unsynchronized wildlife was created")
 	var second := WebSocketPeer.new()
-	assert(second.connect_to_url("ws://127.0.0.1:8765/") == OK, "Second client could not connect")
+	assert(second.connect_to_url("wss://127.0.0.1:8765/", TLSOptions.client_unsafe()) == OK, "Second client could not connect")
 	for frame in 180:
 		second.poll()
 		if second.get_ready_state() == WebSocketPeer.STATE_OPEN:
