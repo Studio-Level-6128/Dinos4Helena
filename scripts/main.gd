@@ -11,6 +11,8 @@ const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 const POWERUP_TOKEN_SCRIPT := preload("res://scripts/powerup_token.gd")
 const EGG_NEST_SCRIPT := preload("res://scripts/egg_nest.gd")
 const BABY_DINO_SCRIPT := preload("res://scripts/baby_dino.gd")
+const MULTIPLAYER_CLIENT_SCRIPT := preload("res://scripts/multiplayer_client.gd")
+const REMOTE_PLAYER_SCRIPT := preload("res://scripts/remote_player.gd")
 const VIRTUAL_JOYSTICK_SCRIPT := preload("res://scripts/virtual_joystick.gd")
 const LAVA_STREAM_SCRIPT := preload("res://scripts/lava_stream.gd")
 const SNOW_FOOTPRINTS_SCRIPT := preload("res://scripts/snow_footprints.gd")
@@ -23,6 +25,8 @@ const MAP_HALF_SIZE := 200.0
 const MAP_THEMES := ["grassland", "desert", "winter", "volcano"]
 const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x71A7E2, "volcano": 0xB01CA0}
 const QUEST_PROGRESS_PATH := "user://quest_progress.cfg"
+const MULTIPLAYER_SETTINGS_PATH := "user://multiplayer.cfg"
+const DEFAULT_SERVER_URL := "ws://127.0.0.1:8765/"
 const SCREAM_RESPONSE_RANGE := 72.0
 # Adaptive performance starts at full quality. It only reduces expensive
 # rendering features after several sustained low-frame-rate samples, and uses
@@ -56,6 +60,7 @@ var game_hud: CanvasLayer
 var menu_layer: CanvasLayer
 var landing_page: Control
 var free_game_page: Control
+var multiplayer_page: Control
 var quest_overview_page: Control
 var quest_detail_page: Control
 var credits_overlay: Control
@@ -73,6 +78,15 @@ var selected_dino_name := ""
 var selected_dino_id := "trex"
 var selected_map_theme := "grassland"
 var dino_cards: Dictionary = {}
+var multiplayer_dino_cards: Dictionary = {}
+var multiplayer_settings := ConfigFile.new()
+var multiplayer_url_input: LineEdit
+var multiplayer_status_label: Label
+var multiplayer_connect_button: Button
+var multiplayer_client: Node
+var multiplayer_active := false
+var multiplayer_id := 0
+var remote_players: Dictionary = {}
 var map_theme_buttons: Dictionary = {}
 var start_game_button: Button
 var dinosaur_config := ConfigFile.new()
@@ -143,6 +157,14 @@ func _ready() -> void:
 	var progress_error := quest_progress.load(quest_progress_path)
 	if progress_error != OK and progress_error != ERR_FILE_NOT_FOUND:
 		push_warning("Could not load quest progress: %s" % error_string(progress_error))
+	multiplayer_settings.load(MULTIPLAYER_SETTINGS_PATH)
+	multiplayer_client = MULTIPLAYER_CLIENT_SCRIPT.new()
+	multiplayer_client.name = "MultiplayerClient"
+	add_child(multiplayer_client)
+	multiplayer_client.welcome_received.connect(_on_multiplayer_welcome)
+	multiplayer_client.message_received.connect(_on_multiplayer_message)
+	multiplayer_client.connection_failed.connect(_on_multiplayer_failed)
+	multiplayer_client.disconnected.connect(_on_multiplayer_disconnected)
 	_create_input_actions()
 	_build_main_menu()
 	_build_splash_screen()
@@ -205,11 +227,13 @@ func _start_game(dino_id: String) -> void:
 	_build_clouds()
 	_build_ambient_audio()
 	_build_landscape()
-	_build_powerup_tokens()
+	if not multiplayer_active:
+		_build_powerup_tokens()
 	_build_player(dino_id)
-	_build_egg_nests()
-	_build_wild_dinosaurs()
-	_build_mission_babies()
+	if not multiplayer_active:
+		_build_egg_nests()
+		_build_wild_dinosaurs()
+		_build_mission_babies()
 	_build_snow_footprints()
 	_build_hud()
 	_play_mission_intro()
@@ -219,6 +243,12 @@ func _start_game(dino_id: String) -> void:
 
 func _return_to_main_menu() -> void:
 	var return_to_quest := active_quest_id != ""
+	var return_to_multiplayer := multiplayer_active
+	if multiplayer_active:
+		multiplayer_client.disconnect_from_server()
+		multiplayer_active = false
+		multiplayer_id = 0
+		remote_players.clear()
 	if is_instance_valid(active_mission_event):
 		active_mission_event.queue_free()
 	active_mission_event = null
@@ -243,6 +273,8 @@ func _return_to_main_menu() -> void:
 	get_viewport().scaling_3d_scale = 1.0
 	if return_to_quest:
 		_show_quest_page(active_quest_id)
+	elif return_to_multiplayer:
+		_show_multiplayer_page()
 	else:
 		_show_free_game_page()
 	active_mission_id = ""
@@ -312,6 +344,11 @@ func _build_main_menu() -> void:
 	free_game_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(free_game_page)
 	free_game_page.hide()
+	multiplayer_page = Control.new()
+	multiplayer_page.name = "MultiplayerPage"
+	multiplayer_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(multiplayer_page)
+	multiplayer_page.hide()
 
 	var title := Label.new()
 	title.text = _t("app.title")
@@ -342,16 +379,16 @@ func _build_main_menu() -> void:
 	var mode_tiles := HBoxContainer.new()
 	mode_tiles.name = "GameModeTiles"
 	mode_tiles.set_anchors_preset(Control.PRESET_CENTER)
-	mode_tiles.position = Vector2(-344, -110)
-	mode_tiles.size = Vector2(688, 238)
+	mode_tiles.position = Vector2(-474, -110)
+	mode_tiles.size = Vector2(948, 238)
 	mode_tiles.alignment = BoxContainer.ALIGNMENT_CENTER
-	mode_tiles.add_theme_constant_override("separation", 28)
+	mode_tiles.add_theme_constant_override("separation", 18)
 	landing_page.add_child(mode_tiles)
 
 	var quests_tile := Button.new()
 	quests_tile.name = "QuestsTile"
 	quests_tile.text = _t("menu.quests")
-	quests_tile.custom_minimum_size = Vector2(330, 220)
+	quests_tile.custom_minimum_size = Vector2(304, 210)
 	quests_tile.focus_mode = Control.FOCUS_NONE
 	quests_tile.tooltip_text = _t("menu.quests_tooltip")
 	quests_tile.add_theme_font_size_override("font_size", 25)
@@ -370,7 +407,7 @@ func _build_main_menu() -> void:
 	var free_game_tile := Button.new()
 	free_game_tile.name = "FreeGameTile"
 	free_game_tile.text = _t("menu.free_game_tile")
-	free_game_tile.custom_minimum_size = Vector2(330, 220)
+	free_game_tile.custom_minimum_size = Vector2(304, 210)
 	free_game_tile.focus_mode = Control.FOCUS_NONE
 	free_game_tile.add_theme_font_size_override("font_size", 25)
 	free_game_tile.add_theme_color_override("font_color", Color("fff2c2"))
@@ -385,6 +422,24 @@ func _build_main_menu() -> void:
 	free_game_tile.pressed.connect(_show_free_game_page)
 	_add_tile_rim(free_game_tile)
 	mode_tiles.add_child(free_game_tile)
+
+	var multiplayer_tile := Button.new()
+	multiplayer_tile.name = "MultiplayerTile"
+	multiplayer_tile.text = _t("menu.multiplayer_tile")
+	multiplayer_tile.custom_minimum_size = Vector2(304, 210)
+	multiplayer_tile.focus_mode = Control.FOCUS_NONE
+	multiplayer_tile.add_theme_font_size_override("font_size", 25)
+	multiplayer_tile.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_tile.add_theme_color_override("font_hover_color", Color.WHITE)
+	multiplayer_tile.add_theme_color_override("font_outline_color", Color(0.01, 0.025, 0.015, 0.96))
+	multiplayer_tile.add_theme_constant_override("outline_size", 8)
+	var multiplayer_art: Texture2D = load("res://assets/ui/menu/multiplayer-tile.png")
+	multiplayer_tile.add_theme_stylebox_override("normal", _tile_image_style(multiplayer_art, Color(0.72, 0.72, 0.68)))
+	multiplayer_tile.add_theme_stylebox_override("hover", _tile_image_style(multiplayer_art, Color(0.95, 0.95, 0.88)))
+	multiplayer_tile.add_theme_stylebox_override("pressed", _tile_image_style(multiplayer_art, Color(0.58, 0.60, 0.54)))
+	multiplayer_tile.pressed.connect(_show_multiplayer_page)
+	_add_tile_rim(multiplayer_tile)
+	mode_tiles.add_child(multiplayer_tile)
 
 	var free_game_title := Label.new()
 	free_game_title.text = _t("menu.free_game")
@@ -419,6 +474,7 @@ func _build_main_menu() -> void:
 	free_game_page.add_child(prompt)
 
 	dino_cards.clear()
+	multiplayer_dino_cards.clear()
 	var cards := VBoxContainer.new()
 	cards.name = "DinosaurCards"
 	cards.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -570,6 +626,7 @@ func _build_main_menu() -> void:
 	_build_credits_overlay(root)
 	_build_play_guide_overlay(root)
 	_build_quest_pages(root)
+	_build_multiplayer_page()
 
 
 func _build_language_selector(parent: Control) -> void:
@@ -639,19 +696,222 @@ func _start_selected_game() -> void:
 
 
 func _update_dino_card_selection() -> void:
-	for dino_id in dino_cards:
-		var panel := dino_cards[dino_id] as PanelContainer
-		var selected := str(dino_id) == selected_dino_id
-		panel.add_theme_stylebox_override("panel", _card_style(selected))
-		var marker := panel.find_child("SelectedMarker", true, false) as Label
-		var shade := panel.find_child("SelectionShade", true, false) as ColorRect
-		var stats := panel.find_child("SelectedStats", true, false) as GridContainer
-		if marker:
-			marker.visible = selected
-		if shade:
-			shade.visible = selected
-		if stats:
-			stats.visible = selected
+	for collection in [dino_cards, multiplayer_dino_cards]:
+		for dino_id in collection:
+			var panel := collection[dino_id] as PanelContainer
+			_set_dino_card_selected(panel, str(dino_id) == selected_dino_id)
+
+
+func _set_dino_card_selected(panel: PanelContainer, selected: bool) -> void:
+	panel.add_theme_stylebox_override("panel", _card_style(selected))
+	var marker := panel.find_child("SelectedMarker", true, false) as Label
+	var shade := panel.find_child("SelectionShade", true, false) as ColorRect
+	var stats := panel.find_child("SelectedStats", true, false) as GridContainer
+	if marker:
+		marker.visible = selected
+	if shade:
+		shade.visible = selected
+	if stats:
+		stats.visible = selected
+
+
+func _build_multiplayer_page() -> void:
+	var heading := Label.new()
+	heading.name = "MultiplayerHeading"
+	heading.text = _t("menu.multiplayer_title")
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	heading.position = Vector2(-330, 10)
+	heading.size = Vector2(660, 48)
+	heading.add_theme_font_size_override("font_size", 32)
+	heading.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(heading)
+	var back := Button.new()
+	back.name = "MultiplayerBackButton"
+	back.text = _t("menu.back")
+	back.position = Vector2(20, 14)
+	back.size = Vector2(126, 40)
+	back.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42)))
+	back.pressed.connect(_show_landing_page)
+	multiplayer_page.add_child(back)
+	var prompt := Label.new()
+	prompt.text = _t("menu.choose_dinosaur")
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	prompt.position = Vector2(-300, 60)
+	prompt.size = Vector2(600, 30)
+	prompt.add_theme_font_size_override("font_size", 18)
+	prompt.add_theme_color_override("font_color", Color.WHITE)
+	multiplayer_page.add_child(prompt)
+	multiplayer_dino_cards.clear()
+	var cards := VBoxContainer.new()
+	cards.name = "MultiplayerDinosaurCards"
+	cards.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	cards.position = Vector2(-430, 88)
+	cards.size = Vector2(860, 326)
+	cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards.add_theme_constant_override("separation", 6)
+	multiplayer_page.add_child(cards)
+	var rows: Array[HBoxContainer] = []
+	for row_index in 2:
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 10)
+		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		cards.add_child(row)
+		rows.append(row)
+	for index in DINO_IDS.size():
+		var dino_id: String = DINO_IDS[index]
+		rows[0 if index < 4 else 1].add_child(_create_dino_card(dino_id, _dino_name(dino_id), true))
+	var address_label := Label.new()
+	address_label.text = _t("menu.server_address")
+	address_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	address_label.position = Vector2(-390, 446)
+	address_label.size = Vector2(180, 38)
+	address_label.add_theme_font_size_override("font_size", 18)
+	address_label.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(address_label)
+	multiplayer_url_input = LineEdit.new()
+	multiplayer_url_input.name = "ServerUrl"
+	multiplayer_url_input.text = str(multiplayer_settings.get_value("server", "url", DEFAULT_SERVER_URL))
+	multiplayer_url_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_url_input.position = Vector2(-185, 438)
+	multiplayer_url_input.size = Vector2(560, 44)
+	multiplayer_url_input.add_theme_font_size_override("font_size", 18)
+	multiplayer_url_input.placeholder_text = DEFAULT_SERVER_URL
+	multiplayer_page.add_child(multiplayer_url_input)
+	multiplayer_connect_button = Button.new()
+	multiplayer_connect_button.name = "ConnectToServerButton"
+	multiplayer_connect_button.text = _t("menu.connect")
+	multiplayer_connect_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_connect_button.position = Vector2(-190, 515)
+	multiplayer_connect_button.size = Vector2(380, 54)
+	multiplayer_connect_button.add_theme_font_size_override("font_size", 21)
+	multiplayer_connect_button.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
+	multiplayer_connect_button.pressed.connect(_connect_multiplayer)
+	multiplayer_page.add_child(multiplayer_connect_button)
+	multiplayer_status_label = Label.new()
+	multiplayer_status_label.name = "MultiplayerStatus"
+	multiplayer_status_label.text = _t("menu.multiplayer_hint")
+	multiplayer_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	multiplayer_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_status_label.position = Vector2(-450, 590)
+	multiplayer_status_label.size = Vector2(900, 42)
+	multiplayer_status_label.add_theme_font_size_override("font_size", 16)
+	multiplayer_status_label.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(multiplayer_status_label)
+
+
+func _show_multiplayer_page() -> void:
+	landing_page.hide()
+	free_game_page.hide()
+	quest_overview_page.hide()
+	quest_detail_page.hide()
+	multiplayer_page.show()
+	_update_dino_card_selection()
+	if is_instance_valid(multiplayer_connect_button):
+		multiplayer_connect_button.disabled = false
+
+
+func _connect_multiplayer() -> void:
+	var url := multiplayer_url_input.text.strip_edges()
+	if not (url.begins_with("ws://") or url.begins_with("wss://")) or url.contains(" "):
+		multiplayer_status_label.text = _t("menu.server_url_invalid")
+		return
+	multiplayer_settings.set_value("server", "url", url)
+	if multiplayer_settings.save(MULTIPLAYER_SETTINGS_PATH) != OK:
+		push_warning("Could not save multiplayer server URL")
+	multiplayer_connect_button.disabled = true
+	multiplayer_status_label.text = _t("menu.connecting")
+	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id)
+	if result != OK:
+		_on_multiplayer_failed(error_string(result))
+
+
+func _on_multiplayer_welcome(message: Dictionary) -> void:
+	var seed := int(message.get("seed", 0))
+	if message.get("map") != "grassland" or seed < 100000 or seed > 999999 or not message.get("spawn") is Dictionary:
+		_on_multiplayer_failed("protocol")
+		multiplayer_client.disconnect_from_server()
+		return
+	active_quest_id = ""
+	active_mission_id = ""
+	multiplayer_active = true
+	multiplayer_id = int(message.get("id", 0))
+	selected_map_theme = "grassland"
+	seed_input.text = "%06d" % seed
+	map_seed = seed
+	_start_game(selected_dino_id)
+	var spawn: Dictionary = message["spawn"]
+	player.global_position = Vector3(float(spawn.get("x", 0.0)), float(spawn.get("y", 0.1)), float(spawn.get("z", 0.0)))
+	for peer in message.get("players", []):
+		if peer is Dictionary:
+			_upsert_remote_player(peer, true)
+
+
+func _on_multiplayer_message(message: Dictionary) -> void:
+	if not multiplayer_active or not is_instance_valid(world_root):
+		return
+	match str(message.get("type", "")):
+		"joined":
+			if message.get("player") is Dictionary:
+				_upsert_remote_player(message["player"], true)
+		"state":
+			if message.get("player") is Dictionary:
+				_upsert_remote_player(message["player"])
+		"left":
+			var peer_id := int(message.get("id", 0))
+			if remote_players.has(peer_id):
+				(remote_players[peer_id] as Node).queue_free()
+				remote_players.erase(peer_id)
+		"hit":
+			var target_id := int(message.get("target", 0))
+			var remaining := maxi(int(message.get("health", 0)), 0)
+			if target_id == multiplayer_id and is_instance_valid(player):
+				if remaining < player.health:
+					player.take_damage(player.health - remaining)
+				elif remaining > player.health:
+					player.restore_health(remaining - player.health)
+			elif remote_players.has(target_id):
+				remote_players[target_id].set_health(remaining)
+		"scream":
+			pass
+
+
+func _upsert_remote_player(data: Dictionary, immediate := false) -> void:
+	var peer_id := int(data.get("id", 0))
+	if peer_id == 0 or peer_id == multiplayer_id:
+		return
+	var remote: Node3D = remote_players.get(peer_id)
+	if not is_instance_valid(remote):
+		remote = REMOTE_PLAYER_SCRIPT.new()
+		remote.name = "RemotePlayer_%d" % peer_id
+		remote.set("identifier", peer_id)
+		remote.set("dino_id", str(data.get("dino", "triceratops")))
+		world_root.add_child(remote)
+		remote_players[peer_id] = remote
+		_register_quality_geometry(remote, "actor")
+		immediate = true
+	remote.call("set_network_state", data, immediate)
+
+
+func _on_multiplayer_failed(reason: String) -> void:
+	if is_instance_valid(multiplayer_connect_button):
+		multiplayer_connect_button.disabled = false
+	if is_instance_valid(multiplayer_status_label):
+		multiplayer_status_label.text = _t("menu.server_full") if reason == "full" else (_t("menu.server_unreachable") if reason in ["timeout", "unreachable"] else _t("menu.server_rejected"))
+
+
+func _on_multiplayer_disconnected() -> void:
+	if multiplayer_active:
+		_return_to_main_menu()
+	if is_instance_valid(multiplayer_status_label):
+		multiplayer_status_label.text = _t("menu.server_disconnected")
+
+
+func _on_player_attacked() -> void:
+	if multiplayer_active:
+		multiplayer_client.send_action("attack")
 
 
 func _update_map_theme_selection() -> void:
@@ -683,6 +943,7 @@ func _show_free_game_page() -> void:
 	landing_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.hide()
+	multiplayer_page.hide()
 	free_game_page.show()
 	_update_dino_card_selection()
 	_update_map_theme_selection()
@@ -695,6 +956,7 @@ func _show_landing_page() -> void:
 	if is_instance_valid(play_guide_overlay):
 		play_guide_overlay.hide()
 	free_game_page.hide()
+	multiplayer_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.hide()
 	landing_page.show()
@@ -801,6 +1063,7 @@ func _show_quest_overview() -> void:
 		play_guide_overlay.hide()
 	landing_page.hide()
 	free_game_page.hide()
+	multiplayer_page.hide()
 	quest_detail_page.hide()
 	quest_overview_page.show()
 
@@ -865,6 +1128,7 @@ func _show_quest_page(quest_id: String) -> void:
 		mission_grid.add_child(button)
 	landing_page.hide()
 	free_game_page.hide()
+	multiplayer_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.show()
 
@@ -1261,13 +1525,16 @@ func _credits_style() -> StyleBoxFlat:
 	return style
 
 
-func _create_dino_card(dino_id: String, display_name: String) -> Control:
+func _create_dino_card(dino_id: String, display_name: String, for_multiplayer := false) -> Control:
 	var panel := PanelContainer.new()
 	panel.name = "DinoCard_%s" % dino_id
 	panel.custom_minimum_size = Vector2(202, 154)
 	panel.set_meta("dino_id", dino_id)
 	panel.add_theme_stylebox_override("panel", _card_style(dino_id == selected_dino_id))
-	dino_cards[dino_id] = panel
+	if for_multiplayer:
+		multiplayer_dino_cards[dino_id] = panel
+	else:
+		dino_cards[dino_id] = panel
 
 	# Cards stay image-first until selected. The chosen portrait is dimmed and
 	# reveals its configured abilities in the same space.
@@ -1922,12 +2189,15 @@ func _build_player(dino_id: String) -> void:
 	player.position = Vector3(0.0, 0.1, 58.0) if selected_map_theme == "volcano" else mission_player_start
 	world_root.add_child(player)
 	player.screamed.connect(_on_dino_screamed)
+	player.attacked.connect(_on_player_attacked)
 	player.health_changed.connect(_on_health_changed)
 	player.energy_changed.connect(_on_energy_changed)
 	player.bonuses_changed.connect(_on_bonuses_changed)
 	player.poisoning_changed.connect(_on_poisoning_changed)
 	player.died.connect(_on_player_died)
 	player.status_requested.connect(_show_status_message)
+	if multiplayer_active:
+		multiplayer_client.player = player
 
 
 func _build_wild_dinosaurs() -> void:
@@ -2168,7 +2438,7 @@ func _build_hud() -> void:
 
 	var menu_button := Button.new()
 	menu_button.name = "ReturnToMissionButton" if not active_mission_id.is_empty() else "ReturnToFreeGameButton"
-	menu_button.text = _t("hud.return_missions") if not active_mission_id.is_empty() else _t("hud.return_free_game")
+	menu_button.text = _t("hud.return_missions") if not active_mission_id.is_empty() else (_t("hud.return_multiplayer") if multiplayer_active else _t("hud.return_free_game"))
 	menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	menu_button.position = Vector2(-190, 16)
 	menu_button.size = Vector2(170, 46)
@@ -3068,6 +3338,8 @@ func _add_key_action(action: StringName, keys: Array) -> void:
 func _on_dino_screamed() -> void:
 	if not is_instance_valid(player):
 		return
+	if multiplayer_active:
+		multiplayer_client.send_action("scream")
 	if str(player.get("diet")) == "herbivore":
 		_show_status_message(_t("status.call_for_help"))
 		var attacker = player.get("last_attacker")
@@ -3136,6 +3408,8 @@ func _on_bonuses_changed(speed_seconds: float, strength_seconds: float) -> void:
 
 
 func _on_player_died() -> void:
+	if multiplayer_active:
+		multiplayer_client.disconnect_from_server()
 	_show_status_message(_t("game_over.fallen"))
 	var overlay := ColorRect.new()
 	overlay.name = "GameOver"

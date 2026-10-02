@@ -17,6 +17,8 @@ android/
 # Editor and OS noise
 *.log
 .DS_Store
+__pycache__/
+*.pyc
 # Local secrets
 .env
 .env.*

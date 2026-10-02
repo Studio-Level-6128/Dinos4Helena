@@ -6,6 +6,7 @@ extends CharacterBody3D
 const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 
 signal screamed
+signal attacked
 signal health_changed(current_health: int, maximum_health: int)
 signal energy_changed(current_energy: float, maximum_energy: float)
 signal bonuses_changed(speed_seconds: float, strength_seconds: float)
@@ -342,6 +343,7 @@ func _perform_attack_hit() -> void:
 	# test prevents targets behind the player from being struck.
 	if dead:
 		return
+	attacked.emit()
 	var forward := -global_transform.basis.z.normalized()
 	var closest_target: Node3D
 	var closest_distance := collision_radius + 3.8

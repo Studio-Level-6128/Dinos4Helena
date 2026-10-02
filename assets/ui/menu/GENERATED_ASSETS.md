@@ -50,6 +50,14 @@ The generated file is `quests-tile.png`. The game darkens it to communicate that
 
 The generated file is `free-game-tile.png`. Godot applies brighter hover and darker pressed states while rendering the tile label natively for clarity.
 
+## Multiplayer tile
+
+Generated on 2026-10-02 with Codex's built-in image-generation tool, then cropped and resized to 768×512 for the landing page.
+
+> Photorealistic cinematic natural-history game art of distinct Triceratops, Tyrannosaurus, Stegosaurus, and Parasaurolophus peacefully exploring one lush prehistoric grassland map together. Fern meadow, stream, cycads, distant hills, golden daylight, wide 3:2 composition with room for a game-rendered lower label. No text, logos, border, UI, watermark, humans, fighting, or gore.
+
+The generated file is `multiplayer-tile.png`.
+
 ## Free Game map-theme previews
 
 Generated on 2026-09-25 with Codex's built-in image-generation tool, then cropped and resized to 512 by 288 pixels for compact Android menu tiles.
