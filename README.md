@@ -2,9 +2,9 @@
 
 A mobile-first 3D Android game built with Godot 4 and GDScript. The current playable prototype has seven selectable animated dinosaurs, a third-person follow camera, two-handed touch controls, species-specific sound design, and a procedural prehistoric valley.
 
-See the [player guide](docs/PLAY_GUIDE.md) for the complete game rules, the [development guide](docs/DEVELOPMENT.md) for project architecture and builds, and the [quest-authoring guide](docs/QUEST_AUTHORING.md) for adding campaigns and missions.
+See the [player guide](docs/PLAY_GUIDE.md) for the complete game rules, the [multiplayer server setup guide](server/README.md) for running a separate host, the [development guide](docs/DEVELOPMENT.md) for project architecture and builds, and the [quest-authoring guide](docs/QUEST_AUTHORING.md) for adding campaigns and missions.
 
-The game opens with a generated cinematic dinosaur-fight splash, followed by a clean **DINOS4HELENA** landing page with `QUESTS`, `FREE GAME`, and `CREDITS`. `QUESTS` opens a config-driven campaign browser. Its first campaign, **Getting Started**, contains six grassland missions covering grazing, exploration, herd behavior, breeding, hunting, and pack defense. `FREE GAME` opens a separate setup page where the player chooses T-Rex, Spinosaurus, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus and sets the world seed. `HOW TO PLAY` is available there, and the top-right menu button returns from gameplay to the appropriate setup page.
+The game opens with a generated cinematic dinosaur-fight splash, followed by a clean **DINOS4HELENA** landing page with `QUESTS`, `FREE GAME`, `MULTIPLAYER`, and `CREDITS`. `QUESTS` opens a config-driven campaign browser. Its first campaign, **Getting Started**, contains six grassland missions covering grazing, exploration, herd behavior, breeding, hunting, and pack defense. `FREE GAME` opens a separate setup page where the player chooses T-Rex, Spinosaurus, Triceratops, Stegosaurus, Velociraptor, Parasaurolophus, or Apatosaurus and sets the world seed. `MULTIPLAYER` lets players select a dinosaur and connect to a shared grassland server using its IP or host name and port. `HOW TO PLAY` is available in Free Game, and the top-right menu button returns from gameplay to the appropriate setup page.
 
 ## Play the prototype
 

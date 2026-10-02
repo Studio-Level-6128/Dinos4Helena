@@ -2,7 +2,13 @@
 
 ## Start an adventure
 
-Choose one of the six dinosaurs on the landing page. Each species has different speed, strength, health and jumping ability. Enter a six-digit world seed to revisit the same valley, or select **New Random Seed**.
+Choose **Free Game** on the landing page, then select one of seven dinosaurs. Each species has different speed, strength, health and jumping ability. Enter a six-digit world seed to revisit the same valley, or select **New Random Seed**.
+
+## Play together
+
+Choose **Multiplayer** on the landing page, select a dinosaur, and enter the server computer's IP address or host name and its port. On a local network, use the host computer's LAN address (for example `192.168.1.50`) and the default port `8765`; leave **Secure connection** unchecked. Check it when the server uses TLS. The app remembers these settings. Up to ten players can share the grassland map.
+
+The server runs separately from the game. Whoever hosts it can follow the [server setup guide](../server/README.md). `127.0.0.1` works only when the game and server run on the same device.
 
 ## Controls
 

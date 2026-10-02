@@ -27,6 +27,8 @@ const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x7
 const QUEST_PROGRESS_PATH := "user://quest_progress.cfg"
 const MULTIPLAYER_SETTINGS_PATH := "user://multiplayer.cfg"
 const DEFAULT_SERVER_URL := "ws://127.0.0.1:8765/"
+const DEFAULT_SERVER_HOST := "127.0.0.1"
+const DEFAULT_SERVER_PORT := 8765
 const SCREAM_RESPONSE_RANGE := 72.0
 # Adaptive performance starts at full quality. It only reduces expensive
 # rendering features after several sustained low-frame-rate samples, and uses
@@ -80,7 +82,9 @@ var selected_map_theme := "grassland"
 var dino_cards: Dictionary = {}
 var multiplayer_dino_cards: Dictionary = {}
 var multiplayer_settings := ConfigFile.new()
-var multiplayer_url_input: LineEdit
+var multiplayer_host_input: LineEdit
+var multiplayer_port_input: LineEdit
+var multiplayer_secure_checkbox: CheckBox
 var multiplayer_status_label: Label
 var multiplayer_connect_button: Button
 var multiplayer_client: Node
@@ -763,28 +767,57 @@ func _build_multiplayer_page() -> void:
 	for index in DINO_IDS.size():
 		var dino_id: String = DINO_IDS[index]
 		rows[0 if index < 4 else 1].add_child(_create_dino_card(dino_id, _dino_name(dino_id), true))
-	var address_label := Label.new()
-	address_label.text = _t("menu.server_address")
-	address_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	address_label.position = Vector2(-390, 446)
-	address_label.size = Vector2(180, 38)
-	address_label.add_theme_font_size_override("font_size", 18)
-	address_label.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(address_label)
-	multiplayer_url_input = LineEdit.new()
-	multiplayer_url_input.name = "ServerUrl"
-	multiplayer_url_input.text = str(multiplayer_settings.get_value("server", "url", DEFAULT_SERVER_URL))
-	multiplayer_url_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_url_input.position = Vector2(-185, 438)
-	multiplayer_url_input.size = Vector2(560, 44)
-	multiplayer_url_input.add_theme_font_size_override("font_size", 18)
-	multiplayer_url_input.placeholder_text = DEFAULT_SERVER_URL
-	multiplayer_page.add_child(multiplayer_url_input)
+	var connection := _saved_multiplayer_connection()
+	var host_label := Label.new()
+	host_label.text = _t("menu.server_host")
+	host_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	host_label.position = Vector2(-440, 444)
+	host_label.size = Vector2(180, 38)
+	host_label.add_theme_font_size_override("font_size", 18)
+	host_label.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(host_label)
+	multiplayer_host_input = LineEdit.new()
+	multiplayer_host_input.name = "ServerHost"
+	multiplayer_host_input.text = str(connection["host"])
+	multiplayer_host_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_host_input.position = Vector2(-255, 438)
+	multiplayer_host_input.size = Vector2(390, 44)
+	multiplayer_host_input.add_theme_font_size_override("font_size", 18)
+	multiplayer_host_input.placeholder_text = _t("menu.server_host_placeholder")
+	multiplayer_page.add_child(multiplayer_host_input)
+	var port_label := Label.new()
+	port_label.text = _t("menu.server_port")
+	port_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	port_label.position = Vector2(150, 444)
+	port_label.size = Vector2(70, 38)
+	port_label.add_theme_font_size_override("font_size", 18)
+	port_label.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(port_label)
+	multiplayer_port_input = LineEdit.new()
+	multiplayer_port_input.name = "ServerPort"
+	multiplayer_port_input.text = str(connection["port"])
+	multiplayer_port_input.max_length = 5
+	multiplayer_port_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	multiplayer_port_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_port_input.position = Vector2(225, 438)
+	multiplayer_port_input.size = Vector2(130, 44)
+	multiplayer_port_input.add_theme_font_size_override("font_size", 18)
+	multiplayer_page.add_child(multiplayer_port_input)
+	multiplayer_secure_checkbox = CheckBox.new()
+	multiplayer_secure_checkbox.name = "SecureConnection"
+	multiplayer_secure_checkbox.text = _t("menu.server_secure")
+	multiplayer_secure_checkbox.button_pressed = bool(connection["secure"])
+	multiplayer_secure_checkbox.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_secure_checkbox.position = Vector2(-250, 489)
+	multiplayer_secure_checkbox.size = Vector2(500, 40)
+	multiplayer_secure_checkbox.add_theme_font_size_override("font_size", 17)
+	multiplayer_secure_checkbox.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(multiplayer_secure_checkbox)
 	multiplayer_connect_button = Button.new()
 	multiplayer_connect_button.name = "ConnectToServerButton"
 	multiplayer_connect_button.text = _t("menu.connect")
 	multiplayer_connect_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_connect_button.position = Vector2(-190, 515)
+	multiplayer_connect_button.position = Vector2(-190, 545)
 	multiplayer_connect_button.size = Vector2(380, 54)
 	multiplayer_connect_button.add_theme_font_size_override("font_size", 21)
 	multiplayer_connect_button.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
@@ -795,7 +828,7 @@ func _build_multiplayer_page() -> void:
 	multiplayer_status_label.text = _t("menu.multiplayer_hint")
 	multiplayer_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	multiplayer_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_status_label.position = Vector2(-450, 590)
+	multiplayer_status_label.position = Vector2(-450, 610)
 	multiplayer_status_label.size = Vector2(900, 42)
 	multiplayer_status_label.add_theme_font_size_override("font_size", 16)
 	multiplayer_status_label.add_theme_color_override("font_color", Color("fff2c2"))
@@ -814,10 +847,20 @@ func _show_multiplayer_page() -> void:
 
 
 func _connect_multiplayer() -> void:
-	var url := multiplayer_url_input.text.strip_edges()
-	if not (url.begins_with("ws://") or url.begins_with("wss://")) or url.contains(" "):
-		multiplayer_status_label.text = _t("menu.server_url_invalid")
+	var host := multiplayer_host_input.text.strip_edges()
+	var port_text := multiplayer_port_input.text.strip_edges()
+	if host.is_empty() or host.contains(" ") or host.contains("/") or host.contains("@") or host.contains("?") or host.contains("#") or host.contains(":"):
+		multiplayer_status_label.text = _t("menu.server_host_invalid")
 		return
+	if not port_text.is_valid_int() or int(port_text) < 1 or int(port_text) > 65535:
+		multiplayer_status_label.text = _t("menu.server_port_invalid")
+		return
+	var port := int(port_text)
+	var secure := multiplayer_secure_checkbox.button_pressed
+	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
+	multiplayer_settings.set_value("server", "host", host)
+	multiplayer_settings.set_value("server", "port", port)
+	multiplayer_settings.set_value("server", "secure", secure)
 	multiplayer_settings.set_value("server", "url", url)
 	if multiplayer_settings.save(MULTIPLAYER_SETTINGS_PATH) != OK:
 		push_warning("Could not save multiplayer server URL")
@@ -826,6 +869,20 @@ func _connect_multiplayer() -> void:
 	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id)
 	if result != OK:
 		_on_multiplayer_failed(error_string(result))
+
+
+func _saved_multiplayer_connection() -> Dictionary:
+	# Preserve addresses entered in versions that used one WebSocket URL field.
+	var old_url := str(multiplayer_settings.get_value("server", "url", DEFAULT_SERVER_URL))
+	var secure := bool(multiplayer_settings.get_value("server", "secure", old_url.begins_with("wss://")))
+	var address := old_url.trim_prefix("wss://").trim_prefix("ws://").get_slice("/", 0)
+	var old_host := address.get_slice(":", 0)
+	var old_port := int(address.get_slice(":", 1)) if address.contains(":") else DEFAULT_SERVER_PORT
+	return {
+		"host": str(multiplayer_settings.get_value("server", "host", old_host if not old_host.is_empty() else DEFAULT_SERVER_HOST)),
+		"port": int(multiplayer_settings.get_value("server", "port", old_port if old_port > 0 else DEFAULT_SERVER_PORT)),
+		"secure": secure
+	}
 
 
 func _on_multiplayer_welcome(message: Dictionary) -> void:

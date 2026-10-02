@@ -14,9 +14,23 @@ func _run() -> void:
 	assert(tile != null and tile.disabled == false, "Multiplayer landing tile is missing")
 	world._show_multiplayer_page()
 	assert(world.multiplayer_page.visible and world.multiplayer_dino_cards.size() == 7, "Multiplayer dinosaur selection is incomplete")
+	world.multiplayer_settings.set_value("server", "url", "wss://games.example.org:9443/")
+	world.multiplayer_settings.erase_section_key("server", "host")
+	world.multiplayer_settings.erase_section_key("server", "port")
+	world.multiplayer_settings.erase_section_key("server", "secure")
+	var migrated: Dictionary = world._saved_multiplayer_connection()
+	assert(migrated["host"] == "games.example.org" and int(migrated["port"]) == 9443 and bool(migrated["secure"]), "Previously saved server URL was not migrated")
 	world._select_dino("stegosaurus")
-	world.multiplayer_url_input.text = "ws://127.0.0.1:8765/"
+	world.multiplayer_host_input.text = "127.0.0.1"
+	world.multiplayer_port_input.text = "0"
 	world._connect_multiplayer()
+	assert(world.multiplayer_status_label.text == world._t("menu.server_port_invalid"), "Invalid server port was accepted")
+	world.multiplayer_port_input.text = "8765"
+	world.multiplayer_secure_checkbox.button_pressed = false
+	world._connect_multiplayer()
+	assert(world.multiplayer_settings.get_value("server", "host") == "127.0.0.1", "Server IP was not saved")
+	assert(int(world.multiplayer_settings.get_value("server", "port")) == 8765, "Server port was not saved")
+	assert(world.multiplayer_settings.get_value("server", "url") == "ws://127.0.0.1:8765/", "Host and port did not produce the expected WebSocket URL")
 	for frame in 900:
 		await process_frame
 		if world.multiplayer_active and is_instance_valid(world.player):
