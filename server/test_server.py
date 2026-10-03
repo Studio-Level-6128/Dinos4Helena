@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from check_server import CheckError, check_server, parse_url
 from server import GameServer, ensure_tls_certificates
 
 
@@ -112,6 +113,61 @@ class CertificateTests(unittest.TestCase):
             original = (certificate.read_bytes(), key.read_bytes())
             self.assertEqual((certificate, key), ensure_tls_certificates(Path(directory) / "certs", "127.0.0.1"))
             self.assertEqual(original, (certificate.read_bytes(), key.read_bytes()))
+
+
+class SetupCheckerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_plain_server_join_and_full_world(self):
+        game = GameServer(seed=654321, limit=1)
+        server = await asyncio.start_server(game.handle, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        try:
+            result = await check_server(f"ws://127.0.0.1:{port}/", "triceratops")
+            self.assertEqual((result["map"], result["seed"], result["spawn"]["dino"]),
+                             ("grassland", 654321, "triceratops"))
+            full_game = GameServer(limit=0)
+            full_server = await asyncio.start_server(full_game.handle, "127.0.0.1", 0)
+            try:
+                full_port = full_server.sockets[0].getsockname()[1]
+                with self.assertRaisesRegex(CheckError, "full"):
+                    await check_server(f"ws://127.0.0.1:{full_port}/", "trex")
+            finally:
+                full_server.close()
+                await full_server.wait_closed()
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    @unittest.skipUnless(shutil.which("openssl"), "OpenSSL is required for automatic certificates")
+    async def test_self_signed_requires_opt_in_or_trusted_certificate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            certificate, key = ensure_tls_certificates(Path(directory) / "certs", "127.0.0.1")
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(certificate, key)
+            server = await asyncio.start_server(GameServer().handle, "127.0.0.1", 0, ssl=context)
+            port = server.sockets[0].getsockname()[1]
+            url = f"wss://127.0.0.1:{port}/"
+            try:
+                # The server side can log an expected reset when verification fails.
+                loop = asyncio.get_running_loop()
+                previous_handler = loop.get_exception_handler()
+                loop.set_exception_handler(lambda _loop, _context: None)
+                try:
+                    with self.assertRaisesRegex(CheckError, "certificate verification failed"):
+                        await check_server(url, "trex")
+                    await asyncio.sleep(0)
+                finally:
+                    loop.set_exception_handler(previous_handler)
+                self.assertEqual((await check_server(url, "trex", allow_self_signed=True))["type"], "welcome")
+                self.assertEqual((await check_server(url, "trex", ca_cert=str(certificate)))["type"], "welcome")
+            finally:
+                server.close()
+                await server.wait_closed()
+
+    def test_invalid_url_and_tls_options(self):
+        with self.assertRaisesRegex(CheckError, "Port"):
+            parse_url("ws://127.0.0.1:0/")
+        with self.assertRaisesRegex(CheckError, "URL"):
+            parse_url("https://127.0.0.1/")
 
 
 if __name__ == "__main__":

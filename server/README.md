@@ -17,6 +17,18 @@ This server runs independently of Godot on a separate computer. It uses Python 3
 
 The app saves the host, port, and secure setting locally for the next session. If the server rejects an eleventh player, the app shows a full-world message. Restarting the server starts a new session.
 
+## Check a server setup
+
+Run this from the **device or computer whose connection you want to test**, using the same host and port entered in the app. Copy `check_server.py` there; it needs only Python 3.10 or newer, not Godot or third-party packages:
+
+```sh
+python3 check_server.py wss://192.168.1.50:8765/ --allow-self-signed
+```
+
+For a certificate trusted by the operating system, omit `--allow-self-signed`. To verify a self-signed certificate without disabling identity checks, use `--ca-cert /path/to/server.crt` and connect using a host name or IP included in that certificate. For a server started with `--no-tls`, use `ws://192.168.1.50:8765/` without either TLS option. You can also set `--dino trex` and `--timeout 10`.
+
+The script performs the TLS connection, WebSocket upgrade, and actual game join. It prints the map, seed, player ID, other-player count, and a TLS status on success; it exits with status `1` and a diagnostic on failure. A full server rejects the test join. The check briefly occupies one player slot and then disconnects. `--allow-self-signed` disables certificate **and host-name** verification for this check, just like the corresponding app option; use it only for a server you trust by other means. Run it from another network if you need to check Internet reachability rather than only local access.
+
 ## Host on the Internet
 
 Use a DNS name pointing to the server's public IP. Allow the chosen TCP port in the host and cloud firewalls. If the server sits behind a home router, forward that TCP port to the host's LAN IP. A private LAN address such as `192.168.x.x` will not work from outside the LAN.
