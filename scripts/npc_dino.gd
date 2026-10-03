@@ -99,7 +99,9 @@ var same_species_allies: Array = []
 
 func _ready() -> void:
 	var config := ConfigFile.new()
-	assert(config.load(CONFIG_PATH) == OK, "Could not load dinosaur configuration")
+	var config_error := config.load(CONFIG_PATH)
+	if config_error != OK:
+		push_error("Could not load dinosaur configuration: %s" % error_string(config_error))
 	diet = config.get_value(dino_id, "diet", "herbivore")
 	display_name = Localization.text(str(config.get_value(dino_id, "display_name_key", "dino." + dino_id)))
 	model_scale = config.get_value(dino_id, "model_scale", 0.2)

@@ -158,7 +158,9 @@ func _ready() -> void:
 	add_to_group("world_controller")
 	var config_error := dinosaur_config.load("res://config/dinosaurs.cfg")
 	assert(config_error == OK, "Could not load dinosaur configuration")
-	assert(quest_config.load("res://config/quests.cfg") == OK, "Could not load quest configuration")
+	var quest_config_error := quest_config.load("res://config/quests.cfg")
+	if quest_config_error != OK:
+		push_error("Could not load quest configuration: %s" % error_string(quest_config_error))
 	var progress_error := quest_progress.load(quest_progress_path)
 	if progress_error != OK and progress_error != ERR_FILE_NOT_FOUND:
 		push_warning("Could not load quest progress: %s" % error_string(progress_error))

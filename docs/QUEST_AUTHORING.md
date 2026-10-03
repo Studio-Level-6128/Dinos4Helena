@@ -410,10 +410,24 @@ Run:
 ```bash
 ./scripts/godot.sh --headless --path . --script res://tests/quests_smoke.gd
 ./scripts/godot.sh --headless --path . --script res://tests/quest_missions_smoke.gd
+./scripts/godot.sh --headless --path . --script res://tests/quest_release_smoke.gd
 ./scripts/godot.sh --headless --path . --editor --quit
 git diff --check
 ./scripts/build-android.sh
 ```
+
+The release smoke check uses explicit runtime checks rather than `assert()`,
+which is omitted from release builds. To test the exported code and data before
+installing on a device, export a pack and run it outside the project directory:
+
+```bash
+./scripts/godot.sh --headless --path . --export-pack "Android Release" /tmp/dinos4helena-quests.zip
+cd /tmp
+/path/to/Dinos4Helena/scripts/godot.sh --headless --main-pack /tmp/dinos4helena-quests.zip --script res://tests/quest_release_smoke.gd
+```
+
+Never put required setup or configuration loads inside `assert()`: Godot does
+not evaluate those expressions in release builds.
 
 Extend `tests/quests_smoke.gd` when adding catalog or progression behavior.
 Extend `tests/quest_missions_smoke.gd` with assertions for the new mission's
@@ -437,4 +451,3 @@ logic rather than relying only on the generic boot test.
 - **A mission is impossible on some seeds:** place required objects in known
   clear locations or replace the relevant generated array with a controlled
   layout.
-

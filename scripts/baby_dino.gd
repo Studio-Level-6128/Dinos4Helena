@@ -42,7 +42,9 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 func _ready() -> void:
 	var config := ConfigFile.new()
-	assert(config.load(CONFIG_PATH) == OK, "Could not load dinosaur configuration")
+	var config_error := config.load(CONFIG_PATH)
+	if config_error != OK:
+		push_error("Could not load dinosaur configuration: %s" % error_string(config_error))
 	diet = config.get_value(dino_id, "diet", "herbivore")
 	display_name = Localization.text("dino.baby_named", [Localization.text(str(config.get_value(dino_id, "display_name_key", "dino." + dino_id)))])
 	var baby_scale := float(config.get_value("breeding", "baby_scale", 0.42))
@@ -89,7 +91,7 @@ func _physics_process(delta: float) -> void:
 		speed = run_speed
 		state = "panicked"
 		_face_direction(direction, delta)
-	elif is_instance_valid(parent_dino) and not bool(parent_dino.get("dead")) and bool(parent_dino.get("eating_active")) and is_instance_valid(parent_dino.get("eating_target")):
+	elif is_instance_valid(parent_dino) and parent_dino.get("dead") != true and parent_dino.get("eating_active") == true and is_instance_valid(parent_dino.get("eating_target")):
 		var food := parent_dino.get("eating_target") as Node3D
 		var angle := TAU * float(posmod(companion_index * 5 + 2, 13)) / 13.0
 		var meal_radius := collision_radius + 0.9 + float(companion_index / 2) * 0.35
@@ -104,7 +106,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			state = "eating_with_parent"
 			_face_direction(food.global_position - global_position, delta)
-	elif is_instance_valid(parent_dino) and not bool(parent_dino.get("dead")):
+	elif is_instance_valid(parent_dino) and parent_dino.get("dead") != true:
 		# Alternate companions left/right and place later babies slightly farther
 		# back. A short catch-up boost prevents permanent loss behind obstacles.
 		var side_sign := 1.0 if companion_index % 2 == 0 else -1.0
