@@ -16,6 +16,11 @@ func _run() -> void:
 	var defaults: Dictionary = world._saved_multiplayer_connection()
 	assert(defaults["host"] == "92.205.18.100" and defaults["port"] == 8765, "Default server address is wrong")
 	assert(defaults["secure"] and defaults["allow_self_signed"], "Default TLS options should be enabled")
+	world._show_configuration_page()
+	assert(world.multiplayer_host_input.text == "92.205.18.100" and world.multiplayer_port_input.text == "8765", "Default server is not shown in Configuration")
+	assert(world.multiplayer_host_input.placeholder_text == "92.205.18.100", "Server field still hints at an unrelated IP")
+	assert(world.multiplayer_secure_checkbox.button_pressed and world.multiplayer_self_signed_checkbox.button_pressed, "Default TLS checkboxes should be on")
+	assert(world.configuration_test_button.get_parent() == world.configuration_page, "Test Connection button is missing")
 	world._show_multiplayer_page()
 	assert(world.multiplayer_page.visible and world.multiplayer_dino_cards.size() == 7, "Multiplayer dinosaur selection is incomplete")
 	assert(world.multiplayer_name_input.get_parent() == world.multiplayer_page, "Player name input is missing")
@@ -31,6 +36,7 @@ func _run() -> void:
 	assert(migrated["host"] == "games.example.org" and int(migrated["port"]) == 9443 and bool(migrated["secure"]), "Previously saved server URL was not migrated")
 	world._select_dino("stegosaurus")
 	world._show_configuration_page()
+	assert(world.multiplayer_host_input.text == "games.example.org" and world.multiplayer_port_input.text == "9443", "Configuration does not show the currently selected server")
 	world.multiplayer_host_input.text = "127.0.0.1"
 	world.multiplayer_port_input.text = "0"
 	world._save_multiplayer_settings()
@@ -38,8 +44,18 @@ func _run() -> void:
 	world.multiplayer_port_input.text = "8765"
 	world.multiplayer_secure_checkbox.button_pressed = true
 	world.multiplayer_self_signed_checkbox.button_pressed = true
+	world.configuration_test_button.pressed.emit()
+	assert(world.configuration_test_button.disabled, "Connection test did not start")
+	for frame in 600:
+		await process_frame
+		if not world.configuration_test_button.disabled:
+			break
+	assert(world.configuration_status_label.text == world._t("menu.test_connection_success"), "Connection test did not confirm the local TLS server")
+	assert(world.multiplayer_settings.get_value("server", "url") == "wss://games.example.org:9443/", "Connection test saved unsaved server settings")
 	world._save_multiplayer_settings()
 	assert(world.configuration_status_label.text == world._t("menu.configuration_saved"), "Server settings were not saved from Configuration")
+	world._show_configuration_page()
+	assert(world.multiplayer_host_input.text == "127.0.0.1" and world.multiplayer_port_input.text == "8765", "Saved server IP was not restored in Configuration")
 	world._show_multiplayer_page()
 	world._connect_multiplayer()
 	assert(world.multiplayer_settings.get_value("server", "host") == "127.0.0.1", "Server IP was not saved")

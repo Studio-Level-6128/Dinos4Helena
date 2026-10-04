@@ -30,6 +30,7 @@ const MULTIPLAYER_SETTINGS_PATH := "user://multiplayer.cfg"
 const DEFAULT_SERVER_URL := "wss://92.205.18.100:8765/"
 const DEFAULT_SERVER_HOST := "92.205.18.100"
 const DEFAULT_SERVER_PORT := 8765
+const SERVER_TEST_TIMEOUT := 10.0
 const PLAYER_COLORS := ["#ff6b6b", "#ffd166", "#7bd389", "#4ecdc4", "#6ea8fe", "#c792ea", "#ff9f68", "#f47ac2"]
 const SCREAM_RESPONSE_RANGE := 72.0
 # Adaptive performance starts at full quality. It only reduces expensive
@@ -90,6 +91,10 @@ var multiplayer_port_input: LineEdit
 var multiplayer_secure_checkbox: CheckBox
 var multiplayer_self_signed_checkbox: CheckBox
 var configuration_status_label: Label
+var configuration_test_button: Button
+var configuration_test_socket: WebSocketPeer
+var configuration_test_elapsed := 0.0
+var configuration_test_hello_sent := false
 var multiplayer_status_label: Label
 var multiplayer_connect_button: Button
 var multiplayer_name_input: LineEdit
@@ -187,6 +192,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if configuration_test_socket != null:
+		_poll_configuration_test(delta)
 	# Startup generation is intentionally excluded: only sustained gameplay FPS
 	# should decide whether this device needs a lower rendering tier.
 	if not is_instance_valid(world_root) or not is_instance_valid(player):
@@ -711,6 +718,7 @@ func _select_language(locale: String) -> void:
 
 
 func _rebuild_menu_for_language() -> void:
+	_cancel_configuration_test()
 	var menu_was_visible := is_instance_valid(menu_layer) and menu_layer.visible
 	if is_instance_valid(menu_layer):
 		menu_layer.free()
@@ -996,11 +1004,21 @@ func _build_configuration_page() -> void:
 	save.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
 	save.pressed.connect(_save_multiplayer_settings)
 	configuration_page.add_child(save)
+	configuration_test_button = Button.new()
+	configuration_test_button.name = "TestServerConnectionButton"
+	configuration_test_button.text = _t("menu.test_connection")
+	configuration_test_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	configuration_test_button.position = Vector2(-190, 573)
+	configuration_test_button.size = Vector2(380, 54)
+	configuration_test_button.add_theme_font_size_override("font_size", 21)
+	configuration_test_button.add_theme_stylebox_override("normal", _button_style(Color(0.13, 0.31, 0.34), Color("83d7e4")))
+	configuration_test_button.pressed.connect(_test_server_connection)
+	configuration_page.add_child(configuration_test_button)
 	configuration_status_label = Label.new()
 	configuration_status_label.name = "ConfigurationStatus"
 	configuration_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	configuration_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	configuration_status_label.position = Vector2(-420, 582)
+	configuration_status_label.position = Vector2(-420, 640)
 	configuration_status_label.size = Vector2(840, 38)
 	configuration_status_label.add_theme_font_size_override("font_size", 17)
 	configuration_status_label.add_theme_color_override("font_color", Color("fff2c2"))
@@ -1053,6 +1071,7 @@ func _connect_multiplayer() -> void:
 
 
 func _show_configuration_page() -> void:
+	_cancel_configuration_test()
 	var connection := _saved_multiplayer_connection()
 	multiplayer_host_input.text = str(connection["host"])
 	multiplayer_port_input.text = str(connection["port"])
@@ -1069,30 +1088,96 @@ func _show_configuration_page() -> void:
 
 
 func _save_multiplayer_settings() -> void:
-	var host := multiplayer_host_input.text.strip_edges()
-	var port_text := multiplayer_port_input.text.strip_edges()
-	if host.is_empty() or host.contains(" ") or host.contains("/") or host.contains("@") or host.contains("?") or host.contains("#") or host.contains(":"):
-		configuration_status_label.text = _t("menu.server_host_invalid")
+	var connection := _configuration_connection()
+	if connection.is_empty():
 		return
-	if not port_text.is_valid_int() or int(port_text) < 1 or int(port_text) > 65535:
-		configuration_status_label.text = _t("menu.server_port_invalid")
-		return
-	var port := int(port_text)
-	var secure := multiplayer_secure_checkbox.button_pressed
-	var allow_self_signed := secure and multiplayer_self_signed_checkbox.button_pressed
-	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
 	var pending_settings := ConfigFile.new()
 	pending_settings.load(MULTIPLAYER_SETTINGS_PATH)
-	pending_settings.set_value("server", "host", host)
-	pending_settings.set_value("server", "port", port)
-	pending_settings.set_value("server", "secure", secure)
-	pending_settings.set_value("server", "allow_self_signed", allow_self_signed)
-	pending_settings.set_value("server", "url", url)
+	pending_settings.set_value("server", "host", connection["host"])
+	pending_settings.set_value("server", "port", connection["port"])
+	pending_settings.set_value("server", "secure", connection["secure"])
+	pending_settings.set_value("server", "allow_self_signed", connection["allow_self_signed"])
+	pending_settings.set_value("server", "url", connection["url"])
 	if pending_settings.save(MULTIPLAYER_SETTINGS_PATH) != OK:
 		configuration_status_label.text = _t("menu.configuration_save_failed")
 		return
 	multiplayer_settings = pending_settings
 	configuration_status_label.text = _t("menu.configuration_saved")
+
+
+func _configuration_connection() -> Dictionary:
+	var host := multiplayer_host_input.text.strip_edges()
+	var port_text := multiplayer_port_input.text.strip_edges()
+	if host.is_empty() or host.contains(" ") or host.contains("/") or host.contains("@") or host.contains("?") or host.contains("#") or host.contains(":"):
+		configuration_status_label.text = _t("menu.server_host_invalid")
+		return {}
+	if not port_text.is_valid_int() or int(port_text) < 1 or int(port_text) > 65535:
+		configuration_status_label.text = _t("menu.server_port_invalid")
+		return {}
+	var port := int(port_text)
+	var secure := multiplayer_secure_checkbox.button_pressed
+	var allow_self_signed := secure and multiplayer_self_signed_checkbox.button_pressed
+	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
+	return {"host": host, "port": port, "secure": secure, "allow_self_signed": allow_self_signed, "url": url}
+
+
+func _test_server_connection() -> void:
+	if configuration_test_socket != null:
+		return
+	var connection := _configuration_connection()
+	if connection.is_empty():
+		return
+	configuration_test_socket = WebSocketPeer.new()
+	configuration_test_elapsed = 0.0
+	configuration_test_hello_sent = false
+	configuration_test_button.disabled = true
+	configuration_status_label.text = _t("menu.testing_connection")
+	var tls_options: TLSOptions = TLSOptions.client_unsafe() if bool(connection["allow_self_signed"]) else null
+	var result := configuration_test_socket.connect_to_url(str(connection["url"]), tls_options)
+	if result != OK:
+		_finish_configuration_test(_t("menu.test_connection_failed"))
+
+
+func _poll_configuration_test(delta: float) -> void:
+	configuration_test_elapsed += delta
+	configuration_test_socket.poll()
+	if configuration_test_socket.get_ready_state() == WebSocketPeer.STATE_OPEN and not configuration_test_hello_sent:
+		configuration_test_hello_sent = true
+		configuration_test_socket.send_text(JSON.stringify({
+			"type": "hello", "dino": "triceratops",
+			"name": "Connection test", "color": "#6ea8fe"
+		}))
+	while configuration_test_socket.get_available_packet_count() > 0:
+		var message = JSON.parse_string(configuration_test_socket.get_packet().get_string_from_utf8())
+		if not message is Dictionary:
+			continue
+		if message.get("type") == "welcome":
+			_finish_configuration_test(_t("menu.test_connection_success"))
+			return
+		if message.get("type") == "rejected":
+			_finish_configuration_test(_t("menu.test_connection_full") if message.get("reason") == "full" else _t("menu.test_connection_failed"))
+			return
+	if configuration_test_socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+		_finish_configuration_test(_t("menu.test_connection_failed"))
+		return
+	if configuration_test_elapsed >= SERVER_TEST_TIMEOUT:
+		_finish_configuration_test(_t("menu.test_connection_failed"))
+
+
+func _finish_configuration_test(result_text: String) -> void:
+	_cancel_configuration_test()
+	if is_instance_valid(configuration_status_label):
+		configuration_status_label.text = result_text
+
+
+func _cancel_configuration_test() -> void:
+	if configuration_test_socket != null:
+		configuration_test_socket.close()
+		configuration_test_socket = null
+	configuration_test_elapsed = 0.0
+	configuration_test_hello_sent = false
+	if is_instance_valid(configuration_test_button):
+		configuration_test_button.disabled = false
 
 
 func _saved_multiplayer_connection() -> Dictionary:
@@ -1275,6 +1360,7 @@ func _show_free_game_page() -> void:
 
 
 func _show_landing_page() -> void:
+	_cancel_configuration_test()
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
 	if is_instance_valid(play_guide_overlay):
