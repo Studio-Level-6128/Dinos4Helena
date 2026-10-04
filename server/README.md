@@ -13,9 +13,9 @@ This server runs independently of Godot on a separate computer. It uses Python 3
 
    The first launch creates `certs/server.crt` and `certs/server.key` next to the script, then serves encrypted `wss://` connections. Later launches reuse the same keypair. The private key is mode `0600` and the `certs` directory is ignored by Git. Keep the key private and back up both files together. `0.0.0.0` means listen on all network interfaces; it is **not** the address players enter in the game. The seed must have six digits; all players receive the same seed from the server. To accept connections only from the host computer, use `--host 127.0.0.1`.
 3. Find the host computer's LAN IPv4 address in its network settings (for example `192.168.1.50`). Allow incoming **TCP 8765** in its firewall. The server and devices must be able to reach each other on the same network.
-4. On each device, open **Multiplayer**, choose a dinosaur, and enter the host computer's IP or DNS name in **Server IP / Host**. Enter `8765` as **Port**, check **Secure connection**, and check **Allow self-signed certificate**. Tap **Connect and Play**. Do not enter `0.0.0.0` or `127.0.0.1` on a different device; those addresses refer to that device itself.
+4. On each device, open **Configuration** at the bottom-left of the start screen. The default is `92.205.18.100:8765` with TLS and self-signed certificates enabled. For your own server, enter its IP or DNS name in **Server IP / Host**, enter `8765` as **Port**, and save. Keep **Secure connection** and **Allow self-signed certificate** checked for the automatically generated certificate. Then open **Multiplayer**, choose a dinosaur, and tap **Connect and Play**. Do not enter `0.0.0.0` or `127.0.0.1` on a different device; those addresses refer to that device itself.
 
-The app saves the host, port, and secure setting locally for the next session. If the server rejects an eleventh player, the app shows a full-world message. Restarting the server starts a new session.
+The app saves the host, port, and TLS settings locally for the next session. If the server rejects an eleventh player, the app shows a full-world message. Restarting the server starts a new session.
 
 ## Check a server setup
 
@@ -39,7 +39,7 @@ The automatically generated certificate also works over the Internet when player
 python3 server.py --host 0.0.0.0 --port 8765 --seed 424242 --cert /path/to/cert.pem --key /path/to/key.pem
 ```
 
-In the app, enter the certificate's DNS name as **Server IP / Host**, the chosen port, and check **Secure connection (TLS / wss)**. A TLS reverse proxy is also possible; forward WebSocket traffic on `/` to the Python server and enter the proxy's public port in the app. This first version has no accounts or access control. Use a private network or add authentication before exposing a server intended only for invited players.
+In the app's start-screen **Configuration**, enter the certificate's DNS name as **Server IP / Host**, the chosen port, and check **Secure connection (TLS / wss)**. A TLS reverse proxy is also possible; forward WebSocket traffic on `/` to the Python server and enter the proxy's public port in the app. This first version has no accounts or access control. Use a private network or add authentication before exposing a server intended only for invited players.
 
 To put the host's address in a newly generated certificate, add `--cert-host 192.168.1.50` or `--cert-host game.example.org` on its **first** run. Existing certificates are deliberately reused; changing `--cert-host` later does not replace them. To generate a new pair, first stop the server and safely move both existing files out of `certs/`, then start it again. Clients that explicitly allow self-signed certificates do not check the certificate's host name.
 

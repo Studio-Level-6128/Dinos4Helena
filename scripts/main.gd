@@ -26,8 +26,8 @@ const MAP_THEMES := ["grassland", "desert", "winter", "volcano"]
 const MAP_THEME_SEED_SALTS := {"grassland": 0, "desert": 0xD35E47, "winter": 0x71A7E2, "volcano": 0xB01CA0}
 const QUEST_PROGRESS_PATH := "user://quest_progress.cfg"
 const MULTIPLAYER_SETTINGS_PATH := "user://multiplayer.cfg"
-const DEFAULT_SERVER_URL := "wss://127.0.0.1:8765/"
-const DEFAULT_SERVER_HOST := "127.0.0.1"
+const DEFAULT_SERVER_URL := "wss://92.205.18.100:8765/"
+const DEFAULT_SERVER_HOST := "92.205.18.100"
 const DEFAULT_SERVER_PORT := 8765
 const SCREAM_RESPONSE_RANGE := 72.0
 # Adaptive performance starts at full quality. It only reduces expensive
@@ -63,6 +63,7 @@ var menu_layer: CanvasLayer
 var landing_page: Control
 var free_game_page: Control
 var multiplayer_page: Control
+var configuration_page: Control
 var quest_overview_page: Control
 var quest_detail_page: Control
 var credits_overlay: Control
@@ -86,6 +87,7 @@ var multiplayer_host_input: LineEdit
 var multiplayer_port_input: LineEdit
 var multiplayer_secure_checkbox: CheckBox
 var multiplayer_self_signed_checkbox: CheckBox
+var configuration_status_label: Label
 var multiplayer_status_label: Label
 var multiplayer_connect_button: Button
 var multiplayer_client: Node
@@ -356,6 +358,11 @@ func _build_main_menu() -> void:
 	multiplayer_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(multiplayer_page)
 	multiplayer_page.hide()
+	configuration_page = Control.new()
+	configuration_page.name = "ConfigurationPage"
+	configuration_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(configuration_page)
+	configuration_page.hide()
 
 	var title := Label.new()
 	title.text = _t("app.title")
@@ -383,19 +390,20 @@ func _build_main_menu() -> void:
 	subtitle.add_theme_constant_override("shadow_offset_y", 2)
 	landing_page.add_child(subtitle)
 
-	var mode_tiles := HBoxContainer.new()
+	var mode_tiles := Control.new()
 	mode_tiles.name = "GameModeTiles"
 	mode_tiles.set_anchors_preset(Control.PRESET_CENTER)
-	mode_tiles.position = Vector2(-474, -110)
-	mode_tiles.size = Vector2(948, 238)
-	mode_tiles.alignment = BoxContainer.ALIGNMENT_CENTER
-	mode_tiles.add_theme_constant_override("separation", 18)
+	mode_tiles.position = Vector2(-474, -105)
+	mode_tiles.size = Vector2(948, 210)
 	landing_page.add_child(mode_tiles)
 
 	var quests_tile := Button.new()
 	quests_tile.name = "QuestsTile"
 	quests_tile.text = _t("menu.quests")
 	quests_tile.custom_minimum_size = Vector2(304, 210)
+	quests_tile.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	quests_tile.position = Vector2(0, 0)
+	quests_tile.size = Vector2(304, 210)
 	quests_tile.focus_mode = Control.FOCUS_NONE
 	quests_tile.tooltip_text = _t("menu.quests_tooltip")
 	quests_tile.add_theme_font_size_override("font_size", 25)
@@ -415,6 +423,9 @@ func _build_main_menu() -> void:
 	free_game_tile.name = "FreeGameTile"
 	free_game_tile.text = _t("menu.free_game_tile")
 	free_game_tile.custom_minimum_size = Vector2(304, 210)
+	free_game_tile.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	free_game_tile.position = Vector2(322, 0)
+	free_game_tile.size = Vector2(304, 210)
 	free_game_tile.focus_mode = Control.FOCUS_NONE
 	free_game_tile.add_theme_font_size_override("font_size", 25)
 	free_game_tile.add_theme_color_override("font_color", Color("fff2c2"))
@@ -434,6 +445,9 @@ func _build_main_menu() -> void:
 	multiplayer_tile.name = "MultiplayerTile"
 	multiplayer_tile.text = _t("menu.multiplayer_tile")
 	multiplayer_tile.custom_minimum_size = Vector2(304, 210)
+	multiplayer_tile.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	multiplayer_tile.position = Vector2(644, 0)
+	multiplayer_tile.size = Vector2(304, 210)
 	multiplayer_tile.focus_mode = Control.FOCUS_NONE
 	multiplayer_tile.add_theme_font_size_override("font_size", 25)
 	multiplayer_tile.add_theme_color_override("font_color", Color("fff2c2"))
@@ -447,6 +461,20 @@ func _build_main_menu() -> void:
 	multiplayer_tile.pressed.connect(_show_multiplayer_page)
 	_add_tile_rim(multiplayer_tile)
 	mode_tiles.add_child(multiplayer_tile)
+
+	var configuration_button := Button.new()
+	configuration_button.name = "ConfigurationButton"
+	configuration_button.text = _t("menu.configuration")
+	configuration_button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	configuration_button.position = Vector2(20, -66)
+	configuration_button.size = Vector2(190, 44)
+	configuration_button.focus_mode = Control.FOCUS_NONE
+	configuration_button.add_theme_font_size_override("font_size", 16)
+	configuration_button.add_theme_color_override("font_color", Color("f7f2d0"))
+	configuration_button.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42, 0.72)))
+	configuration_button.add_theme_stylebox_override("hover", _button_style(Color(0.18, 0.34, 0.2, 0.96), Color("f7f2d0")))
+	configuration_button.pressed.connect(_show_configuration_page)
+	landing_page.add_child(configuration_button)
 
 	var free_game_title := Label.new()
 	free_game_title.text = _t("menu.free_game")
@@ -634,6 +662,7 @@ func _build_main_menu() -> void:
 	_build_play_guide_overlay(root)
 	_build_quest_pages(root)
 	_build_multiplayer_page()
+	_build_configuration_page()
 
 
 func _build_language_selector(parent: Control) -> void:
@@ -770,71 +799,11 @@ func _build_multiplayer_page() -> void:
 	for index in DINO_IDS.size():
 		var dino_id: String = DINO_IDS[index]
 		rows[0 if index < 4 else 1].add_child(_create_dino_card(dino_id, _dino_name(dino_id), true))
-	var connection := _saved_multiplayer_connection()
-	var host_label := Label.new()
-	host_label.text = _t("menu.server_host")
-	host_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	host_label.position = Vector2(-440, 444)
-	host_label.size = Vector2(180, 38)
-	host_label.add_theme_font_size_override("font_size", 18)
-	host_label.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(host_label)
-	multiplayer_host_input = LineEdit.new()
-	multiplayer_host_input.name = "ServerHost"
-	multiplayer_host_input.text = str(connection["host"])
-	multiplayer_host_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_host_input.position = Vector2(-255, 438)
-	multiplayer_host_input.size = Vector2(390, 44)
-	multiplayer_host_input.add_theme_font_size_override("font_size", 18)
-	multiplayer_host_input.placeholder_text = _t("menu.server_host_placeholder")
-	multiplayer_page.add_child(multiplayer_host_input)
-	var port_label := Label.new()
-	port_label.text = _t("menu.server_port")
-	port_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	port_label.position = Vector2(150, 444)
-	port_label.size = Vector2(70, 38)
-	port_label.add_theme_font_size_override("font_size", 18)
-	port_label.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(port_label)
-	multiplayer_port_input = LineEdit.new()
-	multiplayer_port_input.name = "ServerPort"
-	multiplayer_port_input.text = str(connection["port"])
-	multiplayer_port_input.max_length = 5
-	multiplayer_port_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
-	multiplayer_port_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_port_input.position = Vector2(225, 438)
-	multiplayer_port_input.size = Vector2(130, 44)
-	multiplayer_port_input.add_theme_font_size_override("font_size", 18)
-	multiplayer_page.add_child(multiplayer_port_input)
-	multiplayer_secure_checkbox = CheckBox.new()
-	multiplayer_secure_checkbox.name = "SecureConnection"
-	multiplayer_secure_checkbox.text = _t("menu.server_secure")
-	multiplayer_secure_checkbox.button_pressed = bool(connection["secure"])
-	multiplayer_secure_checkbox.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_secure_checkbox.position = Vector2(-250, 489)
-	multiplayer_secure_checkbox.size = Vector2(500, 40)
-	multiplayer_secure_checkbox.add_theme_font_size_override("font_size", 17)
-	multiplayer_secure_checkbox.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(multiplayer_secure_checkbox)
-	multiplayer_self_signed_checkbox = CheckBox.new()
-	multiplayer_self_signed_checkbox.name = "AllowSelfSignedCertificate"
-	multiplayer_self_signed_checkbox.text = _t("menu.server_self_signed")
-	multiplayer_self_signed_checkbox.button_pressed = bool(connection["allow_self_signed"])
-	multiplayer_self_signed_checkbox.disabled = not multiplayer_secure_checkbox.button_pressed
-	multiplayer_self_signed_checkbox.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_self_signed_checkbox.position = Vector2(-250, 523)
-	multiplayer_self_signed_checkbox.size = Vector2(690, 38)
-	multiplayer_self_signed_checkbox.add_theme_font_size_override("font_size", 16)
-	multiplayer_self_signed_checkbox.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(multiplayer_self_signed_checkbox)
-	multiplayer_secure_checkbox.toggled.connect(func(active: bool) -> void:
-		multiplayer_self_signed_checkbox.disabled = not active
-	)
 	multiplayer_connect_button = Button.new()
 	multiplayer_connect_button.name = "ConnectToServerButton"
 	multiplayer_connect_button.text = _t("menu.connect")
 	multiplayer_connect_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_connect_button.position = Vector2(-190, 569)
+	multiplayer_connect_button.position = Vector2(-190, 468)
 	multiplayer_connect_button.size = Vector2(380, 54)
 	multiplayer_connect_button.add_theme_font_size_override("font_size", 21)
 	multiplayer_connect_button.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
@@ -845,16 +814,126 @@ func _build_multiplayer_page() -> void:
 	multiplayer_status_label.text = _t("menu.multiplayer_hint")
 	multiplayer_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	multiplayer_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_status_label.position = Vector2(-450, 640)
+	multiplayer_status_label.position = Vector2(-450, 538)
 	multiplayer_status_label.size = Vector2(900, 42)
 	multiplayer_status_label.add_theme_font_size_override("font_size", 16)
 	multiplayer_status_label.add_theme_color_override("font_color", Color("fff2c2"))
 	multiplayer_page.add_child(multiplayer_status_label)
 
 
+func _build_configuration_page() -> void:
+	var heading := Label.new()
+	heading.name = "ConfigurationHeading"
+	heading.text = _t("menu.configuration_title")
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	heading.position = Vector2(-360, 85)
+	heading.size = Vector2(720, 56)
+	heading.add_theme_font_size_override("font_size", 36)
+	heading.add_theme_color_override("font_color", Color("fff2c2"))
+	configuration_page.add_child(heading)
+	var back := Button.new()
+	back.name = "ConfigurationBackButton"
+	back.text = _t("menu.back")
+	back.position = Vector2(20, 14)
+	back.size = Vector2(126, 40)
+	back.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42)))
+	back.pressed.connect(_show_landing_page)
+	configuration_page.add_child(back)
+	var description := Label.new()
+	description.text = _t("menu.configuration_description")
+	description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	description.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	description.position = Vector2(-400, 150)
+	description.size = Vector2(800, 36)
+	description.add_theme_font_size_override("font_size", 19)
+	description.add_theme_color_override("font_color", Color("f5dc9d"))
+	configuration_page.add_child(description)
+	var connection := _saved_multiplayer_connection()
+	var host_label := Label.new()
+	host_label.text = _t("menu.server_host")
+	host_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	host_label.position = Vector2(-390, 246)
+	host_label.size = Vector2(200, 38)
+	host_label.add_theme_font_size_override("font_size", 18)
+	host_label.add_theme_color_override("font_color", Color("fff2c2"))
+	configuration_page.add_child(host_label)
+	multiplayer_host_input = LineEdit.new()
+	multiplayer_host_input.name = "ServerHost"
+	multiplayer_host_input.text = str(connection["host"])
+	multiplayer_host_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_host_input.position = Vector2(-185, 240)
+	multiplayer_host_input.size = Vector2(440, 44)
+	multiplayer_host_input.add_theme_font_size_override("font_size", 18)
+	multiplayer_host_input.placeholder_text = _t("menu.server_host_placeholder")
+	configuration_page.add_child(multiplayer_host_input)
+	var port_label := Label.new()
+	port_label.text = _t("menu.server_port")
+	port_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	port_label.position = Vector2(-390, 310)
+	port_label.size = Vector2(200, 38)
+	port_label.add_theme_font_size_override("font_size", 18)
+	port_label.add_theme_color_override("font_color", Color("fff2c2"))
+	configuration_page.add_child(port_label)
+	multiplayer_port_input = LineEdit.new()
+	multiplayer_port_input.name = "ServerPort"
+	multiplayer_port_input.text = str(connection["port"])
+	multiplayer_port_input.max_length = 5
+	multiplayer_port_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	multiplayer_port_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_port_input.position = Vector2(-185, 304)
+	multiplayer_port_input.size = Vector2(160, 44)
+	multiplayer_port_input.add_theme_font_size_override("font_size", 18)
+	configuration_page.add_child(multiplayer_port_input)
+	multiplayer_secure_checkbox = CheckBox.new()
+	multiplayer_secure_checkbox.name = "SecureConnection"
+	multiplayer_secure_checkbox.text = _t("menu.server_secure")
+	multiplayer_secure_checkbox.button_pressed = bool(connection["secure"])
+	multiplayer_secure_checkbox.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_secure_checkbox.position = Vector2(-390, 377)
+	multiplayer_secure_checkbox.size = Vector2(680, 40)
+	multiplayer_secure_checkbox.add_theme_font_size_override("font_size", 18)
+	multiplayer_secure_checkbox.add_theme_color_override("font_color", Color("fff2c2"))
+	configuration_page.add_child(multiplayer_secure_checkbox)
+	multiplayer_self_signed_checkbox = CheckBox.new()
+	multiplayer_self_signed_checkbox.name = "AllowSelfSignedCertificate"
+	multiplayer_self_signed_checkbox.text = _t("menu.server_self_signed")
+	multiplayer_self_signed_checkbox.button_pressed = bool(connection["allow_self_signed"])
+	multiplayer_self_signed_checkbox.disabled = not multiplayer_secure_checkbox.button_pressed
+	multiplayer_self_signed_checkbox.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_self_signed_checkbox.position = Vector2(-390, 422)
+	multiplayer_self_signed_checkbox.size = Vector2(780, 40)
+	multiplayer_self_signed_checkbox.add_theme_font_size_override("font_size", 17)
+	multiplayer_self_signed_checkbox.add_theme_color_override("font_color", Color("fff2c2"))
+	configuration_page.add_child(multiplayer_self_signed_checkbox)
+	multiplayer_secure_checkbox.toggled.connect(func(active: bool) -> void:
+		multiplayer_self_signed_checkbox.disabled = not active
+	)
+	var save := Button.new()
+	save.name = "SaveServerConfiguration"
+	save.text = _t("menu.save_configuration")
+	save.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	save.position = Vector2(-190, 508)
+	save.size = Vector2(380, 54)
+	save.add_theme_font_size_override("font_size", 21)
+	save.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
+	save.pressed.connect(_save_multiplayer_settings)
+	configuration_page.add_child(save)
+	configuration_status_label = Label.new()
+	configuration_status_label.name = "ConfigurationStatus"
+	configuration_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	configuration_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	configuration_status_label.position = Vector2(-420, 582)
+	configuration_status_label.size = Vector2(840, 38)
+	configuration_status_label.add_theme_font_size_override("font_size", 17)
+	configuration_status_label.add_theme_color_override("font_color", Color("fff2c2"))
+	configuration_page.add_child(configuration_status_label)
+
+
 func _show_multiplayer_page() -> void:
 	landing_page.hide()
 	free_game_page.hide()
+	configuration_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.hide()
 	multiplayer_page.show()
@@ -864,8 +943,9 @@ func _show_multiplayer_page() -> void:
 
 
 func _connect_multiplayer() -> void:
-	var host := multiplayer_host_input.text.strip_edges()
-	var port_text := multiplayer_port_input.text.strip_edges()
+	var connection := _saved_multiplayer_connection()
+	var host := str(connection["host"]).strip_edges()
+	var port_text := str(connection["port"])
 	if host.is_empty() or host.contains(" ") or host.contains("/") or host.contains("@") or host.contains("?") or host.contains("#") or host.contains(":"):
 		multiplayer_status_label.text = _t("menu.server_host_invalid")
 		return
@@ -873,21 +953,57 @@ func _connect_multiplayer() -> void:
 		multiplayer_status_label.text = _t("menu.server_port_invalid")
 		return
 	var port := int(port_text)
-	var secure := multiplayer_secure_checkbox.button_pressed
-	var allow_self_signed := secure and multiplayer_self_signed_checkbox.button_pressed
+	var secure := bool(connection["secure"])
+	var allow_self_signed := secure and bool(connection["allow_self_signed"])
 	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
-	multiplayer_settings.set_value("server", "host", host)
-	multiplayer_settings.set_value("server", "port", port)
-	multiplayer_settings.set_value("server", "secure", secure)
-	multiplayer_settings.set_value("server", "allow_self_signed", allow_self_signed)
-	multiplayer_settings.set_value("server", "url", url)
-	if multiplayer_settings.save(MULTIPLAYER_SETTINGS_PATH) != OK:
-		push_warning("Could not save multiplayer server URL")
 	multiplayer_connect_button.disabled = true
 	multiplayer_status_label.text = _t("menu.connecting")
 	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id, allow_self_signed)
 	if result != OK:
 		_on_multiplayer_failed(error_string(result))
+
+
+func _show_configuration_page() -> void:
+	var connection := _saved_multiplayer_connection()
+	multiplayer_host_input.text = str(connection["host"])
+	multiplayer_port_input.text = str(connection["port"])
+	multiplayer_secure_checkbox.button_pressed = bool(connection["secure"])
+	multiplayer_self_signed_checkbox.button_pressed = bool(connection["allow_self_signed"])
+	multiplayer_self_signed_checkbox.disabled = not multiplayer_secure_checkbox.button_pressed
+	configuration_status_label.text = ""
+	landing_page.hide()
+	free_game_page.hide()
+	multiplayer_page.hide()
+	quest_overview_page.hide()
+	quest_detail_page.hide()
+	configuration_page.show()
+
+
+func _save_multiplayer_settings() -> void:
+	var host := multiplayer_host_input.text.strip_edges()
+	var port_text := multiplayer_port_input.text.strip_edges()
+	if host.is_empty() or host.contains(" ") or host.contains("/") or host.contains("@") or host.contains("?") or host.contains("#") or host.contains(":"):
+		configuration_status_label.text = _t("menu.server_host_invalid")
+		return
+	if not port_text.is_valid_int() or int(port_text) < 1 or int(port_text) > 65535:
+		configuration_status_label.text = _t("menu.server_port_invalid")
+		return
+	var port := int(port_text)
+	var secure := multiplayer_secure_checkbox.button_pressed
+	var allow_self_signed := secure and multiplayer_self_signed_checkbox.button_pressed
+	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
+	var pending_settings := ConfigFile.new()
+	pending_settings.load(MULTIPLAYER_SETTINGS_PATH)
+	pending_settings.set_value("server", "host", host)
+	pending_settings.set_value("server", "port", port)
+	pending_settings.set_value("server", "secure", secure)
+	pending_settings.set_value("server", "allow_self_signed", allow_self_signed)
+	pending_settings.set_value("server", "url", url)
+	if pending_settings.save(MULTIPLAYER_SETTINGS_PATH) != OK:
+		configuration_status_label.text = _t("menu.configuration_save_failed")
+		return
+	multiplayer_settings = pending_settings
+	configuration_status_label.text = _t("menu.configuration_saved")
 
 
 func _saved_multiplayer_connection() -> Dictionary:
@@ -901,7 +1017,7 @@ func _saved_multiplayer_connection() -> Dictionary:
 		"host": str(multiplayer_settings.get_value("server", "host", old_host if not old_host.is_empty() else DEFAULT_SERVER_HOST)),
 		"port": int(multiplayer_settings.get_value("server", "port", old_port if old_port > 0 else DEFAULT_SERVER_PORT)),
 		"secure": secure,
-		"allow_self_signed": bool(multiplayer_settings.get_value("server", "allow_self_signed", false))
+		"allow_self_signed": bool(multiplayer_settings.get_value("server", "allow_self_signed", true))
 	}
 
 
@@ -1018,6 +1134,7 @@ func _show_free_game_page() -> void:
 	if is_instance_valid(play_guide_overlay):
 		play_guide_overlay.hide()
 	landing_page.hide()
+	configuration_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.hide()
 	multiplayer_page.hide()
@@ -1033,6 +1150,7 @@ func _show_landing_page() -> void:
 	if is_instance_valid(play_guide_overlay):
 		play_guide_overlay.hide()
 	free_game_page.hide()
+	configuration_page.hide()
 	multiplayer_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.hide()
@@ -1139,6 +1257,7 @@ func _show_quest_overview() -> void:
 	if is_instance_valid(play_guide_overlay):
 		play_guide_overlay.hide()
 	landing_page.hide()
+	configuration_page.hide()
 	free_game_page.hide()
 	multiplayer_page.hide()
 	quest_detail_page.hide()

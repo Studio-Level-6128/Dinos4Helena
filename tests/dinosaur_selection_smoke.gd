@@ -29,7 +29,16 @@ func _run() -> void:
 	assert(ResourceLoader.exists("res://assets/ui/menu/quests-tile.png"), "Quests tile background is missing")
 	assert(ResourceLoader.exists("res://assets/ui/menu/free-game-tile.png"), "Free Game tile background is missing")
 	var mode_tiles: Node = app.menu_layer.find_child("GameModeTiles", true, false)
-	assert(mode_tiles != null and mode_tiles.get_child_count() == 2, "Landing page should contain exactly two mode tiles")
+	assert(mode_tiles != null and mode_tiles.get_child_count() == 3, "Landing page should contain exactly three mode tiles")
+	var multiplayer_tile := app.menu_layer.find_child("MultiplayerTile", true, false) as Button
+	assert(multiplayer_tile != null and quests_tile.size == free_game_tile.size and free_game_tile.size == multiplayer_tile.size, "Landing tiles should have equal sizes")
+	assert(is_equal_approx(mode_tiles.position.x + mode_tiles.size.x / 2.0, landing_page.size.x / 2.0), "Landing tiles are not centered")
+	var configuration_button := app.menu_layer.find_child("ConfigurationButton", true, false) as Button
+	assert(configuration_button != null and configuration_button.get_parent() == landing_page, "Configuration entry is missing from the start screen")
+	configuration_button.pressed.emit()
+	assert(app.configuration_page.visible and not landing_page.visible, "Configuration page did not open")
+	(app.configuration_page.find_child("ConfigurationBackButton", true, false) as Button).pressed.emit()
+	assert(landing_page.visible and not app.configuration_page.visible, "Configuration back button failed")
 
 	# Credits remain available from the clean landing page.
 	var credits_button := app.menu_layer.find_child("CreditsButton", true, false) as Button

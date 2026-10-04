@@ -12,22 +12,28 @@ func _run() -> void:
 	world._dismiss_splash(true)
 	var tile = world.landing_page.find_child("MultiplayerTile", true, false)
 	assert(tile != null and tile.disabled == false, "Multiplayer landing tile is missing")
+	world.multiplayer_settings.clear()
+	var defaults: Dictionary = world._saved_multiplayer_connection()
+	assert(defaults["host"] == "92.205.18.100" and defaults["port"] == 8765, "Default server address is wrong")
+	assert(defaults["secure"] and defaults["allow_self_signed"], "Default TLS options should be enabled")
 	world._show_multiplayer_page()
 	assert(world.multiplayer_page.visible and world.multiplayer_dino_cards.size() == 7, "Multiplayer dinosaur selection is incomplete")
+	assert(world.multiplayer_host_input.get_parent() == world.configuration_page, "Server settings should be on Configuration, not Multiplayer")
 	world.multiplayer_settings.set_value("server", "url", "wss://games.example.org:9443/")
-	world.multiplayer_settings.erase_section_key("server", "host")
-	world.multiplayer_settings.erase_section_key("server", "port")
-	world.multiplayer_settings.erase_section_key("server", "secure")
 	var migrated: Dictionary = world._saved_multiplayer_connection()
 	assert(migrated["host"] == "games.example.org" and int(migrated["port"]) == 9443 and bool(migrated["secure"]), "Previously saved server URL was not migrated")
 	world._select_dino("stegosaurus")
+	world._show_configuration_page()
 	world.multiplayer_host_input.text = "127.0.0.1"
 	world.multiplayer_port_input.text = "0"
-	world._connect_multiplayer()
-	assert(world.multiplayer_status_label.text == world._t("menu.server_port_invalid"), "Invalid server port was accepted")
+	world._save_multiplayer_settings()
+	assert(world.configuration_status_label.text == world._t("menu.server_port_invalid"), "Invalid server port was accepted")
 	world.multiplayer_port_input.text = "8765"
 	world.multiplayer_secure_checkbox.button_pressed = true
 	world.multiplayer_self_signed_checkbox.button_pressed = true
+	world._save_multiplayer_settings()
+	assert(world.configuration_status_label.text == world._t("menu.configuration_saved"), "Server settings were not saved from Configuration")
+	world._show_multiplayer_page()
 	world._connect_multiplayer()
 	assert(world.multiplayer_settings.get_value("server", "host") == "127.0.0.1", "Server IP was not saved")
 	assert(int(world.multiplayer_settings.get_value("server", "port")) == 8765, "Server port was not saved")
