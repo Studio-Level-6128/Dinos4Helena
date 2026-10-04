@@ -1,6 +1,7 @@
 extends Node3D
 
 const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
+const HUMAN_MARKER_SCRIPT := preload("res://scripts/human_marker.gd")
 
 var dino_id := "triceratops"
 var identifier := 0
@@ -10,6 +11,9 @@ var animation_player: AnimationPlayer
 var current_animation := ""
 var health_label: Label3D
 var current_health := 100
+var player_name := "Player"
+var player_color := "#6ea8fe"
+var identity_marker: Node3D
 
 
 func _ready() -> void:
@@ -38,10 +42,20 @@ func _ready() -> void:
 	label.modulate = Color("fff2c2")
 	add_child(label)
 	health_label = label
+	identity_marker = HUMAN_MARKER_SCRIPT.new()
+	identity_marker.position.y = float(config.get_value(dino_id, "collision_height", 2.8)) + 1.7
+	add_child(identity_marker)
 	_play_motion("idle")
 
 
 func set_network_state(data: Dictionary, immediate := false) -> void:
+	player_name = str(data.get("name", player_name))
+	var incoming_color := str(data.get("color", player_color))
+	if incoming_color != player_color:
+		player_color = incoming_color
+		identity_marker.call("set_color", player_color)
+	if is_instance_valid(health_label):
+		health_label.modulate = Color(player_color)
 	target_position = Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.1)), float(data.get("z", 0.0)))
 	target_yaw = float(data.get("yaw", 0.0))
 	if immediate:
@@ -55,7 +69,7 @@ func set_network_state(data: Dictionary, immediate := false) -> void:
 func set_health(value: int) -> void:
 	current_health = value
 	if is_instance_valid(health_label):
-		health_label.text = "%s  %d" % [Localization.text("dino." + dino_id), current_health]
+		health_label.text = "%s  %d" % [player_name, current_health]
 
 
 func _process(delta: float) -> void:

@@ -35,6 +35,11 @@ SPECIES = {
 }
 MAX_PLAYERS = 10
 MAX_MESSAGE_BYTES = 4096
+PLAYER_COLORS = frozenset((
+    "#ff6b6b", "#ffd166", "#7bd389", "#4ecdc4",
+    "#6ea8fe", "#c792ea", "#ff9f68", "#f47ac2",
+))
+DEFAULT_PLAYER_COLOR = "#6ea8fe"
 WORLD_LIMIT = 194.0
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 DEFAULT_CERT_DIR = Path(__file__).resolve().parent / "certs"
@@ -117,6 +122,8 @@ class Player:
     identifier: int
     writer: asyncio.StreamWriter
     dino: str
+    name: str
+    color: str
     x: float
     y: float
     z: float
@@ -129,6 +136,7 @@ class Player:
     def public(self) -> dict:
         return {
             "id": self.identifier, "dino": self.dino,
+            "name": self.name, "color": self.color,
             "x": round(self.x, 3), "y": round(self.y, 3), "z": round(self.z, 3),
             "yaw": round(self.yaw, 4), "animation": self.animation,
             "health": self.health,
@@ -197,6 +205,13 @@ class GameServer:
                     or not isinstance(hello.get("dino"), str) or hello["dino"] not in SPECIES):
                 await self.send(writer, {"type": "rejected", "reason": "invalid_dinosaur"})
                 return
+            raw_name = hello.get("name")
+            name = raw_name.strip() if isinstance(raw_name, str) else None
+            color = hello.get("color", DEFAULT_PLAYER_COLOR)
+            if ((raw_name is not None and (not name or len(name) > 20 or not name.isprintable()))
+                    or not isinstance(color, str) or color not in PLAYER_COLORS):
+                await self.send(writer, {"type": "rejected", "reason": "invalid_identity"})
+                return
             async with self.lock:
                 if len(self.players) >= self.limit:
                     await self.send(writer, {"type": "rejected", "reason": "full"})
@@ -207,7 +222,8 @@ class GameServer:
                 identifier = secrets.randbits(53)
                 while identifier in self.players:
                     identifier = secrets.randbits(53)
-                player = Player(identifier, writer, hello["dino"], x, y, z,
+                player = Player(identifier, writer, hello["dino"],
+                                name or f"Player {slot + 1}", color, x, y, z,
                                 health=SPECIES[hello["dino"]][0])
                 player.slot = slot
                 roster = [member.public() for member in self.players.values()]

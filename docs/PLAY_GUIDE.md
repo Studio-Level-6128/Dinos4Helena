@@ -6,7 +6,7 @@ Choose **Free Game** on the landing page, then select one of seven dinosaurs. Ea
 
 ## Play together
 
-The default multiplayer server is `92.205.18.100:8765` with TLS and self-signed certificates enabled. To use another server, open **Configuration** at the bottom-left of the start screen, enter its IP address or host name and port, choose the TLS options, and save. On a local network, use the host computer's LAN address (for example `192.168.1.50`). Allowing a self-signed certificate encrypts the connection but does not verify the server's identity. The app remembers saved settings. Then choose **Multiplayer**, select a dinosaur, and connect. Up to ten players can share the grassland map.
+The default multiplayer server is `92.205.18.100:8765` with TLS and self-signed certificates enabled. To use another server, open **Configuration** at the bottom-left of the start screen, enter its IP address or host name and port, choose the TLS options, and save. On a local network, use the host computer's LAN address (for example `192.168.1.50`). Allowing a self-signed certificate encrypts the connection but does not verify the server's identity. The app remembers saved settings. Then choose **Multiplayer**, select a dinosaur, enter your player name, choose a color, and connect. Up to ten players can share the grassland map. The in-game player list shows each name in its color; a matching colored token floats above each human-controlled dinosaur.
 
 The server runs separately from the game. Whoever hosts it can follow the [server setup guide](../server/README.md). `127.0.0.1` works only when the game and server run on the same device.
 

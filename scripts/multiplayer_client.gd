@@ -11,15 +11,19 @@ const CONNECT_TIMEOUT := 10.0
 
 var socket: WebSocketPeer
 var selected_dino := "triceratops"
+var player_name := "Player"
+var player_color := "#6ea8fe"
 var player: CharacterBody3D
 var connected := false
 var elapsed := 0.0
 var connect_time := 0.0
 
 
-func connect_to_server(url: String, dino_id: String, allow_self_signed := false) -> Error:
+func connect_to_server(url: String, dino_id: String, allow_self_signed := false, display_name := "Player", color := "#6ea8fe") -> Error:
 	disconnect_from_server()
 	selected_dino = dino_id
+	player_name = display_name
+	player_color = color
 	socket = WebSocketPeer.new()
 	var tls_options: TLSOptions = TLSOptions.client_unsafe() if allow_self_signed and url.begins_with("wss://") else null
 	var result := socket.connect_to_url(url, tls_options)
@@ -54,7 +58,10 @@ func _process(delta: float) -> void:
 		WebSocketPeer.STATE_OPEN:
 			if not connected:
 				connected = true
-				socket.send_text(JSON.stringify({"type": "hello", "dino": selected_dino}))
+				socket.send_text(JSON.stringify({
+					"type": "hello", "dino": selected_dino,
+					"name": player_name, "color": player_color
+				}))
 			while socket.get_available_packet_count() > 0:
 				var parsed = JSON.parse_string(socket.get_packet().get_string_from_utf8())
 				if not parsed is Dictionary:

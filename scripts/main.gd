@@ -13,6 +13,7 @@ const EGG_NEST_SCRIPT := preload("res://scripts/egg_nest.gd")
 const BABY_DINO_SCRIPT := preload("res://scripts/baby_dino.gd")
 const MULTIPLAYER_CLIENT_SCRIPT := preload("res://scripts/multiplayer_client.gd")
 const REMOTE_PLAYER_SCRIPT := preload("res://scripts/remote_player.gd")
+const HUMAN_MARKER_SCRIPT := preload("res://scripts/human_marker.gd")
 const VIRTUAL_JOYSTICK_SCRIPT := preload("res://scripts/virtual_joystick.gd")
 const LAVA_STREAM_SCRIPT := preload("res://scripts/lava_stream.gd")
 const SNOW_FOOTPRINTS_SCRIPT := preload("res://scripts/snow_footprints.gd")
@@ -29,6 +30,7 @@ const MULTIPLAYER_SETTINGS_PATH := "user://multiplayer.cfg"
 const DEFAULT_SERVER_URL := "wss://92.205.18.100:8765/"
 const DEFAULT_SERVER_HOST := "92.205.18.100"
 const DEFAULT_SERVER_PORT := 8765
+const PLAYER_COLORS := ["#ff6b6b", "#ffd166", "#7bd389", "#4ecdc4", "#6ea8fe", "#c792ea", "#ff9f68", "#f47ac2"]
 const SCREAM_RESPONSE_RANGE := 72.0
 # Adaptive performance starts at full quality. It only reduces expensive
 # rendering features after several sustained low-frame-rate samples, and uses
@@ -90,10 +92,15 @@ var multiplayer_self_signed_checkbox: CheckBox
 var configuration_status_label: Label
 var multiplayer_status_label: Label
 var multiplayer_connect_button: Button
+var multiplayer_name_input: LineEdit
+var multiplayer_color_buttons: Dictionary = {}
+var selected_player_color := "#6ea8fe"
 var multiplayer_client: Node
 var multiplayer_active := false
 var multiplayer_id := 0
 var remote_players: Dictionary = {}
+var multiplayer_roster: Dictionary = {}
+var multiplayer_roster_rows: VBoxContainer
 var map_theme_buttons: Dictionary = {}
 var start_game_button: Button
 var dinosaur_config := ConfigFile.new()
@@ -258,6 +265,7 @@ func _return_to_main_menu() -> void:
 		multiplayer_active = false
 		multiplayer_id = 0
 		remote_players.clear()
+		multiplayer_roster.clear()
 	if is_instance_valid(active_mission_event):
 		active_mission_event.queue_free()
 	active_mission_event = null
@@ -275,6 +283,7 @@ func _return_to_main_menu() -> void:
 	poison_label = null
 	mission_objective_label = null
 	mission_intro_player = null
+	multiplayer_roster_rows = null
 	companions_spawned = 0
 	quality_geometry.clear()
 	sun_light = null
@@ -799,11 +808,51 @@ func _build_multiplayer_page() -> void:
 	for index in DINO_IDS.size():
 		var dino_id: String = DINO_IDS[index]
 		rows[0 if index < 4 else 1].add_child(_create_dino_card(dino_id, _dino_name(dino_id), true))
+	var name_label := Label.new()
+	name_label.text = _t("menu.player_name")
+	name_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	name_label.position = Vector2(-430, 428)
+	name_label.size = Vector2(125, 36)
+	name_label.add_theme_font_size_override("font_size", 18)
+	name_label.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(name_label)
+	multiplayer_name_input = LineEdit.new()
+	multiplayer_name_input.name = "MultiplayerPlayerName"
+	multiplayer_name_input.max_length = 20
+	multiplayer_name_input.placeholder_text = _t("menu.player_name_placeholder")
+	multiplayer_name_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_name_input.position = Vector2(-300, 421)
+	multiplayer_name_input.size = Vector2(300, 43)
+	multiplayer_name_input.add_theme_font_size_override("font_size", 18)
+	multiplayer_page.add_child(multiplayer_name_input)
+	var color_label := Label.new()
+	color_label.text = _t("menu.player_color")
+	color_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	color_label.position = Vector2(-430, 476)
+	color_label.size = Vector2(150, 36)
+	color_label.add_theme_font_size_override("font_size", 18)
+	color_label.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(color_label)
+	multiplayer_color_buttons.clear()
+	for index in PLAYER_COLORS.size():
+		var hex: String = PLAYER_COLORS[index]
+		var swatch := Button.new()
+		swatch.name = "PlayerColor_%d" % index
+		swatch.tooltip_text = hex
+		swatch.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		swatch.position = Vector2(-270 + index * 78, 470)
+		swatch.size = Vector2(60, 42)
+		swatch.add_theme_font_size_override("font_size", 24)
+		swatch.add_theme_color_override("font_color", Color("132518"))
+		swatch.pressed.connect(_select_player_color.bind(hex))
+		multiplayer_page.add_child(swatch)
+		multiplayer_color_buttons[hex] = swatch
+	_update_player_color_buttons()
 	multiplayer_connect_button = Button.new()
 	multiplayer_connect_button.name = "ConnectToServerButton"
 	multiplayer_connect_button.text = _t("menu.connect")
 	multiplayer_connect_button.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_connect_button.position = Vector2(-190, 468)
+	multiplayer_connect_button.position = Vector2(-190, 535)
 	multiplayer_connect_button.size = Vector2(380, 54)
 	multiplayer_connect_button.add_theme_font_size_override("font_size", 21)
 	multiplayer_connect_button.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
@@ -814,11 +863,33 @@ func _build_multiplayer_page() -> void:
 	multiplayer_status_label.text = _t("menu.multiplayer_hint")
 	multiplayer_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	multiplayer_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	multiplayer_status_label.position = Vector2(-450, 538)
+	multiplayer_status_label.position = Vector2(-450, 605)
 	multiplayer_status_label.size = Vector2(900, 42)
 	multiplayer_status_label.add_theme_font_size_override("font_size", 16)
 	multiplayer_status_label.add_theme_color_override("font_color", Color("fff2c2"))
 	multiplayer_page.add_child(multiplayer_status_label)
+
+
+func _select_player_color(hex: String) -> void:
+	if hex not in PLAYER_COLORS:
+		return
+	selected_player_color = hex
+	_update_player_color_buttons()
+
+
+func _update_player_color_buttons() -> void:
+	for hex in multiplayer_color_buttons:
+		var button := multiplayer_color_buttons[hex] as Button
+		var selected := str(hex) == selected_player_color
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(str(hex))
+		style.border_color = Color.WHITE if selected else Color(0.05, 0.12, 0.06, 0.9)
+		style.set_border_width_all(4 if selected else 2)
+		style.set_corner_radius_all(8)
+		button.add_theme_stylebox_override("normal", style)
+		button.add_theme_stylebox_override("hover", style)
+		button.add_theme_stylebox_override("pressed", style)
+		button.text = "✓" if selected else ""
 
 
 func _build_configuration_page() -> void:
@@ -943,6 +1014,10 @@ func _show_multiplayer_page() -> void:
 
 
 func _connect_multiplayer() -> void:
+	var display_name := multiplayer_name_input.text.strip_edges()
+	if display_name.is_empty() or display_name.length() > 20:
+		multiplayer_status_label.text = _t("menu.player_name_required")
+		return
 	var connection := _saved_multiplayer_connection()
 	var host := str(connection["host"]).strip_edges()
 	var port_text := str(connection["port"])
@@ -958,7 +1033,7 @@ func _connect_multiplayer() -> void:
 	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
 	multiplayer_connect_button.disabled = true
 	multiplayer_status_label.text = _t("menu.connecting")
-	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id, allow_self_signed)
+	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id, allow_self_signed, display_name, selected_player_color)
 	if result != OK:
 		_on_multiplayer_failed(error_string(result))
 
@@ -1031,12 +1106,18 @@ func _on_multiplayer_welcome(message: Dictionary) -> void:
 	active_mission_id = ""
 	multiplayer_active = true
 	multiplayer_id = int(message.get("id", 0))
+	multiplayer_roster.clear()
 	selected_map_theme = "grassland"
 	seed_input.text = "%06d" % seed
 	map_seed = seed
 	_start_game(selected_dino_id)
 	var spawn: Dictionary = message["spawn"]
 	player.global_position = Vector3(float(spawn.get("x", 0.0)), float(spawn.get("y", 0.1)), float(spawn.get("z", 0.0)))
+	_remember_multiplayer_player(spawn)
+	var marker: Node3D = HUMAN_MARKER_SCRIPT.new()
+	marker.position.y = float(player.get("collision_height")) + 1.7
+	player.add_child(marker)
+	marker.call("set_color", str(spawn.get("color", selected_player_color)))
 	for peer in message.get("players", []):
 		if peer is Dictionary:
 			_upsert_remote_player(peer, true)
@@ -1057,6 +1138,8 @@ func _on_multiplayer_message(message: Dictionary) -> void:
 			if remote_players.has(peer_id):
 				(remote_players[peer_id] as Node).queue_free()
 				remote_players.erase(peer_id)
+			multiplayer_roster.erase(peer_id)
+			_refresh_multiplayer_roster()
 		"hit":
 			var target_id := int(message.get("target", 0))
 			var remaining := maxi(int(message.get("health", 0)), 0)
@@ -1075,6 +1158,7 @@ func _upsert_remote_player(data: Dictionary, immediate := false) -> void:
 	var peer_id := int(data.get("id", 0))
 	if peer_id == 0 or peer_id == multiplayer_id:
 		return
+	_remember_multiplayer_player(data)
 	var remote: Node3D = remote_players.get(peer_id)
 	if not is_instance_valid(remote):
 		remote = REMOTE_PLAYER_SCRIPT.new()
@@ -1086,6 +1170,38 @@ func _upsert_remote_player(data: Dictionary, immediate := false) -> void:
 		_register_quality_geometry(remote, "actor")
 		immediate = true
 	remote.call("set_network_state", data, immediate)
+
+
+func _remember_multiplayer_player(data: Dictionary) -> void:
+	var peer_id := int(data.get("id", 0))
+	if peer_id == 0:
+		return
+	var details := {
+		"name": str(data.get("name", "Player")),
+		"color": str(data.get("color", "#6ea8fe"))
+	}
+	if multiplayer_roster.get(peer_id, {}) == details:
+		return
+	multiplayer_roster[peer_id] = details
+	_refresh_multiplayer_roster()
+
+
+func _refresh_multiplayer_roster() -> void:
+	if not is_instance_valid(multiplayer_roster_rows):
+		return
+	_clear_control(multiplayer_roster_rows)
+	var ids: Array = multiplayer_roster.keys()
+	ids.sort()
+	for peer_id in ids:
+		var details: Dictionary = multiplayer_roster[peer_id]
+		var row := Label.new()
+		row.name = "Player_%s" % peer_id
+		row.text = "● %s%s" % [details["name"], " (%s)" % _t("hud.you") if peer_id == multiplayer_id else ""]
+		row.clip_text = true
+		row.custom_minimum_size = Vector2(240, 23)
+		row.add_theme_font_size_override("font_size", 16)
+		row.add_theme_color_override("font_color", Color(str(details["color"])))
+		multiplayer_roster_rows.add_child(row)
 
 
 func _on_multiplayer_failed(reason: String) -> void:
@@ -2568,6 +2684,24 @@ func _build_hud() -> void:
 	title.add_theme_color_override("font_color", Color("f4f0cf"))
 	root.add_child(title)
 	_build_vital_bars(root)
+	if multiplayer_active:
+		var roster_panel := PanelContainer.new()
+		roster_panel.name = "MultiplayerRoster"
+		roster_panel.position = Vector2(18, 150)
+		roster_panel.custom_minimum_size = Vector2(260, 0)
+		roster_panel.add_theme_stylebox_override("panel", _button_style(Color(0.02, 0.07, 0.04, 0.78), Color(0.72, 0.83, 0.42, 0.7)))
+		root.add_child(roster_panel)
+		var roster_content := VBoxContainer.new()
+		roster_content.add_theme_constant_override("separation", 3)
+		roster_panel.add_child(roster_content)
+		var roster_title := Label.new()
+		roster_title.text = _t("hud.players")
+		roster_title.add_theme_font_size_override("font_size", 17)
+		roster_title.add_theme_color_override("font_color", Color("fff2c2"))
+		roster_content.add_child(roster_title)
+		multiplayer_roster_rows = VBoxContainer.new()
+		multiplayer_roster_rows.name = "MultiplayerRosterRows"
+		roster_content.add_child(multiplayer_roster_rows)
 
 	status_label = Label.new()
 	status_label.text = _t("hud.explore")

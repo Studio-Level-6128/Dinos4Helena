@@ -15,7 +15,7 @@ from check_server import CheckError, check_server, parse_url
 from server import GameServer, ensure_tls_certificates
 
 
-async def connect(port, dino):
+async def connect(port, dino, name=None, color=None):
     reader, writer = await asyncio.open_connection("127.0.0.1", port)
     key = base64.b64encode(os.urandom(16)).decode()
     writer.write((
@@ -25,7 +25,12 @@ async def connect(port, dino):
     ).encode())
     await writer.drain()
     assert b"101 Switching Protocols" in await reader.readuntil(b"\r\n\r\n")
-    await send(writer, {"type": "hello", "dino": dino})
+    hello = {"type": "hello", "dino": dino}
+    if name is not None:
+        hello["name"] = name
+    if color is not None:
+        hello["color"] = color
+    await send(writer, hello)
     return reader, writer, await receive(reader)
 
 
@@ -61,17 +66,21 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.server.close()
         await self.server.wait_closed()
 
-    async def join(self, dino):
-        reader, writer, welcome = await connect(self.port, dino)
+    async def join(self, dino, name=None, color=None):
+        reader, writer, welcome = await connect(self.port, dino, name, color)
         self.writers.append(writer)
         return reader, writer, welcome
 
     async def test_roster_movement_and_attack(self):
-        first_reader, first_writer, first = await self.join("trex")
+        first_reader, first_writer, first = await self.join("trex", "Helena", "#f47ac2")
         self.assertEqual((first["type"], first["seed"], first["map"]), ("welcome", 654321, "grassland"))
-        second_reader, second_writer, second = await self.join("triceratops")
+        self.assertEqual((first["spawn"]["name"], first["spawn"]["color"]), ("Helena", "#f47ac2"))
+        second_reader, second_writer, second = await self.join("triceratops", "Dad", "#4ecdc4")
         self.assertEqual(second["players"][0]["id"], first["id"])
-        self.assertEqual((await receive(first_reader))["type"], "joined")
+        self.assertEqual((second["players"][0]["name"], second["players"][0]["color"]), ("Helena", "#f47ac2"))
+        joined = await receive(first_reader)
+        self.assertEqual((joined["type"], joined["player"]["name"], joined["player"]["color"]),
+                         ("joined", "Dad", "#4ecdc4"))
         # Move both players near each other and put the T-Rex facing its target.
         self.game.players[first["id"]].x = 0
         self.game.players[first["id"]].z = 0
@@ -79,7 +88,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.game.players[second["id"]].z = -3
         await send(first_writer, {"type": "state", "x": 0.5, "y": 0.1, "z": 0, "yaw": 0, "animation": "walk"})
         await send(second_writer, {"type": "state", "x": 0.5, "y": 0.1, "z": -3, "yaw": 0, "animation": "idle"})
-        self.assertEqual((await receive(second_reader))["type"], "state")
+        state = await receive(second_reader)
+        self.assertEqual((state["type"], state["player"]["name"], state["player"]["color"]),
+                         ("state", "Helena", "#f47ac2"))
         self.assertEqual((await receive(first_reader))["type"], "state")
         await send(first_writer, {"type": "attack"})
         hit = await receive(second_reader)
@@ -99,6 +110,17 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response, {"type": "rejected", "reason": "full"})
         writer.close()
         self.assertEqual(len(self.game.players), 10)
+
+    async def test_invalid_identity_is_rejected(self):
+        for name, color in (("", "#6ea8fe"), ("A" * 21, "#6ea8fe"),
+                            ("Bad\nName", "#6ea8fe"), ("Valid", "#000000")):
+            _, writer, response = await self.join("trex", name, color)
+            self.assertEqual(response, {"type": "rejected", "reason": "invalid_identity"})
+            writer.close()
+            await writer.wait_closed()
+        _, _, response = await self.join("trex")
+        self.assertTrue(response["spawn"]["name"].startswith("Player "))
+        self.assertEqual(response["spawn"]["color"], "#6ea8fe")
 
 
 class CertificateTests(unittest.TestCase):
