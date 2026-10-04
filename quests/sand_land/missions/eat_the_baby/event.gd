@@ -7,7 +7,7 @@ var baby_killed := false
 
 func setup(world_controller: Node, mission_objective: Dictionary) -> void:
 	super.setup(world_controller, mission_objective)
-	controller.player.food_consumed.connect(_on_food_consumed)
+	controller.player.food_source_consumed.connect(_on_food_source_consumed)
 	for npc in get_tree().get_nodes_in_group("npc_dinosaur"):
 		var role := str(npc.get_meta("mission_role", ""))
 		if role == "hunted_baby":
@@ -25,7 +25,13 @@ func setup(world_controller: Node, mission_objective: Dictionary) -> void:
 
 
 func _process(_delta: float) -> void:
-	if ended or baby_killed or not is_instance_valid(baby):
+	if ended:
+		return
+	if baby_killed:
+		if not has_meat_from(baby):
+			fail(Localization.text("mission.meal_lost"))
+		return
+	if not is_instance_valid(baby):
 		return
 	for npc in get_tree().get_nodes_in_group("npc_dinosaur"):
 		if str(npc.get_meta("mission_role", "")) == "baby_hunter_pack":
@@ -42,6 +48,6 @@ func _on_baby_died(_baby: CharacterBody3D) -> void:
 	set_progress(Localization.text("mission.eat_baby_eat"))
 
 
-func _on_food_consumed(food_kind: String) -> void:
-	if baby_killed and food_kind == "meat":
+func _on_food_source_consumed(source: Node3D) -> void:
+	if baby_killed and source == baby:
 		complete()

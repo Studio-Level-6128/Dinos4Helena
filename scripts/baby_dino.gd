@@ -187,6 +187,7 @@ func _drop_meat() -> Node3D:
 	meat.name = "SmallMeat"
 	meat.add_to_group("edible_meat")
 	meat.set_meta("energy_remaining", 24.0)
+	meat.set_meta("source_dinosaur", self)
 	get_parent().add_child(meat)
 	meat.global_position = global_position + Vector3(0.0, 0.2, 0.0)
 	var mesh_instance := MeshInstance3D.new()

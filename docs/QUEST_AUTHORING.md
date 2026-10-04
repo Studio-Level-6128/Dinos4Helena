@@ -410,6 +410,7 @@ Run:
 ```bash
 ./scripts/godot.sh --headless --path . --script res://tests/quests_smoke.gd
 ./scripts/godot.sh --headless --path . --script res://tests/quest_missions_smoke.gd
+./scripts/godot.sh --headless --path . --script res://tests/quest_outcomes_smoke.gd
 ./scripts/godot.sh --headless --path . --script res://tests/quest_release_smoke.gd
 ./scripts/godot.sh --headless --path . --editor --quit
 git diff --check
@@ -433,6 +434,8 @@ Extend `tests/quests_smoke.gd` when adding catalog or progression behavior.
 Extend `tests/quest_missions_smoke.gd` with assertions for the new mission's
 setup data and important actor roles. Add a focused test for complex objective
 logic rather than relying only on the generic boot test.
+Extend `tests/quest_outcomes_smoke.gd` with at least one win and each explicit
+loss condition so missions cannot remain active after their goal becomes impossible.
 
 ## Common mistakes
 
