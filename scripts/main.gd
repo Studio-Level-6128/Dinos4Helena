@@ -819,6 +819,9 @@ func _build_multiplayer_page() -> void:
 	multiplayer_name_input = LineEdit.new()
 	multiplayer_name_input.name = "MultiplayerPlayerName"
 	multiplayer_name_input.max_length = 20
+	var saved_name := str(multiplayer_settings.get_value("player", "name", ""))
+	if saved_name.length() <= 20 and saved_name.strip_edges() == saved_name:
+		multiplayer_name_input.text = saved_name
 	multiplayer_name_input.placeholder_text = _t("menu.player_name_placeholder")
 	multiplayer_name_input.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	multiplayer_name_input.position = Vector2(-300, 421)
@@ -833,6 +836,9 @@ func _build_multiplayer_page() -> void:
 	color_label.add_theme_font_size_override("font_size", 18)
 	color_label.add_theme_color_override("font_color", Color("fff2c2"))
 	multiplayer_page.add_child(color_label)
+	var saved_color := str(multiplayer_settings.get_value("player", "color", selected_player_color))
+	if saved_color in PLAYER_COLORS:
+		selected_player_color = saved_color
 	multiplayer_color_buttons.clear()
 	for index in PLAYER_COLORS.size():
 		var hex: String = PLAYER_COLORS[index]
@@ -1031,6 +1037,14 @@ func _connect_multiplayer() -> void:
 	var secure := bool(connection["secure"])
 	var allow_self_signed := secure and bool(connection["allow_self_signed"])
 	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
+	var pending_settings := ConfigFile.new()
+	pending_settings.load(MULTIPLAYER_SETTINGS_PATH)
+	pending_settings.set_value("player", "name", display_name)
+	pending_settings.set_value("player", "color", selected_player_color)
+	if pending_settings.save(MULTIPLAYER_SETTINGS_PATH) == OK:
+		multiplayer_settings = pending_settings
+	else:
+		push_warning("Could not save multiplayer player identity")
 	multiplayer_connect_button.disabled = true
 	multiplayer_status_label.text = _t("menu.connecting")
 	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id, allow_self_signed, display_name, selected_player_color)

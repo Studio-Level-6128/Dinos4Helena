@@ -46,6 +46,9 @@ func _run() -> void:
 	assert(int(world.multiplayer_settings.get_value("server", "port")) == 8765, "Server port was not saved")
 	assert(world.multiplayer_settings.get_value("server", "url") == "wss://127.0.0.1:8765/", "Host and port did not produce the expected secure WebSocket URL")
 	assert(bool(world.multiplayer_settings.get_value("server", "allow_self_signed")), "Self-signed certificate choice was not saved")
+	var saved_profile := ConfigFile.new()
+	assert(saved_profile.load("user://multiplayer.cfg") == OK, "Multiplayer profile was not saved locally")
+	assert(saved_profile.get_value("player", "name") == "Helena" and saved_profile.get_value("player", "color") == "#f47ac2", "Player name and color were not saved")
 	for frame in 900:
 		await process_frame
 		if world.multiplayer_active and is_instance_valid(world.player):
@@ -105,7 +108,14 @@ func _run() -> void:
 	assert(world.multiplayer_roster_rows.get_child_count() == 1, "Disconnected player remained in the roster")
 	world._return_to_main_menu()
 	assert(world.multiplayer_page.visible and world.multiplayer_client.socket == null, "Leaving multiplayer did not disconnect")
-	print("Multiplayer smoke test passed: setup, join, shared map, peer movement, and leave")
 	world.queue_free()
 	await process_frame
+	var reopened = load("res://scenes/main.tscn").instantiate()
+	root.add_child(reopened)
+	await process_frame
+	assert(reopened.multiplayer_name_input.text == "Helena", "Player name was not restored after restart")
+	assert(reopened.selected_player_color == "#f47ac2", "Player color was not restored after restart")
+	reopened.queue_free()
+	await process_frame
+	print("Multiplayer smoke test passed: setup, join, identity persistence, shared map, peer movement, and leave")
 	quit()
