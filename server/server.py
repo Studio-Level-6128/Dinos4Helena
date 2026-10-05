@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone asyncio WebSocket server for one Dinos4Helena grassland world.
+"""Standalone asyncio WebSocket server for Dinos4Helena multiplayer sessions.
 
 Uses the Python standard library at runtime and OpenSSL to create a TLS
 certificate on first launch. See README.md for protocol and hosting.
@@ -29,18 +29,21 @@ from pathlib import Path
 
 SPECIES = {
     "trex": (150, 8.0, 15), "spinosaurus": (200, 8.2, 20),
-    "triceratops": (180, 6.0, 8), "stegosaurus": (170, 4.8, 9),
-    "velociraptor": (85, 9.0, 5), "parasaurolophus": (105, 7.0, 4),
-    "apatosaurus": (210, 4.5, 10),
+    "triceratops": (180, 6.0, 8), "stegosaurus": (200, 4.8, 8),
+    "velociraptor": (80, 9.0, 10), "parasaurolophus": (125, 7.0, 6),
+    "apatosaurus": (300, 4.5, 10),
 }
 MAX_PLAYERS = 10
-MAX_MESSAGE_BYTES = 4096
+MAX_MESSAGE_BYTES = 32768
+MAX_SESSIONS = 16
+MAP_THEMES = frozenset(("grassland", "desert", "winter", "volcano"))
 PLAYER_COLORS = frozenset((
     "#ff6b6b", "#ffd166", "#7bd389", "#4ecdc4",
     "#6ea8fe", "#c792ea", "#ff9f68", "#f47ac2",
 ))
 DEFAULT_PLAYER_COLOR = "#6ea8fe"
 WORLD_LIMIT = 194.0
+NPC_WORLD_LIMIT = 210.0
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 DEFAULT_CERT_DIR = Path(__file__).resolve().parent / "certs"
 
@@ -124,6 +127,7 @@ class Player:
     dino: str
     name: str
     color: str
+    session_id: int
     x: float
     y: float
     z: float
@@ -132,6 +136,7 @@ class Player:
     health: int = 100
     last_state: float = field(default_factory=time.monotonic)
     last_attack: float = 0.0
+    last_npc_attack: float = 0.0
 
     def public(self) -> dict:
         return {
@@ -143,27 +148,58 @@ class Player:
         }
 
 
+@dataclass
+class Session:
+    identifier: int
+    name: str
+    map_theme: str
+    seed: int
+    players: dict[int, Player] = field(default_factory=dict)
+    host_id: int = 0
+    npcs: list[dict] = field(default_factory=list)
+
+    def public(self, limit: int) -> dict:
+        return {"id": self.identifier, "name": self.name, "map": self.map_theme,
+                "players": len(self.players), "limit": limit}
+
+
 class GameServer:
     def __init__(self, seed: int = 424242, limit: int = MAX_PLAYERS):
         self.seed = seed
         self.limit = limit
         self.players: dict[int, Player] = {}
+        self.sessions: dict[int, Session] = {}
+        self.next_session_id = 1
+        self.legacy_session_id = 0
         self.lock = asyncio.Lock()
 
     async def send(self, writer: asyncio.StreamWriter, message: dict) -> None:
         writer.write(make_frame(json.dumps(message, separators=(",", ":")).encode()))
         await writer.drain()
 
-    async def broadcast(self, message: dict, exclude: int | None = None) -> None:
+    async def broadcast(self, session: Session, message: dict, exclude: int | None = None) -> None:
         data = make_frame(json.dumps(message, separators=(",", ":")).encode())
-        for player in tuple(self.players.values()):
+        for player in tuple(session.players.values()):
             if player.identifier != exclude and not player.writer.is_closing():
                 player.writer.write(data)
         await asyncio.gather(
-            *(player.writer.drain() for player in tuple(self.players.values())
+            *(player.writer.drain() for player in tuple(session.players.values())
               if player.identifier != exclude and not player.writer.is_closing()),
             return_exceptions=True,
         )
+
+    def session_list(self) -> list[dict]:
+        return [session.public(self.limit) for session in self.sessions.values()]
+
+    def create_session(self, name: str, map_theme: str, legacy: bool = False) -> Session:
+        identifier = self.next_session_id
+        self.next_session_id += 1
+        seed = self.seed if legacy else secrets.randbelow(900000) + 100000
+        session = Session(identifier, name, map_theme, seed)
+        self.sessions[identifier] = session
+        if legacy:
+            self.legacy_session_id = identifier
+        return session
 
     def spawn(self, slot: int) -> tuple[float, float, float]:
         angle = slot * math.tau / self.limit
@@ -195,45 +231,82 @@ class GameServer:
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         player: Player | None = None
+        session: Session | None = None
         try:
             await self.handshake(reader, writer)
-            opcode, payload = await asyncio.wait_for(read_frame(reader), 10)
-            if opcode != 1:
-                raise ProtocolError("Expected a hello message")
-            hello = json.loads(payload)
-            if (not isinstance(hello, dict) or hello.get("type") != "hello"
-                    or not isinstance(hello.get("dino"), str) or hello["dino"] not in SPECIES):
-                await self.send(writer, {"type": "rejected", "reason": "invalid_dinosaur"})
-                return
-            raw_name = hello.get("name")
-            name = raw_name.strip() if isinstance(raw_name, str) else None
-            color = hello.get("color", DEFAULT_PLAYER_COLOR)
-            if ((raw_name is not None and (not name or len(name) > 20 or not name.isprintable()))
-                    or not isinstance(color, str) or color not in PLAYER_COLORS):
-                await self.send(writer, {"type": "rejected", "reason": "invalid_identity"})
-                return
-            async with self.lock:
-                if len(self.players) >= self.limit:
-                    await self.send(writer, {"type": "rejected", "reason": "full"})
+            while player is None:
+                opcode, payload = await asyncio.wait_for(read_frame(reader), 60)
+                if opcode == 8:
                     return
-                occupied = {getattr(p, "slot", -1) for p in self.players.values()}
-                slot = next(index for index in range(self.limit) if index not in occupied)
-                x, y, z = self.spawn(slot)
-                identifier = secrets.randbits(53)
-                while identifier in self.players:
+                if opcode != 1:
+                    raise ProtocolError("Expected a lobby request")
+                request = json.loads(payload)
+                if not isinstance(request, dict):
+                    continue
+                kind = request.get("type")
+                if kind == "list":
+                    await self.send(writer, {"type": "sessions", "sessions": self.session_list()})
+                    continue
+                if kind not in ("hello", "create", "join"):
+                    await self.send(writer, {"type": "rejected", "reason": "invalid_request"})
+                    continue
+                if not isinstance(request.get("dino"), str) or request["dino"] not in SPECIES:
+                    await self.send(writer, {"type": "rejected", "reason": "invalid_dinosaur"})
+                    continue
+                raw_name = request.get("name")
+                name = raw_name.strip() if isinstance(raw_name, str) else None
+                color = request.get("color", DEFAULT_PLAYER_COLOR)
+                if ((raw_name is not None and (not name or len(name) > 20 or not name.isprintable()))
+                        or not isinstance(color, str) or color not in PLAYER_COLORS):
+                    await self.send(writer, {"type": "rejected", "reason": "invalid_identity"})
+                    continue
+                if kind == "create" and request.get("map") not in MAP_THEMES:
+                    await self.send(writer, {"type": "rejected", "reason": "invalid_map"})
+                    continue
+                async with self.lock:
+                    if kind == "create":
+                        if len(self.sessions) >= MAX_SESSIONS:
+                            await self.send(writer, {"type": "rejected", "reason": "sessions_full"})
+                            continue
+                        session = self.create_session(f"{name or 'Player'}'s {request['map'].title()}", request["map"])
+                    elif kind == "hello":
+                        session = self.sessions.get(self.legacy_session_id)
+                        if session is None:
+                            if len(self.sessions) >= MAX_SESSIONS:
+                                await self.send(writer, {"type": "rejected", "reason": "sessions_full"})
+                                continue
+                            session = self.create_session("Grassland", "grassland", legacy=True)
+                    else:
+                        session_id = request.get("session")
+                        session = self.sessions.get(session_id) if type(session_id) is int else None
+                        if session is None:
+                            await self.send(writer, {"type": "rejected", "reason": "missing_session"})
+                            continue
+                    if len(session.players) >= self.limit:
+                        await self.send(writer, {"type": "rejected", "reason": "full"})
+                        continue
+                    occupied = {getattr(member, "slot", -1) for member in session.players.values()}
+                    slot = next(index for index in range(self.limit) if index not in occupied)
+                    x, y, z = self.spawn(slot)
                     identifier = secrets.randbits(53)
-                player = Player(identifier, writer, hello["dino"],
-                                name or f"Player {slot + 1}", color, x, y, z,
-                                health=SPECIES[hello["dino"]][0])
-                player.slot = slot
-                roster = [member.public() for member in self.players.values()]
-                self.players[identifier] = player
-                await self.send(writer, {
-                    "type": "welcome", "id": identifier, "seed": self.seed,
-                    "map": "grassland", "limit": self.limit, "spawn": player.public(),
-                    "players": roster,
-                })
-                await self.broadcast({"type": "joined", "player": player.public()}, identifier)
+                    while identifier in self.players:
+                        identifier = secrets.randbits(53)
+                    player = Player(identifier, writer, request["dino"],
+                                    name or f"Player {slot + 1}", color, session.identifier, x, y, z,
+                                    health=SPECIES[request["dino"]][0])
+                    player.slot = slot
+                    roster = [member.public() for member in session.players.values()]
+                    session.players[identifier] = player
+                    self.players[identifier] = player
+                    if session.host_id == 0:
+                        session.host_id = identifier
+                    await self.send(writer, {
+                        "type": "welcome", "id": identifier, "session": session.identifier,
+                        "seed": session.seed, "map": session.map_theme, "limit": self.limit,
+                        "host": session.host_id, "npcs": session.npcs,
+                        "spawn": player.public(), "players": roster,
+                    })
+                    await self.broadcast(session, {"type": "joined", "player": player.public()}, identifier)
             while True:
                 opcode, payload = await asyncio.wait_for(read_frame(reader), 30)
                 if opcode == 8:
@@ -249,27 +322,44 @@ class GameServer:
                     continue
                 kind = message.get("type")
                 if kind == "state":
-                    await self.update_state(player, message)
+                    await self.update_state(session, player, message)
                 elif kind == "attack":
-                    await self.attack(player)
+                    await self.attack(session, player)
                 elif kind == "scream":
-                    await self.broadcast({"type": "scream", "id": player.identifier}, player.identifier)
+                    await self.broadcast(session, {"type": "scream", "id": player.identifier}, player.identifier)
+                elif kind == "npcs":
+                    await self.update_npcs(session, player, message)
+                elif kind == "npc_attack":
+                    await self.attack_npc(session, player, message)
+                elif kind == "npc_hit":
+                    await self.npc_hit(session, player, message)
+                elif kind == "health":
+                    await self.update_health(session, player, message)
         except (asyncio.IncompleteReadError, ConnectionError, TimeoutError):
             pass
         except (ProtocolError, ValueError, UnicodeError, TypeError, binascii.Error) as error:
             print(f"Client rejected: {error}")
         finally:
-            if player is not None:
+            if player is not None and session is not None:
                 async with self.lock:
                     self.players.pop(player.identifier, None)
-                    await self.broadcast({"type": "left", "id": player.identifier})
+                    session.players.pop(player.identifier, None)
+                    await self.broadcast(session, {"type": "left", "id": player.identifier})
+                    if not session.players:
+                        self.sessions.pop(session.identifier, None)
+                        if self.legacy_session_id == session.identifier:
+                            self.legacy_session_id = 0
+                    elif session.host_id == player.identifier:
+                        session.host_id = next(iter(session.players))
+                        await self.broadcast(session, {"type": "ai_host", "host": session.host_id,
+                                                       "npcs": session.npcs})
             writer.close()
             try:
                 await writer.wait_closed()
             except ConnectionError:
                 pass
 
-    async def update_state(self, player: Player, message: dict) -> None:
+    async def update_state(self, session: Session, player: Player, message: dict) -> None:
         try:
             x, y, z, yaw = (float(message[key]) for key in ("x", "y", "z", "yaw"))
         except (KeyError, ValueError, TypeError):
@@ -287,9 +377,9 @@ class GameServer:
         player.last_state = now
         animation = message.get("animation", "idle")
         player.animation = animation if animation in ("idle", "walk", "run", "attack", "eat", "scream") else "idle"
-        await self.broadcast({"type": "state", "player": player.public()}, player.identifier)
+        await self.broadcast(session, {"type": "state", "player": player.public()}, player.identifier)
 
-    async def attack(self, attacker: Player) -> None:
+    async def attack(self, session: Session, attacker: Player) -> None:
         now = time.monotonic()
         if now - attacker.last_attack < 1.0 or attacker.health <= 0:
             return
@@ -297,7 +387,7 @@ class GameServer:
         forward = (-math.sin(attacker.yaw), -math.cos(attacker.yaw))
         target = None
         nearest = 5.0
-        for candidate in self.players.values():
+        for candidate in session.players.values():
             if candidate.identifier == attacker.identifier or candidate.dino == attacker.dino or candidate.health <= 0:
                 continue
             dx, dz = candidate.x - attacker.x, candidate.z - attacker.z
@@ -307,8 +397,81 @@ class GameServer:
         if target is None:
             return
         target.health = max(0, target.health - SPECIES[attacker.dino][2] * 3)
-        await self.broadcast({"type": "hit", "attacker": attacker.identifier,
+        await self.broadcast(session, {"type": "hit", "attacker": attacker.identifier,
                               "target": target.identifier, "health": target.health})
+
+    async def update_npcs(self, session: Session, sender: Player, message: dict) -> None:
+        if sender.identifier != session.host_id:
+            return
+        entries = message.get("npcs")
+        if not isinstance(entries, list) or len(entries) > 80:
+            return
+        validated = []
+        seen = set()
+        for entry in entries:
+            if not isinstance(entry, dict) or type(entry.get("id")) is not int:
+                return
+            npc_id, species = entry["id"], entry.get("dino")
+            if npc_id < 0 or npc_id >= 80 or npc_id in seen or species not in SPECIES:
+                return
+            try:
+                x, y, z, yaw = (float(entry[key]) for key in ("x", "y", "z", "yaw"))
+                health = int(entry["health"])
+            except (KeyError, ValueError, TypeError):
+                return
+            if (not all(map(math.isfinite, (x, y, z, yaw)))
+                    or abs(x) > NPC_WORLD_LIMIT or abs(z) > NPC_WORLD_LIMIT
+                    or y < -5 or y > 35 or not 0 <= health <= SPECIES[species][0]):
+                return
+            animation = entry.get("animation", "idle")
+            if animation not in ("idle", "walk", "run", "attack", "eat", "scream", "death"):
+                animation = "idle"
+            validated.append({"id": npc_id, "dino": species, "x": round(x, 3),
+                              "y": round(y, 3), "z": round(z, 3), "yaw": round(yaw, 4),
+                              "health": health, "dead": bool(entry.get("dead", False)),
+                              "animation": animation})
+            seen.add(npc_id)
+        session.npcs = validated
+        await self.broadcast(session, {"type": "npcs", "npcs": validated}, sender.identifier)
+
+    async def attack_npc(self, session: Session, attacker: Player, message: dict) -> None:
+        npc_id = message.get("npc")
+        if type(npc_id) is not int or time.monotonic() - attacker.last_npc_attack < 0.7:
+            return
+        npc = next((entry for entry in session.npcs if entry["id"] == npc_id), None)
+        if (npc is None or npc["dead"] or npc["health"] <= 0 or npc["dino"] == attacker.dino
+                or math.dist((attacker.x, attacker.z), (npc["x"], npc["z"])) > 6.0):
+            return
+        attacker.last_npc_attack = time.monotonic()
+        host = session.players.get(session.host_id)
+        if host is not None and host.identifier != attacker.identifier:
+            await self.send(host.writer, {"type": "npc_attack", "player": attacker.identifier,
+                                          "npc": npc_id, "damage": SPECIES[attacker.dino][2] * 4})
+
+    async def npc_hit(self, session: Session, sender: Player, message: dict) -> None:
+        if sender.identifier != session.host_id:
+            return
+        target_id, npc_id = message.get("target"), message.get("npc")
+        amount = message.get("damage")
+        if type(target_id) is not int or type(npc_id) is not int or type(amount) is not int:
+            return
+        target = session.players.get(target_id)
+        npc = next((entry for entry in session.npcs if entry["id"] == npc_id), None)
+        if (target is None or npc is None or npc["dead"] or amount < 1
+                or amount > SPECIES[npc["dino"]][2] * 3
+                or math.dist((target.x, target.z), (npc["x"], npc["z"])) > 7.0):
+            return
+        target.health = max(0, target.health - amount)
+        await self.broadcast(session, {"type": "hit", "attacker": -npc_id - 1,
+                                       "target": target_id, "health": target.health})
+
+    async def update_health(self, session: Session, player: Player, message: dict) -> None:
+        health = message.get("health")
+        if type(health) is not int or not 0 <= health <= SPECIES[player.dino][0]:
+            return
+        player.health = health
+        await self.broadcast(session, {"type": "health", "target": player.identifier,
+                                       "health": health}, player.identifier)
 
 
 async def main() -> None:

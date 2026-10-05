@@ -10,7 +10,7 @@
   "menu.quests_tooltip": "Choisis une quête",
   "menu.free_game_tile": "JEU LIBRE\nCHOISIS TON DINOSAURE",
   "menu.multiplayer_tile": "MULTIJOUEUR\nEXPLOREZ ENSEMBLE",
-  "menu.multiplayer_title": "PRAIRIE MULTIJOUEUR",
+  "menu.multiplayer_title": "MULTIJOUEUR",
   "menu.player_name": "TON NOM",
   "menu.player_name_placeholder": "Saisis ton nom de joueur",
   "menu.player_name_required": "Saisis un nom de joueur (20 caractères maximum).",
@@ -37,7 +37,7 @@
   "menu.server_host_invalid": "Saisis une IP ou un nom de serveur sans ws://.",
   "menu.server_port_invalid": "Saisis un port entre 1 et 65535.",
   "menu.connect": "SE CONNECTER ET JOUER",
-  "menu.multiplayer_hint": "Jusqu'à 10 joueurs partagent une prairie.",
+  "menu.multiplayer_hint": "Rejoins une partie ou crée une nouvelle carte.",
   "menu.connecting": "Connexion au serveur...",
   "menu.server_url_invalid": "Saisis une adresse ws:// ou wss://.",
   "menu.server_full": "Cette partie est pleine (10 joueurs). Réessaie plus tard.",
@@ -207,5 +207,13 @@
   "game_over.fallen": "Ton dinosaure est tombé",
   "game_over.heading": "PARTIE TERMINÉE",
   "game_over.detail": "%s n'a plus de santé",
-  "game_over.return": "RETOUR AU CHOIX DU DINOSAURE"
+  "game_over.return": "RETOUR AU CHOIX DU DINOSAURE",
+  "menu.multiplayer_sessions": "PARTIES MULTIJOUEUR",
+  "menu.create_session": "CRÉER UNE PARTIE",
+  "menu.refresh_sessions": "ACTUALISER LES PARTIES",
+  "menu.no_sessions": "Aucune partie. Crée la première !",
+  "menu.join_session": "REJOINDRE",
+  "menu.create_and_play": "CRÉER ET JOUER",
+  "menu.join_and_play": "REJOINDRE ET JOUER",
+  "menu.choose_identity": "Choisis ton dinosaure, ton nom et ta couleur."
 }

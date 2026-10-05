@@ -1,4 +1,6 @@
-extends Node3D
+extends CharacterBody3D
+
+signal damage_requested(player_id: int, npc_id: int, damage: int)
 
 const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
 const HUMAN_MARKER_SCRIPT := preload("res://scripts/human_marker.gd")
@@ -14,12 +16,25 @@ var current_health := 100
 var player_name := "Player"
 var player_color := "#6ea8fe"
 var identity_marker: Node3D
+var diet := "herbivore"
+var health := 100
+var max_health := 100
+var strength := 5
+var collision_radius := 0.8
+var collision_height := 2.8
+var dead := false
+var ai_target := false
 
 
 func _ready() -> void:
 	var config := ConfigFile.new()
 	if config.load("res://config/dinosaurs.cfg") != OK:
 		return
+	diet = str(config.get_value(dino_id, "diet", "herbivore"))
+	max_health = int(config.get_value(dino_id, "max_health", 100))
+	strength = int(config.get_value(dino_id, "strength", 5))
+	collision_radius = float(config.get_value(dino_id, "collision_radius", 0.8))
+	collision_height = float(config.get_value(dino_id, "collision_height", 2.8))
 	var scene := load(str(config.get_value(dino_id, "model_path", ""))) as PackedScene
 	if scene == null:
 		return
@@ -68,13 +83,32 @@ func set_network_state(data: Dictionary, immediate := false) -> void:
 
 func set_health(value: int) -> void:
 	current_health = value
+	health = value
+	dead = value <= 0
 	if is_instance_valid(health_label):
 		health_label.text = "%s  %d" % [player_name, current_health]
 
 
 func _process(delta: float) -> void:
+	velocity = (target_position - global_position) / maxf(delta, 0.001)
 	global_position = global_position.lerp(target_position, minf(delta * 11.0, 1.0))
 	rotation.y = lerp_angle(rotation.y, target_yaw, minf(delta * 11.0, 1.0))
+
+
+func set_ai_target(enabled: bool) -> void:
+	ai_target = enabled
+	if enabled:
+		add_to_group("player_dinosaur")
+		if diet == "carnivore":
+			add_to_group("player_hunter")
+	else:
+		remove_from_group("player_dinosaur")
+		remove_from_group("player_hunter")
+
+
+func take_damage(amount: int, _from_npc := false, attacker: Node3D = null) -> void:
+	if ai_target and amount > 0 and is_instance_valid(attacker):
+		damage_requested.emit(identifier, int(attacker.get("multiplayer_npc_id")), amount)
 
 
 func _play_motion(motion: String) -> void:

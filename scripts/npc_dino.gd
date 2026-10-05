@@ -4,6 +4,7 @@ extends CharacterBody3D
 # herbivores use flee/retaliate/defend states and a leader-based pack formation.
 # State priority is deliberate: survival and combat always override roaming.
 signal died(npc: CharacterBody3D)
+signal damage_requested(npc_id: int, damage: int)
 
 const CONFIG_PATH := "res://config/dinosaurs.cfg"
 const GENERATED_MATERIALS := preload("res://scripts/generated_materials.gd")
@@ -59,6 +60,8 @@ var starvation_damage_accumulator := 0.0
 var collision_radius := 0.8
 var collision_height := 2.8
 var dead := false
+var network_replica := false
+var multiplayer_npc_id := -1
 var can_retreat := true
 var ignore_combat_odds := false
 var allow_same_species_combat := false
@@ -136,6 +139,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if network_replica:
+		return
 	if dead:
 		velocity = Vector3.ZERO
 		return
@@ -693,6 +698,10 @@ func _attack(target: Node3D) -> void:
 
 
 func take_damage(amount: int, attacker: Node3D = null) -> void:
+	if network_replica:
+		if amount > 0 and not dead:
+			damage_requested.emit(multiplayer_npc_id, amount)
+		return
 	if amount <= 0 or dead or (is_instance_valid(attacker) and _is_same_species(attacker)):
 		return
 	health = maxi(health - amount, 0)
@@ -801,6 +810,25 @@ func _die(attacker: Node3D = null) -> void:
 		attacker.call("claim_meal", meat)
 	died.emit(self)
 	get_tree().create_timer(14.0).timeout.connect(queue_free)
+
+
+func apply_network_state(data: Dictionary, immediate := false) -> void:
+	var target := Vector3(float(data.get("x", position.x)), float(data.get("y", position.y)), float(data.get("z", position.z)))
+	position = target if immediate else position.lerp(target, 0.55)
+	rotation.y = float(data.get("yaw", rotation.y)) if immediate else lerp_angle(rotation.y, float(data.get("yaw", rotation.y)), 0.55)
+	var previous_health := health
+	health = int(data.get("health", health))
+	var newly_dead := bool(data.get("dead", dead)) and not dead
+	dead = bool(data.get("dead", dead))
+	if health != previous_health:
+		_show_health()
+	if dead:
+		remove_from_group("hunter_dinosaur")
+		remove_from_group("prey_dinosaur")
+		collision_shape.set_deferred("disabled", true)
+		if newly_dead:
+			_drop_meat()
+	_play_animation(str(data.get("animation", "idle")), true)
 
 
 func _drop_meat() -> Node3D:

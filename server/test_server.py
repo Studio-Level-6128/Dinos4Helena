@@ -34,6 +34,19 @@ async def connect(port, dino, name=None, color=None):
     return reader, writer, await receive(reader)
 
 
+async def lobby(port):
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    key = base64.b64encode(os.urandom(16)).decode()
+    writer.write((
+        f"GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUpgrade: websocket\r\n"
+        f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n"
+        "Sec-WebSocket-Version: 13\r\n\r\n"
+    ).encode())
+    await writer.drain()
+    assert b"101 Switching Protocols" in await reader.readuntil(b"\r\n\r\n")
+    return reader, writer
+
+
 async def send(writer, message):
     payload = json.dumps(message).encode()
     mask = os.urandom(4)
@@ -121,6 +134,69 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         _, _, response = await self.join("trex")
         self.assertTrue(response["spawn"]["name"].startswith("Player "))
         self.assertEqual(response["spawn"]["color"], "#6ea8fe")
+
+
+class SessionTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.game = GameServer(seed=654321)
+        self.server = await asyncio.start_server(self.game.handle, "127.0.0.1", 0)
+        self.port = self.server.sockets[0].getsockname()[1]
+        self.writers = []
+
+    async def asyncTearDown(self):
+        for writer in self.writers:
+            writer.close()
+            await writer.wait_closed()
+        self.server.close()
+        await self.server.wait_closed()
+
+    async def connect(self):
+        reader, writer = await lobby(self.port)
+        self.writers.append(writer)
+        return reader, writer
+
+    async def test_list_join_and_session_isolation(self):
+        first_reader, first_writer = await self.connect()
+        await send(first_writer, {"type": "list"})
+        self.assertEqual((await receive(first_reader))["sessions"], [])
+        await send(first_writer, {"type": "create", "map": "desert", "dino": "trex",
+                                  "name": "Hunter", "color": "#6ea8fe"})
+        first = await receive(first_reader)
+        self.assertEqual((first["map"], first["type"]), ("desert", "welcome"))
+        second_reader, second_writer = await self.connect()
+        await send(second_writer, {"type": "list"})
+        sessions = (await receive(second_reader))["sessions"]
+        self.assertEqual((sessions[0]["id"], sessions[0]["map"], sessions[0]["players"]),
+                         (first["session"], "desert", 1))
+        await send(second_writer, {"type": "join", "session": first["session"],
+                                   "dino": "triceratops", "name": "Friend", "color": "#f47ac2"})
+        second = await receive(second_reader)
+        self.assertEqual((second["seed"], second["host"]), (first["seed"], first["id"]))
+        self.assertEqual((await receive(first_reader))["type"], "joined")
+        third_reader, third_writer = await self.connect()
+        await send(third_writer, {"type": "create", "map": "winter", "dino": "apatosaurus",
+                                  "name": "Other", "color": "#7bd389"})
+        third = await receive(third_reader)
+        self.assertNotEqual(third["session"], first["session"])
+        self.assertEqual(third["map"], "winter")
+        await send(third_writer, {"type": "state", "x": third["spawn"]["x"],
+                                  "y": 0.1, "z": third["spawn"]["z"], "yaw": 0})
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(receive(first_reader), 0.1)
+        await send(first_writer, {"type": "npcs", "npcs": [{"id": 0, "dino": "trex",
+            "x": 0, "y": 0.1, "z": 0, "yaw": 0, "health": 150, "dead": False}]})
+        self.assertEqual((await receive(second_reader))["type"], "npcs")
+        self.assertEqual(self.game.sessions[first["session"]].npcs[0]["dino"], "trex")
+        self.assertEqual(self.game.sessions[third["session"]].npcs, [])
+        await send(second_writer, {"type": "npcs", "npcs": []})
+        await asyncio.sleep(0.05)
+        self.assertEqual(len(self.game.sessions[first["session"]].npcs), 1)
+        first_writer.close()
+        await first_writer.wait_closed()
+        host = await receive(second_reader)
+        self.assertEqual(host["type"], "left")
+        host = await receive(second_reader)
+        self.assertEqual((host["type"], host["host"]), ("ai_host", second["id"]))
 
 
 class CertificateTests(unittest.TestCase):

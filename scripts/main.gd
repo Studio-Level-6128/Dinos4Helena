@@ -66,6 +66,16 @@ var menu_layer: CanvasLayer
 var landing_page: Control
 var free_game_page: Control
 var multiplayer_page: Control
+var multiplayer_setup_page: Control
+var multiplayer_setup_title: Label
+var multiplayer_setup_mode := "join"
+var multiplayer_session_id := 0
+var multiplayer_session_theme := "grassland"
+var multiplayer_session_rows: VBoxContainer
+var multiplayer_lobby_status: Label
+var multiplayer_create_theme_row: Control
+var multiplayer_create_theme_buttons: Dictionary = {}
+var multiplayer_identity_controls: Array[Control] = []
 var configuration_page: Control
 var quest_overview_page: Control
 var quest_detail_page: Control
@@ -104,6 +114,9 @@ var multiplayer_client: Node
 var multiplayer_active := false
 var multiplayer_id := 0
 var remote_players: Dictionary = {}
+var multiplayer_ai_host_id := 0
+var multiplayer_npcs: Dictionary = {}
+var multiplayer_npc_sync_elapsed := 0.0
 var multiplayer_roster: Dictionary = {}
 var multiplayer_roster_rows: VBoxContainer
 var map_theme_buttons: Dictionary = {}
@@ -186,6 +199,7 @@ func _ready() -> void:
 	multiplayer_client.message_received.connect(_on_multiplayer_message)
 	multiplayer_client.connection_failed.connect(_on_multiplayer_failed)
 	multiplayer_client.disconnected.connect(_on_multiplayer_disconnected)
+	multiplayer_client.sessions_received.connect(_on_multiplayer_sessions)
 	_create_input_actions()
 	_build_main_menu()
 	_build_splash_screen()
@@ -194,6 +208,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if configuration_test_socket != null:
 		_poll_configuration_test(delta)
+	if multiplayer_active and multiplayer_id == multiplayer_ai_host_id and is_instance_valid(world_root):
+		multiplayer_npc_sync_elapsed += delta
+		if multiplayer_npc_sync_elapsed >= 0.2:
+			multiplayer_npc_sync_elapsed = 0.0
+			_send_multiplayer_npcs()
 	# Startup generation is intentionally excluded: only sustained gameplay FPS
 	# should decide whether this device needs a lower rendering tier.
 	if not is_instance_valid(world_root) or not is_instance_valid(player):
@@ -255,7 +274,8 @@ func _start_game(dino_id: String) -> void:
 	_build_player(dino_id)
 	if not multiplayer_active:
 		_build_egg_nests()
-		_build_wild_dinosaurs()
+	_build_wild_dinosaurs()
+	if not multiplayer_active:
 		_build_mission_babies()
 	_build_snow_footprints()
 	_build_hud()
@@ -271,6 +291,8 @@ func _return_to_main_menu() -> void:
 		multiplayer_client.disconnect_from_server()
 		multiplayer_active = false
 		multiplayer_id = 0
+		multiplayer_ai_host_id = 0
+		multiplayer_npcs.clear()
 		remote_players.clear()
 		multiplayer_roster.clear()
 	if is_instance_valid(active_mission_event):
@@ -374,6 +396,11 @@ func _build_main_menu() -> void:
 	multiplayer_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(multiplayer_page)
 	multiplayer_page.hide()
+	multiplayer_setup_page = Control.new()
+	multiplayer_setup_page.name = "MultiplayerSetupPage"
+	multiplayer_setup_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(multiplayer_setup_page)
+	multiplayer_setup_page.hide()
 	configuration_page = Control.new()
 	configuration_page.name = "ConfigurationPage"
 	configuration_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -678,6 +705,7 @@ func _build_main_menu() -> void:
 	_build_play_guide_overlay(root)
 	_build_quest_pages(root)
 	_build_multiplayer_page()
+	_build_multiplayer_setup_page()
 	_build_configuration_page()
 
 
@@ -770,6 +798,62 @@ func _set_dino_card_selected(panel: PanelContainer, selected: bool) -> void:
 
 func _build_multiplayer_page() -> void:
 	var heading := Label.new()
+	heading.text = _t("menu.multiplayer_sessions")
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	heading.position = Vector2(-400, 48)
+	heading.size = Vector2(800, 54)
+	heading.add_theme_font_size_override("font_size", 34)
+	heading.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(heading)
+	var back := Button.new()
+	back.text = _t("menu.back")
+	back.position = Vector2(20, 14)
+	back.size = Vector2(126, 40)
+	back.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42)))
+	back.pressed.connect(_show_landing_page)
+	multiplayer_page.add_child(back)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	scroll.position = Vector2(-485, 126)
+	scroll.size = Vector2(970, 390)
+	multiplayer_page.add_child(scroll)
+	multiplayer_session_rows = VBoxContainer.new()
+	multiplayer_session_rows.name = "MultiplayerSessionRows"
+	multiplayer_session_rows.custom_minimum_size.x = 935
+	multiplayer_session_rows.add_theme_constant_override("separation", 12)
+	scroll.add_child(multiplayer_session_rows)
+	var create := Button.new()
+	create.name = "CreateSessionButton"
+	create.text = _t("menu.create_session")
+	create.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	create.position = Vector2(-225, 540)
+	create.size = Vector2(450, 54)
+	create.add_theme_font_size_override("font_size", 21)
+	create.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
+	create.pressed.connect(_show_multiplayer_setup.bind("create", 0, "grassland"))
+	multiplayer_page.add_child(create)
+	var refresh := Button.new()
+	refresh.name = "RefreshSessionsButton"
+	refresh.text = _t("menu.refresh_sessions")
+	refresh.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	refresh.position = Vector2(-150, 603)
+	refresh.size = Vector2(300, 42)
+	refresh.pressed.connect(func() -> void: multiplayer_client.request_sessions())
+	multiplayer_page.add_child(refresh)
+	multiplayer_lobby_status = Label.new()
+	multiplayer_lobby_status.name = "MultiplayerLobbyStatus"
+	multiplayer_lobby_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	multiplayer_lobby_status.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_lobby_status.position = Vector2(-450, 660)
+	multiplayer_lobby_status.size = Vector2(900, 35)
+	multiplayer_lobby_status.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_page.add_child(multiplayer_lobby_status)
+
+
+func _build_multiplayer_setup_page() -> void:
+	multiplayer_identity_controls.clear()
+	var heading := Label.new()
 	heading.name = "MultiplayerHeading"
 	heading.text = _t("menu.multiplayer_title")
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -778,15 +862,16 @@ func _build_multiplayer_page() -> void:
 	heading.size = Vector2(660, 48)
 	heading.add_theme_font_size_override("font_size", 32)
 	heading.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(heading)
+	multiplayer_setup_page.add_child(heading)
+	multiplayer_setup_title = heading
 	var back := Button.new()
 	back.name = "MultiplayerBackButton"
 	back.text = _t("menu.back")
 	back.position = Vector2(20, 14)
 	back.size = Vector2(126, 40)
 	back.add_theme_stylebox_override("normal", _button_style(Color(0.08, 0.16, 0.1, 0.88), Color(0.72, 0.83, 0.42)))
-	back.pressed.connect(_show_landing_page)
-	multiplayer_page.add_child(back)
+	back.pressed.connect(_show_multiplayer_page)
+	multiplayer_setup_page.add_child(back)
 	var prompt := Label.new()
 	prompt.text = _t("menu.choose_dinosaur")
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -795,7 +880,7 @@ func _build_multiplayer_page() -> void:
 	prompt.size = Vector2(600, 30)
 	prompt.add_theme_font_size_override("font_size", 18)
 	prompt.add_theme_color_override("font_color", Color.WHITE)
-	multiplayer_page.add_child(prompt)
+	multiplayer_setup_page.add_child(prompt)
 	multiplayer_dino_cards.clear()
 	var cards := VBoxContainer.new()
 	cards.name = "MultiplayerDinosaurCards"
@@ -804,7 +889,7 @@ func _build_multiplayer_page() -> void:
 	cards.size = Vector2(860, 326)
 	cards.alignment = BoxContainer.ALIGNMENT_CENTER
 	cards.add_theme_constant_override("separation", 6)
-	multiplayer_page.add_child(cards)
+	multiplayer_setup_page.add_child(cards)
 	var rows: Array[HBoxContainer] = []
 	for row_index in 2:
 		var row := HBoxContainer.new()
@@ -816,6 +901,28 @@ func _build_multiplayer_page() -> void:
 	for index in DINO_IDS.size():
 		var dino_id: String = DINO_IDS[index]
 		rows[0 if index < 4 else 1].add_child(_create_dino_card(dino_id, _dino_name(dino_id), true))
+	multiplayer_create_theme_row = Control.new()
+	multiplayer_create_theme_row.name = "MultiplayerMapThemes"
+	multiplayer_create_theme_row.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	multiplayer_create_theme_row.position = Vector2(-410, 420)
+	multiplayer_create_theme_row.size = Vector2(820, 55)
+	multiplayer_setup_page.add_child(multiplayer_create_theme_row)
+	multiplayer_create_theme_buttons.clear()
+	for index in MAP_THEMES.size():
+		var theme_id: String = MAP_THEMES[index]
+		var theme_button := Button.new()
+		theme_button.name = "SessionTheme_" + theme_id
+		theme_button.position = Vector2(index * 207, 0)
+		theme_button.size = Vector2(198, 54)
+		theme_button.text = _theme_name(theme_id)
+		theme_button.add_theme_font_size_override("font_size", 16)
+		theme_button.add_theme_color_override("font_color", Color("fff2c2"))
+		var art: Texture2D = load("res://assets/ui/menu/theme-%s.png" % theme_id)
+		theme_button.add_theme_stylebox_override("normal", _tile_image_style(art, Color(0.72, 0.72, 0.72)))
+		theme_button.pressed.connect(_select_multiplayer_theme.bind(theme_id))
+		multiplayer_create_theme_row.add_child(theme_button)
+		multiplayer_create_theme_buttons[theme_id] = theme_button
+	_update_multiplayer_theme_buttons()
 	var name_label := Label.new()
 	name_label.text = _t("menu.player_name")
 	name_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -823,7 +930,8 @@ func _build_multiplayer_page() -> void:
 	name_label.size = Vector2(125, 36)
 	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(name_label)
+	multiplayer_setup_page.add_child(name_label)
+	multiplayer_identity_controls.append(name_label)
 	multiplayer_name_input = LineEdit.new()
 	multiplayer_name_input.name = "MultiplayerPlayerName"
 	multiplayer_name_input.max_length = 20
@@ -835,7 +943,8 @@ func _build_multiplayer_page() -> void:
 	multiplayer_name_input.position = Vector2(-300, 421)
 	multiplayer_name_input.size = Vector2(300, 43)
 	multiplayer_name_input.add_theme_font_size_override("font_size", 18)
-	multiplayer_page.add_child(multiplayer_name_input)
+	multiplayer_setup_page.add_child(multiplayer_name_input)
+	multiplayer_identity_controls.append(multiplayer_name_input)
 	var color_label := Label.new()
 	color_label.text = _t("menu.player_color")
 	color_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -843,7 +952,8 @@ func _build_multiplayer_page() -> void:
 	color_label.size = Vector2(150, 36)
 	color_label.add_theme_font_size_override("font_size", 18)
 	color_label.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(color_label)
+	multiplayer_setup_page.add_child(color_label)
+	multiplayer_identity_controls.append(color_label)
 	var saved_color := str(multiplayer_settings.get_value("player", "color", selected_player_color))
 	if saved_color in PLAYER_COLORS:
 		selected_player_color = saved_color
@@ -859,7 +969,8 @@ func _build_multiplayer_page() -> void:
 		swatch.add_theme_font_size_override("font_size", 24)
 		swatch.add_theme_color_override("font_color", Color("132518"))
 		swatch.pressed.connect(_select_player_color.bind(hex))
-		multiplayer_page.add_child(swatch)
+		multiplayer_setup_page.add_child(swatch)
+		multiplayer_identity_controls.append(swatch)
 		multiplayer_color_buttons[hex] = swatch
 	_update_player_color_buttons()
 	multiplayer_connect_button = Button.new()
@@ -871,7 +982,7 @@ func _build_multiplayer_page() -> void:
 	multiplayer_connect_button.add_theme_font_size_override("font_size", 21)
 	multiplayer_connect_button.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
 	multiplayer_connect_button.pressed.connect(_connect_multiplayer)
-	multiplayer_page.add_child(multiplayer_connect_button)
+	multiplayer_setup_page.add_child(multiplayer_connect_button)
 	multiplayer_status_label = Label.new()
 	multiplayer_status_label.name = "MultiplayerStatus"
 	multiplayer_status_label.text = _t("menu.multiplayer_hint")
@@ -881,7 +992,27 @@ func _build_multiplayer_page() -> void:
 	multiplayer_status_label.size = Vector2(900, 42)
 	multiplayer_status_label.add_theme_font_size_override("font_size", 16)
 	multiplayer_status_label.add_theme_color_override("font_color", Color("fff2c2"))
-	multiplayer_page.add_child(multiplayer_status_label)
+	multiplayer_setup_page.add_child(multiplayer_status_label)
+	multiplayer_identity_controls.append(multiplayer_connect_button)
+	multiplayer_identity_controls.append(multiplayer_status_label)
+	for control in multiplayer_identity_controls:
+		control.set_meta("join_y", control.position.y)
+
+
+func _select_multiplayer_theme(theme_id: String) -> void:
+	if theme_id not in MAP_THEMES:
+		return
+	selected_map_theme = theme_id
+	_update_multiplayer_theme_buttons()
+
+
+func _update_multiplayer_theme_buttons() -> void:
+	for theme_id in multiplayer_create_theme_buttons:
+		var button := multiplayer_create_theme_buttons[theme_id] as Button
+		var selected := str(theme_id) == selected_map_theme
+		button.text = ("✓ " if selected else "") + _theme_name(str(theme_id))
+		var art: Texture2D = load("res://assets/ui/menu/theme-%s.png" % theme_id)
+		button.add_theme_stylebox_override("normal", _tile_image_style(art, Color.WHITE if selected else Color(0.62, 0.62, 0.62)))
 
 
 func _select_player_color(hex: String) -> void:
@@ -1031,10 +1162,93 @@ func _show_multiplayer_page() -> void:
 	configuration_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.hide()
+	multiplayer_setup_page.hide()
 	multiplayer_page.show()
-	_update_dino_card_selection()
+	if multiplayer_client.socket == null or multiplayer_client.mode != "lobby":
+		_connect_multiplayer_lobby()
+	else:
+		multiplayer_client.request_sessions()
 	if is_instance_valid(multiplayer_connect_button):
 		multiplayer_connect_button.disabled = false
+
+
+func _connect_multiplayer_lobby() -> void:
+	var connection := _saved_multiplayer_connection()
+	var host := str(connection["host"]).strip_edges()
+	var port := int(connection["port"])
+	if host.is_empty() or port < 1 or port > 65535:
+		multiplayer_lobby_status.text = _t("menu.server_host_invalid")
+		return
+	var secure := bool(connection["secure"])
+	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
+	multiplayer_lobby_status.text = _t("menu.connecting")
+	var error: Error = multiplayer_client.connect_to_lobby(url, secure and bool(connection["allow_self_signed"]))
+	if error != OK:
+		_on_multiplayer_failed(error_string(error))
+
+
+func _on_multiplayer_sessions(sessions: Array) -> void:
+	if not is_instance_valid(multiplayer_session_rows):
+		return
+	_clear_control(multiplayer_session_rows)
+	if sessions.is_empty():
+		var empty := Label.new()
+		empty.text = _t("menu.no_sessions")
+		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty.custom_minimum_size = Vector2(900, 60)
+		empty.add_theme_font_size_override("font_size", 19)
+		empty.add_theme_color_override("font_color", Color("fff2c2"))
+		multiplayer_session_rows.add_child(empty)
+	for entry in sessions:
+		if not entry is Dictionary:
+			continue
+		var data := entry as Dictionary
+		var theme := str(data.get("map", "grassland"))
+		if theme not in MAP_THEMES:
+			continue
+		var row := HBoxContainer.new()
+		row.name = "Session_%s" % data.get("id", 0)
+		row.custom_minimum_size.y = 65
+		row.add_theme_constant_override("separation", 15)
+		multiplayer_session_rows.add_child(row)
+		var title := Label.new()
+		title.text = "%s  •  %s  •  %d/%d" % [str(data.get("name", "Session")), _theme_name(theme), int(data.get("players", 0)), int(data.get("limit", 10))]
+		title.custom_minimum_size = Vector2(720, 55)
+		title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		title.add_theme_font_size_override("font_size", 19)
+		title.add_theme_color_override("font_color", Color("fff2c2"))
+		row.add_child(title)
+		var join := Button.new()
+		join.name = "JoinSession_%s" % data.get("id", 0)
+		join.text = _t("menu.join_session")
+		join.custom_minimum_size = Vector2(170, 52)
+		join.disabled = int(data.get("players", 0)) >= int(data.get("limit", 10))
+		join.add_theme_stylebox_override("normal", _button_style(Color("376c32"), Color("efd56c")))
+		join.pressed.connect(_show_multiplayer_setup.bind("join", int(data.get("id", 0)), theme))
+		row.add_child(join)
+	multiplayer_lobby_status.text = ""
+
+
+func _show_multiplayer_setup(mode: String, session_id: int, map_theme: String) -> void:
+	if multiplayer_client.socket == null or not multiplayer_client.connected:
+		multiplayer_lobby_status.text = _t("menu.server_unreachable")
+		return
+	multiplayer_setup_mode = mode
+	multiplayer_session_id = session_id
+	multiplayer_session_theme = map_theme
+	selected_map_theme = map_theme
+	_update_multiplayer_theme_buttons()
+	var creating := mode == "create"
+	multiplayer_setup_title.text = _t("menu.create_session") if creating else _t("menu.join_session")
+	multiplayer_create_theme_row.visible = creating
+	for control in multiplayer_identity_controls:
+		control.position.y = float(control.get_meta("join_y")) + (60.0 if creating else 0.0)
+	multiplayer_connect_button.text = _t("menu.create_and_play") if creating else _t("menu.join_and_play")
+	multiplayer_status_label.text = _t("menu.choose_identity")
+	multiplayer_connect_button.disabled = false
+	multiplayer_page.hide()
+	multiplayer_setup_page.show()
+	_update_dino_card_selection()
 
 
 func _connect_multiplayer() -> void:
@@ -1042,19 +1256,6 @@ func _connect_multiplayer() -> void:
 	if display_name.is_empty() or display_name.length() > 20:
 		multiplayer_status_label.text = _t("menu.player_name_required")
 		return
-	var connection := _saved_multiplayer_connection()
-	var host := str(connection["host"]).strip_edges()
-	var port_text := str(connection["port"])
-	if host.is_empty() or host.contains(" ") or host.contains("/") or host.contains("@") or host.contains("?") or host.contains("#") or host.contains(":"):
-		multiplayer_status_label.text = _t("menu.server_host_invalid")
-		return
-	if not port_text.is_valid_int() or int(port_text) < 1 or int(port_text) > 65535:
-		multiplayer_status_label.text = _t("menu.server_port_invalid")
-		return
-	var port := int(port_text)
-	var secure := bool(connection["secure"])
-	var allow_self_signed := secure and bool(connection["allow_self_signed"])
-	var url := "%s://%s:%d/" % ["wss" if secure else "ws", host, port]
 	var pending_settings := ConfigFile.new()
 	pending_settings.load(MULTIPLAYER_SETTINGS_PATH)
 	pending_settings.set_value("player", "name", display_name)
@@ -1065,7 +1266,8 @@ func _connect_multiplayer() -> void:
 		push_warning("Could not save multiplayer player identity")
 	multiplayer_connect_button.disabled = true
 	multiplayer_status_label.text = _t("menu.connecting")
-	var result: Error = multiplayer_client.connect_to_server(url, selected_dino_id, allow_self_signed, display_name, selected_player_color)
+	var result: Error = multiplayer_client.enter_session(multiplayer_setup_mode == "create", multiplayer_session_id,
+		selected_map_theme, selected_dino_id, display_name, selected_player_color)
 	if result != OK:
 		_on_multiplayer_failed(error_string(result))
 
@@ -1197,7 +1399,7 @@ func _saved_multiplayer_connection() -> Dictionary:
 
 func _on_multiplayer_welcome(message: Dictionary) -> void:
 	var seed := int(message.get("seed", 0))
-	if message.get("map") != "grassland" or seed < 100000 or seed > 999999 or not message.get("spawn") is Dictionary:
+	if str(message.get("map", "")) not in MAP_THEMES or seed < 100000 or seed > 999999 or not message.get("spawn") is Dictionary:
 		_on_multiplayer_failed("protocol")
 		multiplayer_client.disconnect_from_server()
 		return
@@ -1205,8 +1407,12 @@ func _on_multiplayer_welcome(message: Dictionary) -> void:
 	active_mission_id = ""
 	multiplayer_active = true
 	multiplayer_id = int(message.get("id", 0))
+	multiplayer_session_id = int(message.get("session", 0))
+	multiplayer_ai_host_id = int(message.get("host", 0))
+	multiplayer_npcs.clear()
+	multiplayer_npc_sync_elapsed = 0.0
 	multiplayer_roster.clear()
-	selected_map_theme = "grassland"
+	selected_map_theme = str(message["map"])
 	seed_input.text = "%06d" % seed
 	map_seed = seed
 	_start_game(selected_dino_id)
@@ -1220,6 +1426,8 @@ func _on_multiplayer_welcome(message: Dictionary) -> void:
 	for peer in message.get("players", []):
 		if peer is Dictionary:
 			_upsert_remote_player(peer, true)
+	if message.get("npcs") is Array and not message["npcs"].is_empty():
+		_apply_multiplayer_npcs(message["npcs"], true)
 
 
 func _on_multiplayer_message(message: Dictionary) -> void:
@@ -1249,8 +1457,29 @@ func _on_multiplayer_message(message: Dictionary) -> void:
 					player.restore_health(remaining - player.health)
 			elif remote_players.has(target_id):
 				remote_players[target_id].set_health(remaining)
+		"health":
+			var target_id := int(message.get("target", 0))
+			if remote_players.has(target_id):
+				remote_players[target_id].set_health(int(message.get("health", 0)))
+		"npcs":
+			if message.get("npcs") is Array:
+				_apply_multiplayer_npcs(message["npcs"])
+		"ai_host":
+			multiplayer_ai_host_id = int(message.get("host", 0))
+			if message.get("npcs") is Array:
+				_apply_multiplayer_npcs(message["npcs"], true)
+			_set_multiplayer_ai_authority()
+		"npc_attack":
+			if multiplayer_id == multiplayer_ai_host_id:
+				var npc: Node = multiplayer_npcs.get(int(message.get("npc", -1)))
+				var attacker: Node = remote_players.get(int(message.get("player", 0)))
+				if is_instance_valid(npc) and is_instance_valid(attacker):
+					npc.call("take_damage", int(message.get("damage", 0)), attacker)
 		"scream":
-			pass
+			if multiplayer_id == multiplayer_ai_host_id:
+				var caller: Node3D = remote_players.get(int(message.get("id", 0)))
+				if is_instance_valid(caller):
+					_apply_multiplayer_scream(caller)
 
 
 func _upsert_remote_player(data: Dictionary, immediate := false) -> void:
@@ -1266,9 +1495,65 @@ func _upsert_remote_player(data: Dictionary, immediate := false) -> void:
 		remote.set("dino_id", str(data.get("dino", "triceratops")))
 		world_root.add_child(remote)
 		remote_players[peer_id] = remote
+		remote.connect("damage_requested", _on_remote_damaged_by_npc)
 		_register_quality_geometry(remote, "actor")
 		immediate = true
 	remote.call("set_network_state", data, immediate)
+	remote.call("set_ai_target", multiplayer_id == multiplayer_ai_host_id)
+
+
+func _on_remote_damaged_by_npc(peer_id: int, npc_id: int, damage: int) -> void:
+	if multiplayer_active and multiplayer_id == multiplayer_ai_host_id and npc_id >= 0:
+		multiplayer_client.send_message({"type": "npc_hit", "target": peer_id, "npc": npc_id, "damage": damage})
+
+
+func _on_multiplayer_npc_damage(npc_id: int, _damage: int) -> void:
+	if multiplayer_active and multiplayer_id != multiplayer_ai_host_id and npc_id >= 0:
+		multiplayer_client.send_message({"type": "npc_attack", "npc": npc_id})
+
+
+func _set_multiplayer_ai_authority() -> void:
+	var hosting := multiplayer_id == multiplayer_ai_host_id
+	for npc in multiplayer_npcs.values():
+		if is_instance_valid(npc):
+			npc.set("network_replica", not hosting)
+	for remote in remote_players.values():
+		if is_instance_valid(remote):
+			remote.call("set_ai_target", hosting)
+
+
+func _send_multiplayer_npcs() -> void:
+	var entries: Array = []
+	for npc_id in multiplayer_npcs:
+		var npc: CharacterBody3D = multiplayer_npcs[npc_id]
+		if not is_instance_valid(npc):
+			continue
+		var animation := str(npc.get("state"))
+		if animation not in ["walk", "run", "attack", "eat", "scream", "death"]:
+			animation = "run" if npc.velocity.length() > 5.0 else ("walk" if npc.velocity.length() > 0.3 else "idle")
+		entries.append({"id": int(npc_id), "dino": str(npc.get("dino_id")),
+			"x": npc.position.x, "y": npc.position.y, "z": npc.position.z,
+			"yaw": npc.rotation.y, "health": int(npc.get("health")),
+			"dead": bool(npc.get("dead")), "animation": animation})
+	multiplayer_client.send_message({"type": "npcs", "npcs": entries})
+
+
+func _apply_multiplayer_npcs(entries: Array, immediate := false) -> void:
+	if multiplayer_id == multiplayer_ai_host_id and not immediate:
+		return
+	var seen := {}
+	for entry in entries:
+		if not entry is Dictionary:
+			continue
+		var npc_id := int(entry.get("id", -1))
+		seen[npc_id] = true
+		var npc: Node = multiplayer_npcs.get(npc_id)
+		if is_instance_valid(npc):
+			npc.call("apply_network_state", entry, immediate)
+	for npc_id in multiplayer_npcs.keys():
+		if not seen.has(npc_id) and is_instance_valid(multiplayer_npcs[npc_id]):
+			multiplayer_npcs[npc_id].queue_free()
+			multiplayer_npcs.erase(npc_id)
 
 
 func _remember_multiplayer_player(data: Dictionary) -> void:
@@ -1308,6 +1593,8 @@ func _on_multiplayer_failed(reason: String) -> void:
 		multiplayer_connect_button.disabled = false
 	if is_instance_valid(multiplayer_status_label):
 		multiplayer_status_label.text = _t("menu.server_full") if reason == "full" else (_t("menu.server_unreachable") if reason in ["timeout", "unreachable"] else _t("menu.server_rejected"))
+	if is_instance_valid(multiplayer_lobby_status):
+		multiplayer_lobby_status.text = _t("menu.server_unreachable") if reason in ["timeout", "unreachable"] else _t("menu.server_rejected")
 
 
 func _on_multiplayer_disconnected() -> void:
@@ -1315,6 +1602,8 @@ func _on_multiplayer_disconnected() -> void:
 		_return_to_main_menu()
 	if is_instance_valid(multiplayer_status_label):
 		multiplayer_status_label.text = _t("menu.server_disconnected")
+	if is_instance_valid(multiplayer_lobby_status):
+		multiplayer_lobby_status.text = _t("menu.server_disconnected")
 
 
 func _on_player_attacked() -> void:
@@ -1344,6 +1633,8 @@ func _update_start_button() -> void:
 
 
 func _show_free_game_page() -> void:
+	if not multiplayer_active and multiplayer_client.socket != null:
+		multiplayer_client.disconnect_from_server()
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
 	if is_instance_valid(play_guide_overlay):
@@ -1353,6 +1644,7 @@ func _show_free_game_page() -> void:
 	quest_overview_page.hide()
 	quest_detail_page.hide()
 	multiplayer_page.hide()
+	multiplayer_setup_page.hide()
 	free_game_page.show()
 	_update_dino_card_selection()
 	_update_map_theme_selection()
@@ -1360,6 +1652,8 @@ func _show_free_game_page() -> void:
 
 
 func _show_landing_page() -> void:
+	if not multiplayer_active and multiplayer_client.socket != null:
+		multiplayer_client.disconnect_from_server()
 	_cancel_configuration_test()
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
@@ -1368,6 +1662,7 @@ func _show_landing_page() -> void:
 	free_game_page.hide()
 	configuration_page.hide()
 	multiplayer_page.hide()
+	multiplayer_setup_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.hide()
 	landing_page.show()
@@ -1468,6 +1763,8 @@ func _clear_control(parent: Control) -> void:
 
 
 func _show_quest_overview() -> void:
+	if not multiplayer_active and multiplayer_client.socket != null:
+		multiplayer_client.disconnect_from_server()
 	if is_instance_valid(credits_overlay):
 		credits_overlay.hide()
 	if is_instance_valid(play_guide_overlay):
@@ -1476,6 +1773,7 @@ func _show_quest_overview() -> void:
 	configuration_page.hide()
 	free_game_page.hide()
 	multiplayer_page.hide()
+	multiplayer_setup_page.hide()
 	quest_detail_page.hide()
 	quest_overview_page.show()
 
@@ -1541,6 +1839,7 @@ func _show_quest_page(quest_id: String) -> void:
 	landing_page.hide()
 	free_game_page.hide()
 	multiplayer_page.hide()
+	multiplayer_setup_page.hide()
 	quest_overview_page.hide()
 	quest_detail_page.show()
 
@@ -2613,6 +2912,7 @@ func _build_player(dino_id: String) -> void:
 
 
 func _build_wild_dinosaurs() -> void:
+	multiplayer_npcs.clear()
 	var wildlife := Node3D.new()
 	wildlife.name = "WildDinosaurs"
 	world_root.add_child(wildlife)
@@ -2622,6 +2922,9 @@ func _build_wild_dinosaurs() -> void:
 		npc.name = "WildDino_%02d_%s" % [index, data["species"]]
 		npc.set_script(NPC_DINO_SCRIPT)
 		npc.set("dino_id", data["species"])
+		if multiplayer_active:
+			npc.set("multiplayer_npc_id", index)
+			npc.set("network_replica", multiplayer_id != multiplayer_ai_host_id)
 		npc.set("pack_id", data["pack_id"])
 		npc.set("pack_slot", data.get("pack_slot", -1))
 		npc.set("patrol_center", data["patrol_center"])
@@ -2634,6 +2937,9 @@ func _build_wild_dinosaurs() -> void:
 			npc.set_meta("mission_role", data["mission_role"])
 		npc.position = data["position"]
 		wildlife.add_child(npc)
+		if multiplayer_active:
+			multiplayer_npcs[index] = npc
+			npc.connect("damage_requested", _on_multiplayer_npc_damage)
 		_register_quality_geometry(npc.get("model_root"), "actor")
 
 
@@ -3770,25 +4076,31 @@ func _on_dino_screamed() -> void:
 		return
 	if multiplayer_active:
 		multiplayer_client.send_action("scream")
-	if str(player.get("diet")) == "herbivore":
+		if multiplayer_id != multiplayer_ai_host_id:
+			return
+	_apply_multiplayer_scream(player)
+
+
+func _apply_multiplayer_scream(caller: Node3D) -> void:
+	if str(caller.get("diet")) == "herbivore":
 		_show_status_message(_t("status.call_for_help"))
-		var attacker = player.get("last_attacker")
-		if not attacker is Node3D or not is_instance_valid(attacker) or bool(attacker.get("dead")) or player.global_position.distance_to(attacker.global_position) > SCREAM_RESPONSE_RANGE:
+		var attacker = caller.get("last_attacker") if caller == player else null
+		if not attacker is Node3D or not is_instance_valid(attacker) or bool(attacker.get("dead")) or caller.global_position.distance_to(attacker.global_position) > SCREAM_RESPONSE_RANGE:
 			attacker = null
 		for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
-			if not candidate is Node3D or candidate == player or not candidate.has_method("receive_help_call"):
+			if not candidate is Node3D or candidate == caller or not candidate.has_method("receive_help_call"):
 				continue
-			if str(candidate.get("dino_id")) != str(player.get("dino_id")):
+			if str(candidate.get("dino_id")) != str(caller.get("dino_id")):
 				continue
-			if player.global_position.distance_to(candidate.global_position) <= SCREAM_RESPONSE_RANGE:
-				candidate.call("receive_help_call", player, attacker)
+			if caller.global_position.distance_to(candidate.global_position) <= SCREAM_RESPONSE_RANGE:
+				candidate.call("receive_help_call", caller, attacker)
 	else:
 		_show_status_message(_t("status.fear_roar"))
 		for candidate in get_tree().get_nodes_in_group("prey_dinosaur"):
-			if not candidate is Node3D or candidate == player or not candidate.has_method("receive_predator_roar"):
+			if not candidate is Node3D or candidate == caller or not candidate.has_method("receive_predator_roar"):
 				continue
-			if player.global_position.distance_to(candidate.global_position) <= SCREAM_RESPONSE_RANGE:
-				candidate.call("receive_predator_roar", player)
+			if caller.global_position.distance_to(candidate.global_position) <= SCREAM_RESPONSE_RANGE:
+				candidate.call("receive_predator_roar", caller)
 
 
 func _show_status_message(message: String) -> void:
@@ -3811,6 +4123,8 @@ func _on_poisoning_changed(active: bool) -> void:
 
 
 func _on_health_changed(current_health: int, maximum_health: int) -> void:
+	if multiplayer_active:
+		multiplayer_client.send_message({"type": "health", "health": current_health})
 	if not is_instance_valid(health_bar):
 		return
 	health_bar.max_value = maximum_health

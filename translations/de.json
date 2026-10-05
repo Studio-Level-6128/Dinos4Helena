@@ -10,7 +10,7 @@
   "menu.quests_tooltip": "Wähle eine Quest",
   "menu.free_game_tile": "FREIES SPIEL\nWÄHLE DEINEN DINOSAURIER",
   "menu.multiplayer_tile": "MEHRSPIELER\nGEMEINSAM ENTDECKEN",
-  "menu.multiplayer_title": "MEHRSPIELER-GRASLAND",
+  "menu.multiplayer_title": "MEHRSPIELER",
   "menu.player_name": "DEIN NAME",
   "menu.player_name_placeholder": "Spielernamen eingeben",
   "menu.player_name_required": "Gib einen Spielernamen ein (maximal 20 Zeichen).",
@@ -37,7 +37,7 @@
   "menu.server_host_invalid": "Gib eine Server-IP oder einen Namen ohne ws:// ein.",
   "menu.server_port_invalid": "Gib einen Port zwischen 1 und 65535 ein.",
   "menu.connect": "VERBINDEN UND SPIELEN",
-  "menu.multiplayer_hint": "Bis zu 10 Spieler teilen sich eine Grasland-Welt.",
+  "menu.multiplayer_hint": "Tritt einer Partie bei oder erstelle eine neue Karte.",
   "menu.connecting": "Verbindung zum Server wird hergestellt...",
   "menu.server_url_invalid": "Gib eine Server-URL mit ws:// oder wss:// ein.",
   "menu.server_full": "Diese Welt ist voll (10 Spieler). Versuche es später erneut.",
@@ -207,5 +207,13 @@
   "game_over.fallen": "Dein Dinosaurier ist gefallen",
   "game_over.heading": "SPIEL VORBEI",
   "game_over.detail": "%s hat keine Gesundheit mehr",
-  "game_over.return": "ZURÜCK ZUR DINOSAURIERAUSWAHL"
+  "game_over.return": "ZURÜCK ZUR DINOSAURIERAUSWAHL",
+  "menu.multiplayer_sessions": "MEHRSPIELER-PARTIEN",
+  "menu.create_session": "PARTIE ERSTELLEN",
+  "menu.refresh_sessions": "PARTIEN AKTUALISIEREN",
+  "menu.no_sessions": "Noch keine Partien. Erstelle die erste!",
+  "menu.join_session": "BEITRETEN",
+  "menu.create_and_play": "ERSTELLEN UND SPIELEN",
+  "menu.join_and_play": "BEITRETEN UND SPIELEN",
+  "menu.choose_identity": "Wähle Dinosaurier, Namen und Farbe."
 }
