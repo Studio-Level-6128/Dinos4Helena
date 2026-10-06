@@ -3,16 +3,18 @@
 import asyncio
 import base64
 import json
+import math
 import os
 import shutil
 import ssl
 import struct
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from check_server import CheckError, check_server, parse_url
-from server import GameServer, ensure_tls_certificates
+from server import GameServer, SPECIES, ensure_tls_certificates
 
 
 async def connect(port, dino, name=None, color=None):
@@ -105,6 +107,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((state["type"], state["player"]["name"], state["player"]["color"]),
                          ("state", "Helena", "#f47ac2"))
         self.assertEqual((await receive(first_reader))["type"], "state")
+        await send(first_writer, {"type": "scream"})
+        scream = await receive(second_reader)
+        self.assertEqual((scream["type"], scream["id"]), ("scream", first["id"]))
         await send(first_writer, {"type": "attack"})
         hit = await receive(second_reader)
         self.assertEqual(hit["type"], "hit")
@@ -114,6 +119,45 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         second_writer.close()
         await second_writer.wait_closed()
         self.assertEqual((await receive(first_reader))["type"], "left")
+
+    async def test_death_leaves_meat_and_respawns_elsewhere(self):
+        first_reader, first_writer, first = await self.join("trex")
+        second_reader, _, second = await self.join("triceratops")
+        await receive(first_reader)  # joined
+        attacker = self.game.players[first["id"]]
+        target = self.game.players[second["id"]]
+        attacker.x, attacker.z, attacker.yaw = 0.0, 0.0, 0.0
+        target.x, target.z, target.health = 0.0, -3.0, 1
+        self.game.respawn_delay = 0.05
+        await send(first_writer, {"type": "attack"})
+        hit = await receive(second_reader)
+        death = await receive(second_reader)
+        self.assertEqual((hit["type"], death["type"], death["id"]),
+                         ("hit", "death", second["id"]))
+        self.assertEqual((death["x"], death["z"], death["respawn_delay"]),
+                         (0.0, -3.0, 0.05))
+        await receive(first_reader)  # hit
+        await receive(first_reader)  # death
+        respawn = await receive(second_reader)
+        self.assertEqual(respawn["type"], "respawn")
+        self.assertEqual(respawn["player"]["health"], SPECIES["triceratops"][0])
+        self.assertGreater(math.dist((death["x"], death["z"]),
+                                     (respawn["player"]["x"], respawn["player"]["z"])), 65.0)
+
+    async def test_strength_powerup_doubles_server_damage(self):
+        first_reader, first_writer, first = await self.join("trex")
+        second_reader, _, second = await self.join("triceratops")
+        await receive(first_reader)  # joined
+        attacker = self.game.players[first["id"]]
+        target = self.game.players[second["id"]]
+        attacker.x, attacker.z, attacker.yaw = 0.0, 0.0, 0.0
+        target.x, target.z = 0.0, -3.0
+        await send(first_writer, {"type": "powerup", "token": "strength"})
+        await send(first_writer, {"type": "attack"})
+        hit = await receive(second_reader)
+        self.assertEqual(hit["health"], target.health)
+        self.assertEqual(hit["health"], 180 - 15 * 3 * 2)
+        self.assertGreater(attacker.strength_bonus_until, time.monotonic())
 
     async def test_cap_rejects_eleventh_player(self):
         for _ in range(10):

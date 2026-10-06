@@ -208,6 +208,8 @@
   "game_over.heading": "GAME OVER",
   "game_over.detail": "%s ran out of health",
   "game_over.return": "RETURN TO DINOSAUR SELECTION",
+  "multiplayer.respawn_in": "RESPAWNING IN %d",
+  "multiplayer.respawned": "Respawned at a new location",
   "menu.multiplayer_sessions": "MULTIPLAYER SESSIONS",
   "menu.create_session": "CREATE SESSION",
   "menu.refresh_sessions": "REFRESH SESSIONS",

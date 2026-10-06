@@ -587,6 +587,40 @@ func _die() -> void:
 		tween.finished.connect(died.emit)
 
 
+func respawn_at(spawn_position: Vector3, spawn_yaw := 0.0) -> void:
+	dead = false
+	health = max_health
+	energy = max_energy
+	poisoned = false
+	poison_damage_accumulator = 0.0
+	starvation_damage_accumulator = 0.0
+	last_attacker = null
+	eating_target = null
+	eating_active = false
+	attack_time = 0.0
+	scream_time = 0.0
+	speed_bonus_time = 0.0
+	strength_bonus_time = 0.0
+	walk_speed = base_walk_speed
+	run_speed = base_run_speed
+	duck_speed = base_duck_speed
+	strength = base_strength
+	velocity = Vector3.ZERO
+	mobile_actions.clear()
+	mobile_movement = Vector2.ZERO
+	global_position = spawn_position
+	rotation = Vector3(0.0, spawn_yaw, 0.0)
+	if is_instance_valid(model_root):
+		model_root.position = Vector3.ZERO
+		model_root.rotation = Vector3(0.0, PI, 0.0)
+		model_root.scale = Vector3.ONE * model_scale
+	_play_animation("idle", true)
+	health_changed.emit(health, max_health)
+	energy_changed.emit(energy, max_energy)
+	bonuses_changed.emit(0.0, 0.0)
+	poisoning_changed.emit(false)
+
+
 func _spawn_roar_wave() -> void:
 	var wave := MeshInstance3D.new()
 	var mesh := TorusMesh.new()

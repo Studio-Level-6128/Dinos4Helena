@@ -14,6 +14,7 @@ const BABY_DINO_SCRIPT := preload("res://scripts/baby_dino.gd")
 const MULTIPLAYER_CLIENT_SCRIPT := preload("res://scripts/multiplayer_client.gd")
 const REMOTE_PLAYER_SCRIPT := preload("res://scripts/remote_player.gd")
 const HUMAN_MARKER_SCRIPT := preload("res://scripts/human_marker.gd")
+const MEAT_DROP_SCRIPT := preload("res://scripts/meat_drop.gd")
 const VIRTUAL_JOYSTICK_SCRIPT := preload("res://scripts/virtual_joystick.gd")
 const LAVA_STREAM_SCRIPT := preload("res://scripts/lava_stream.gd")
 const SNOW_FOOTPRINTS_SCRIPT := preload("res://scripts/snow_footprints.gd")
@@ -119,6 +120,9 @@ var multiplayer_npcs: Dictionary = {}
 var multiplayer_npc_sync_elapsed := 0.0
 var multiplayer_roster: Dictionary = {}
 var multiplayer_roster_rows: VBoxContainer
+var multiplayer_respawn_overlay: Control
+var multiplayer_respawn_generation := 0
+var multiplayer_meat_ids: Dictionary = {}
 var map_theme_buttons: Dictionary = {}
 var start_game_button: Button
 var dinosaur_config := ConfigFile.new()
@@ -269,8 +273,7 @@ func _start_game(dino_id: String) -> void:
 	_build_clouds()
 	_build_ambient_audio()
 	_build_landscape()
-	if not multiplayer_active:
-		_build_powerup_tokens()
+	_build_powerup_tokens()
 	_build_player(dino_id)
 	if not multiplayer_active:
 		_build_egg_nests()
@@ -295,6 +298,8 @@ func _return_to_main_menu() -> void:
 		multiplayer_npcs.clear()
 		remote_players.clear()
 		multiplayer_roster.clear()
+		multiplayer_meat_ids.clear()
+		multiplayer_respawn_generation += 1
 	if is_instance_valid(active_mission_event):
 		active_mission_event.queue_free()
 	active_mission_event = null
@@ -313,6 +318,7 @@ func _return_to_main_menu() -> void:
 	mission_objective_label = null
 	mission_intro_player = null
 	multiplayer_roster_rows = null
+	multiplayer_respawn_overlay = null
 	companions_spawned = 0
 	quality_geometry.clear()
 	sun_light = null
@@ -1461,6 +1467,18 @@ func _on_multiplayer_message(message: Dictionary) -> void:
 			var target_id := int(message.get("target", 0))
 			if remote_players.has(target_id):
 				remote_players[target_id].set_health(int(message.get("health", 0)))
+		"death":
+			var target_id := int(message.get("id", 0))
+			_spawn_multiplayer_meat(message)
+			if target_id == multiplayer_id and is_instance_valid(player):
+				if player.health > 0:
+					player.take_damage(player.health)
+				_show_multiplayer_respawn(float(message.get("respawn_delay", 5.0)))
+			elif remote_players.has(target_id):
+				remote_players[target_id].set_health(0)
+		"respawn":
+			if message.get("player") is Dictionary:
+				_apply_multiplayer_respawn(message["player"])
 		"npcs":
 			if message.get("npcs") is Array:
 				_apply_multiplayer_npcs(message["npcs"])
@@ -1476,10 +1494,68 @@ func _on_multiplayer_message(message: Dictionary) -> void:
 				if is_instance_valid(npc) and is_instance_valid(attacker):
 					npc.call("take_damage", int(message.get("damage", 0)), attacker)
 		"scream":
-			if multiplayer_id == multiplayer_ai_host_id:
-				var caller: Node3D = remote_players.get(int(message.get("id", 0)))
-				if is_instance_valid(caller):
+			var caller: Node3D = remote_players.get(int(message.get("id", 0)))
+			if is_instance_valid(caller):
+				caller.call("play_scream")
+				if multiplayer_id == multiplayer_ai_host_id:
 					_apply_multiplayer_scream(caller)
+
+
+func _spawn_multiplayer_meat(data: Dictionary) -> void:
+	var death_key := "%d_%d" % [int(data.get("id", 0)), int(data.get("death", 0))]
+	if multiplayer_meat_ids.has(death_key) or not is_instance_valid(world_root):
+		return
+	multiplayer_meat_ids[death_key] = true
+	var meat := Node3D.new()
+	meat.name = "PlayerMeat_%s" % death_key
+	meat.set_script(MEAT_DROP_SCRIPT)
+	var source: Node3D = player if int(data.get("id", 0)) == multiplayer_id else remote_players.get(int(data.get("id", 0)))
+	meat.set("source_dinosaur", source)
+	meat.position = Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.1)) + 0.28, float(data.get("z", 0.0)))
+	world_root.add_child(meat)
+
+
+func _apply_multiplayer_respawn(data: Dictionary) -> void:
+	var peer_id := int(data.get("id", 0))
+	if peer_id == multiplayer_id and is_instance_valid(player):
+		player.call("respawn_at", Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.1)), float(data.get("z", 0.0))), float(data.get("yaw", 0.0)))
+		_clear_multiplayer_respawn()
+		_show_status_message(_t("multiplayer.respawned"))
+	else:
+		_upsert_remote_player(data, true)
+
+
+func _show_multiplayer_respawn(delay: float) -> void:
+	_clear_multiplayer_respawn()
+	multiplayer_respawn_generation += 1
+	var generation := multiplayer_respawn_generation
+	multiplayer_respawn_overlay = ColorRect.new()
+	multiplayer_respawn_overlay.name = "MultiplayerRespawn"
+	multiplayer_respawn_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	multiplayer_respawn_overlay.color = Color(0.02, 0.01, 0.005, 0.62)
+	game_hud.add_child(multiplayer_respawn_overlay)
+	var label := Label.new()
+	label.name = "RespawnCountdown"
+	label.set_anchors_preset(Control.PRESET_CENTER)
+	label.position = Vector2(-260, -45)
+	label.size = Vector2(520, 90)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 34)
+	label.add_theme_color_override("font_color", Color("fff2c2"))
+	multiplayer_respawn_overlay.add_child(label)
+	var seconds := maxi(int(ceil(delay)), 1)
+	while seconds > 0 and generation == multiplayer_respawn_generation and is_instance_valid(label):
+		label.text = _t("multiplayer.respawn_in", [seconds])
+		await get_tree().create_timer(1.0).timeout
+		seconds -= 1
+
+
+func _clear_multiplayer_respawn() -> void:
+	multiplayer_respawn_generation += 1
+	if is_instance_valid(multiplayer_respawn_overlay):
+		multiplayer_respawn_overlay.queue_free()
+	multiplayer_respawn_overlay = null
 
 
 func _upsert_remote_player(data: Dictionary, immediate := false) -> void:
@@ -3022,6 +3098,8 @@ func _spawn_powerup_token(token_type: String, token_position: Vector3) -> void:
 
 
 func _on_powerup_consumed(token_type: String) -> void:
+	if multiplayer_active and token_type in ["speed", "strength"]:
+		multiplayer_client.send_message({"type": "powerup", "token": token_type})
 	var minimum := float(dinosaur_config.get_value("tokens", "respawn_min_seconds", 6.0))
 	var maximum := float(dinosaur_config.get_value("tokens", "respawn_max_seconds", 12.0))
 	get_tree().create_timer(token_rng.randf_range(minimum, maximum)).timeout.connect(_respawn_powerup_token.bind(token_type))
@@ -4153,7 +4231,7 @@ func _on_bonuses_changed(speed_seconds: float, strength_seconds: float) -> void:
 
 func _on_player_died() -> void:
 	if multiplayer_active:
-		multiplayer_client.disconnect_from_server()
+		return
 	_show_status_message(_t("game_over.fallen"))
 	var overlay := ColorRect.new()
 	overlay.name = "GameOver"

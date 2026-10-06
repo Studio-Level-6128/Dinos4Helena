@@ -37,6 +37,12 @@ func _run() -> void:
 			break
 	assert(world.multiplayer_active and world.selected_map_theme == "desert", "Desert session was not created")
 	assert(world.multiplayer_npcs.size() > 0 and world.world_root.find_child("WildDinosaurs", false, false) != null, "Multiplayer AI wildlife is missing")
+	var multiplayer_tokens: Array[Node] = world.get_tree().get_nodes_in_group("powerup_token")
+	assert(multiplayer_tokens.size() == 30, "Multiplayer map is missing power-up tokens")
+	var multiplayer_token_types := {}
+	for token in multiplayer_tokens:
+		multiplayer_token_types[token.token_type] = true
+	assert(multiplayer_token_types.has("health") and multiplayer_token_types.has("speed") and multiplayer_token_types.has("strength"), "Multiplayer power-up types are incomplete")
 	assert(world.multiplayer_ai_host_id == world.multiplayer_id, "Creator should simulate wildlife")
 	assert(world.multiplayer_roster[world.multiplayer_id]["name"] == "Helena", "Player identity was not synchronized")
 	var session_id := int(world.multiplayer_session_id)
@@ -87,10 +93,30 @@ func _run() -> void:
 		await process_frame
 	assert(received_ai, "Joining player did not receive AI state")
 	assert(world.remote_players.size() == 1 and world.remote_players.values()[0].player_name == "Dad", "Joining player did not appear")
+	second.send_text(JSON.stringify({"type": "scream"}))
+	for frame in 180:
+		await process_frame
+		var remote = world.remote_players.values()[0]
+		if is_instance_valid(remote.vocal_audio) and remote.vocal_audio.playing:
+			break
+	var remote = world.remote_players.values()[0]
+	assert(is_instance_valid(remote.vocal_audio) and remote.vocal_audio.playing, "Remote player scream was not audible")
+	var death_position: Vector3 = remote.global_position
+	world._on_multiplayer_message({"type": "death", "id": remote.identifier, "dino": remote.dino_id,
+		"x": death_position.x, "y": death_position.y, "z": death_position.z,
+		"death": 1, "respawn_delay": 5.0})
+	assert(remote.dead, "Remote player death was not displayed")
+	assert(world.get_tree().get_nodes_in_group("edible_meat").size() > 0, "Player death left no edible meat")
+	var respawn_data: Dictionary = second_welcome["spawn"].duplicate()
+	respawn_data["x"] = death_position.x + 90.0
+	respawn_data["z"] = death_position.z
+	respawn_data["health"] = remote.max_health
+	world._on_multiplayer_message({"type": "respawn", "player": respawn_data})
+	assert(not remote.dead and remote.global_position.distance_to(death_position) > 80.0, "Remote player did not respawn at a different location")
 	second.close()
 	world._return_to_main_menu()
 	assert(world.multiplayer_page.visible, "Leaving multiplayer did not return to lobby")
 	world.queue_free()
 	await process_frame
-	print("Multiplayer smoke test passed: lobby, desert creation, join, identity, AI snapshots, and return")
+	print("Multiplayer smoke test passed: lobby, tokens, screams, respawn, meat, AI snapshots, and return")
 	quit()

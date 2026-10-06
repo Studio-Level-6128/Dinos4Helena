@@ -208,6 +208,8 @@
   "game_over.heading": "PARTIE TERMINÉE",
   "game_over.detail": "%s n'a plus de santé",
   "game_over.return": "RETOUR AU CHOIX DU DINOSAURE",
+  "multiplayer.respawn_in": "RÉAPPARITION DANS %d",
+  "multiplayer.respawned": "Réapparition à un nouvel endroit",
   "menu.multiplayer_sessions": "PARTIES MULTIJOUEUR",
   "menu.create_session": "CRÉER UNE PARTIE",
   "menu.refresh_sessions": "ACTUALISER LES PARTIES",

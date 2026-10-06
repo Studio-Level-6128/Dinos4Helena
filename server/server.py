@@ -44,6 +44,7 @@ PLAYER_COLORS = frozenset((
 DEFAULT_PLAYER_COLOR = "#6ea8fe"
 WORLD_LIMIT = 194.0
 NPC_WORLD_LIMIT = 210.0
+RESPAWN_DELAY_SECONDS = 5.0
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 DEFAULT_CERT_DIR = Path(__file__).resolve().parent / "certs"
 
@@ -137,6 +138,11 @@ class Player:
     last_state: float = field(default_factory=time.monotonic)
     last_attack: float = 0.0
     last_npc_attack: float = 0.0
+    speed_bonus_until: float = 0.0
+    strength_bonus_until: float = 0.0
+    death_count: int = 0
+    respawning: bool = False
+    respawn_task: asyncio.Task | None = field(default=None, repr=False)
 
     def public(self) -> dict:
         return {
@@ -171,6 +177,7 @@ class GameServer:
         self.sessions: dict[int, Session] = {}
         self.next_session_id = 1
         self.legacy_session_id = 0
+        self.respawn_delay = RESPAWN_DELAY_SECONDS
         self.lock = asyncio.Lock()
 
     async def send(self, writer: asyncio.StreamWriter, message: dict) -> None:
@@ -204,6 +211,24 @@ class GameServer:
     def spawn(self, slot: int) -> tuple[float, float, float]:
         angle = slot * math.tau / self.limit
         return round(math.cos(angle) * 12, 3), 0.1, round(math.sin(angle) * 12, 3)
+
+    def respawn_position(self, session: Session, player: Player) -> tuple[float, float, float]:
+        previous = (player.x, player.z)
+        for _ in range(40):
+            angle = secrets.randbelow(3600) * math.tau / 3600.0
+            radius = 72.0 + secrets.randbelow(9800) / 100.0
+            candidate = (math.cos(angle) * radius, math.sin(angle) * radius)
+            if math.dist(previous, candidate) < 65.0:
+                continue
+            if any(member.identifier != player.identifier
+                   and math.dist((member.x, member.z), candidate) < 18.0
+                   for member in session.players.values()):
+                continue
+            return round(candidate[0], 3), 0.1, round(candidate[1], 3)
+        # A half-turn is always a meaningfully different in-bounds fallback.
+        if math.hypot(player.x, player.z) < 32.0:
+            return 150.0, 0.1, 0.0
+        return round(-player.x, 3), 0.1, round(-player.z, 3)
 
     async def handshake(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         request = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
@@ -335,6 +360,8 @@ class GameServer:
                     await self.npc_hit(session, player, message)
                 elif kind == "health":
                     await self.update_health(session, player, message)
+                elif kind == "powerup":
+                    await self.apply_powerup(player, message)
         except (asyncio.IncompleteReadError, ConnectionError, TimeoutError):
             pass
         except (ProtocolError, ValueError, UnicodeError, TypeError, binascii.Error) as error:
@@ -342,6 +369,8 @@ class GameServer:
         finally:
             if player is not None and session is not None:
                 async with self.lock:
+                    if player.respawn_task is not None:
+                        player.respawn_task.cancel()
                     self.players.pop(player.identifier, None)
                     session.players.pop(player.identifier, None)
                     await self.broadcast(session, {"type": "left", "id": player.identifier})
@@ -360,6 +389,8 @@ class GameServer:
                 pass
 
     async def update_state(self, session: Session, player: Player, message: dict) -> None:
+        if player.health <= 0:
+            return
         try:
             x, y, z, yaw = (float(message[key]) for key in ("x", "y", "z", "yaw"))
         except (KeyError, ValueError, TypeError):
@@ -370,7 +401,8 @@ class GameServer:
             return
         now = time.monotonic()
         elapsed = min(now - player.last_state, 1.0)
-        max_distance = SPECIES[player.dino][1] * elapsed * 1.7 + 3.0
+        speed_multiplier = 2.0 if player.speed_bonus_until > now else 1.0
+        max_distance = SPECIES[player.dino][1] * speed_multiplier * elapsed * 1.7 + 3.0
         if math.dist((x, z), (player.x, player.z)) > max_distance:
             return
         player.x, player.y, player.z, player.yaw = x, y, z, yaw
@@ -396,9 +428,12 @@ class GameServer:
                 target, nearest = candidate, distance
         if target is None:
             return
-        target.health = max(0, target.health - SPECIES[attacker.dino][2] * 3)
+        strength_multiplier = 2 if attacker.strength_bonus_until > now else 1
+        target.health = max(0, target.health - SPECIES[attacker.dino][2] * 3 * strength_multiplier)
         await self.broadcast(session, {"type": "hit", "attacker": attacker.identifier,
                               "target": target.identifier, "health": target.health})
+        if target.health <= 0:
+            await self.player_died(session, target)
 
     async def update_npcs(self, session: Session, sender: Player, message: dict) -> None:
         if sender.identifier != session.host_id:
@@ -464,14 +499,60 @@ class GameServer:
         target.health = max(0, target.health - amount)
         await self.broadcast(session, {"type": "hit", "attacker": -npc_id - 1,
                                        "target": target_id, "health": target.health})
+        if target.health <= 0:
+            await self.player_died(session, target)
 
     async def update_health(self, session: Session, player: Player, message: dict) -> None:
         health = message.get("health")
         if type(health) is not int or not 0 <= health <= SPECIES[player.dino][0]:
             return
+        if player.health <= 0 and health > 0:
+            return
         player.health = health
         await self.broadcast(session, {"type": "health", "target": player.identifier,
                                        "health": health}, player.identifier)
+        if health <= 0:
+            await self.player_died(session, player)
+
+    async def apply_powerup(self, player: Player, message: dict) -> None:
+        if player.health <= 0:
+            return
+        token_type = message.get("token")
+        now = time.monotonic()
+        if token_type == "speed":
+            player.speed_bonus_until = now + 30.0
+        elif token_type == "strength":
+            player.strength_bonus_until = now + 30.0
+
+    async def player_died(self, session: Session, player: Player) -> None:
+        if player.respawning:
+            return
+        player.respawning = True
+        player.death_count += 1
+        player.animation = "death"
+        player.speed_bonus_until = 0.0
+        player.strength_bonus_until = 0.0
+        await self.broadcast(session, {
+            "type": "death", "id": player.identifier, "dino": player.dino,
+            "x": round(player.x, 3), "y": round(player.y, 3), "z": round(player.z, 3),
+            "death": player.death_count, "respawn_delay": self.respawn_delay,
+        })
+        player.respawn_task = asyncio.create_task(self.respawn_player(session, player))
+
+    async def respawn_player(self, session: Session, player: Player) -> None:
+        try:
+            await asyncio.sleep(self.respawn_delay)
+            if session.players.get(player.identifier) is not player:
+                return
+            player.x, player.y, player.z = self.respawn_position(session, player)
+            player.yaw = secrets.randbelow(3600) * math.tau / 3600.0
+            player.health = SPECIES[player.dino][0]
+            player.animation = "idle"
+            player.last_state = time.monotonic()
+            await self.broadcast(session, {"type": "respawn", "player": player.public()})
+        finally:
+            player.respawning = False
+            player.respawn_task = None
 
 
 async def main() -> None:

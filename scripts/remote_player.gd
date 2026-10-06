@@ -16,6 +16,8 @@ var current_health := 100
 var player_name := "Player"
 var player_color := "#6ea8fe"
 var identity_marker: Node3D
+var vocal_audio: AudioStreamPlayer3D
+var scream_stream: AudioStream
 var diet := "herbivore"
 var health := 100
 var max_health := 100
@@ -60,6 +62,16 @@ func _ready() -> void:
 	identity_marker = HUMAN_MARKER_SCRIPT.new()
 	identity_marker.position.y = float(config.get_value(dino_id, "collision_height", 2.8)) + 1.7
 	add_child(identity_marker)
+	var audio_profile := str(config.get_value(dino_id, "audio_profile", dino_id))
+	var scream_path := "res://assets/audio/dinosaurs/%s/scream.mp3" % audio_profile
+	if ResourceLoader.exists(scream_path):
+		scream_stream = load(scream_path)
+		vocal_audio = AudioStreamPlayer3D.new()
+		vocal_audio.name = "RemoteVocalAudio"
+		vocal_audio.unit_size = 24.0
+		vocal_audio.max_distance = 80.0
+		vocal_audio.stream = scream_stream
+		add_child(vocal_audio)
 	_play_motion("idle")
 
 
@@ -76,20 +88,29 @@ func set_network_state(data: Dictionary, immediate := false) -> void:
 	if immediate:
 		global_position = target_position
 		rotation.y = target_yaw
-	_play_motion(str(data.get("animation", "idle")))
 	if is_instance_valid(health_label):
 		set_health(int(data.get("health", current_health)))
+	_play_motion(str(data.get("animation", "idle")))
 
 
 func set_health(value: int) -> void:
+	var was_dead := dead
 	current_health = value
 	health = value
 	dead = value <= 0
+	if dead and not was_dead:
+		_play_motion("death")
+	elif was_dead and not dead:
+		visible = true
+		_play_motion("idle")
 	if is_instance_valid(health_label):
 		health_label.text = "%s  %d" % [player_name, current_health]
 
 
 func _process(delta: float) -> void:
+	if dead:
+		velocity = Vector3.ZERO
+		return
 	velocity = (target_position - global_position) / maxf(delta, 0.001)
 	global_position = global_position.lerp(target_position, minf(delta * 11.0, 1.0))
 	rotation.y = lerp_angle(rotation.y, target_yaw, minf(delta * 11.0, 1.0))
@@ -115,10 +136,19 @@ func _play_motion(motion: String) -> void:
 	if animation_player == null:
 		return
 	var wanted := "idle" if motion in ["eat", "scream"] else motion
+	var aliases: Array[String] = [wanted]
+	if wanted == "death":
+		aliases = ["death", "dead", "die"]
 	for animation_name in animation_player.get_animation_list():
-		if wanted in animation_name.to_lower():
+		var lower_name := animation_name.to_lower()
+		if aliases.any(func(alias: String) -> bool: return alias in lower_name):
 			if current_animation != animation_name:
 				current_animation = animation_name
 				animation_player.play(animation_name, 0.16)
 			animation_player.speed_scale = 0.58 if motion == "eat" else 1.0
 			return
+
+
+func play_scream() -> void:
+	if is_instance_valid(vocal_audio) and scream_stream != null:
+		vocal_audio.play()

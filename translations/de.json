@@ -208,6 +208,8 @@
   "game_over.heading": "SPIEL VORBEI",
   "game_over.detail": "%s hat keine Gesundheit mehr",
   "game_over.return": "ZURÜCK ZUR DINOSAURIERAUSWAHL",
+  "multiplayer.respawn_in": "WIEDEREINSTIEG IN %d",
+  "multiplayer.respawned": "An einem neuen Ort wieder eingestiegen",
   "menu.multiplayer_sessions": "MEHRSPIELER-PARTIEN",
   "menu.create_session": "PARTIE ERSTELLEN",
   "menu.refresh_sessions": "PARTIEN AKTUALISIEREN",
