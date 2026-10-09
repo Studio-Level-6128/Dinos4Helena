@@ -77,6 +77,13 @@ func _run() -> void:
 				assert(rivals.size() == 1 and bool(rivals[0].get("allow_same_species_combat")), "Kingpin rival cannot fight the player")
 			"lost_baby":
 				assert(_role_count("lost_baby") == 1 and _role_count("lost_baby_hunter") == 4, "Lost Baby scenario roles are incomplete")
+				var baby_position: Vector3 = game.generated_babies[0]["position"]
+				var minimum_distance := float(game.mission_config.get_value("lost_baby", "hunter_min_distance"))
+				assert(game.mission_player_start.distance_to(baby_position) <= 45.01, "Lost Baby player starts too far away")
+				for hunter in game.generated_dinosaurs:
+					var position: Vector3 = hunter["position"]
+					assert(position.distance_to(baby_position) >= minimum_distance - 0.01, "Lost Baby predator starts too close")
+					assert(absf(position.x) <= 184 and absf(position.z) <= 184, "Lost Baby predator starts outside the map")
 			"eat_the_baby":
 				assert(_role_count("hunted_baby") == 1 and _role_count("baby_hunter_pack") == 3, "Eat the Baby hunter pack is incomplete")
 				assert(_role_count("baby_rescue_leader") == 1, "Eat the Baby rescue herd has no leader")
