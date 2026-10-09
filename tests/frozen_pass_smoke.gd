@@ -15,6 +15,7 @@ func _run() -> void:
 	await process_frame
 	game.quest_progress_path = progress_path
 	game.quest_progress.clear()
+	game.quest_config.set_value("debug", "unlock_all_missions", false)
 	game._dismiss_splash(true)
 	game._show_quest_page("frozen_pass")
 	assert(game.mission_config.get_value("quest", "mission_ids") == IDS)

@@ -48,6 +48,26 @@ func _run() -> void:
 	game.quest_progress_path = progress_path
 	game.quest_progress.clear()
 	game.call("_dismiss_splash", true)
+	assert(bool(game.quest_config.get_value("debug", "unlock_all_missions", false)), "Debug mission unlock should be enabled in config")
+	for quest_id in quest_ids:
+		game.call("_show_quest_page", quest_id)
+		var debug_mission_ids: Array = game.mission_config.get_value("quest", "mission_ids", [])
+		for mission_id in debug_mission_ids:
+			var button := game.find_child("Mission_%s" % mission_id, true, false) as Button
+			assert(is_instance_valid(button) and not button.disabled, "Debug mode did not unlock %s/%s" % [quest_id, mission_id])
+			assert(str(game.call("_t", "mission.available")) in button.text, "Debug mission should be marked available")
+			assert(not game.call("_is_mission_completed", quest_id, mission_id), "Debug unlocking changed completion")
+	# A later mission must also pass the launch guard without saved completion.
+	game.call("_start_quest_mission", "heart_of_volcano", "ashfang")
+	await process_frame
+	assert(game.active_mission_id == "ashfang" and is_instance_valid(game.active_mission_event), "Debug mode could not launch the final boss")
+	game.call("_return_to_main_menu")
+	await process_frame
+	await process_frame
+	assert(game.quest_progress.get_sections().is_empty() and not FileAccess.file_exists(progress_path), "Debug unlocking wrote progress")
+	game.quest_config.erase_section_key("debug", "unlock_all_missions")
+	assert(not game.call("_is_mission_unlocked", "getting_started", mission_ids, 1), "Missing debug setting must preserve progression")
+	game.quest_config.set_value("debug", "unlock_all_missions", false)
 	var quests_tile := game.find_child("QuestsTile", true, false) as Button
 	assert(is_instance_valid(quests_tile) and not quests_tile.disabled, "Quests tile is not enabled")
 	assert(is_instance_valid(quests_tile.get_node_or_null("TileRim")), "Landing quest tile has no rim")
@@ -92,7 +112,7 @@ func _run() -> void:
 	assert(is_instance_valid(game.mission_objective_label), "Mission objective HUD is missing")
 	assert(game.generated_vegetation.size() >= 2, "Dinner Time setup did not populate edible plants")
 
-	print("Quest smoke test passed: four campaigns, progression, audio, and HUD")
+	print("Quest smoke test passed: all 24 debug unlocks, final boss launch, normal progression, audio, and HUD")
 	game.queue_free()
 	await process_frame
 	if FileAccess.file_exists(progress_path):

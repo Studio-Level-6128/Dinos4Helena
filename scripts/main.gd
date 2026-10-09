@@ -1937,6 +1937,8 @@ func _is_mission_completed(quest_id: String, mission_id: String) -> bool:
 
 
 func _is_mission_unlocked(quest_id: String, mission_ids: Array, mission_index: int) -> bool:
+	if bool(quest_config.get_value("debug", "unlock_all_missions", false)):
+		return true
 	return mission_index == 0 or _is_mission_completed(quest_id, str(mission_ids[mission_index - 1]))
 
 

@@ -9,11 +9,17 @@ progress, add artwork, and test the result.
 A **quest** is an ordered campaign. A **mission** is one playable step in that
 campaign. Mission order is significant:
 
-1. The first mission is unlocked by default.
+1. The first mission is unlocked in normal progression.
 2. Completing a mission unlocks the next mission in the configured list.
 3. Completed missions remain replayable.
 4. Completion is saved by quest ID and mission ID in
    `user://quest_progress.cfg`.
+
+For debugging, `config/quests.cfg` currently enables `[debug]`
+`unlock_all_missions=true`. Every quest mission is immediately available,
+including the final boss, without changing saved completion. Set it to `false`
+and restart the game to restore sequential unlocking. Omitting the setting
+also uses normal progression.
 
 When a mission starts, the game:
 
