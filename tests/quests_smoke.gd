@@ -10,7 +10,7 @@ func _run() -> void:
 	var quest_config := ConfigFile.new()
 	assert(quest_config.load("res://config/quests.cfg") == OK, "Quest catalog did not load")
 	var quest_ids: Array = quest_config.get_value("quests", "quest_ids", [])
-	assert(quest_ids == ["getting_started", "sand_land"], "Quest catalog order is wrong")
+	assert(quest_ids == ["getting_started", "sand_land", "frozen_pass"], "Quest catalog order is wrong")
 	assert(ResourceLoader.exists(str(quest_config.get_value("quests", "overview_background"))), "Quest overview background is missing")
 
 	var missions := ConfigFile.new()
@@ -92,7 +92,7 @@ func _run() -> void:
 	assert(is_instance_valid(game.mission_objective_label), "Mission objective HUD is missing")
 	assert(game.generated_vegetation.size() >= 2, "Dinner Time setup did not populate edible plants")
 
-	print("Quest smoke test passed: two campaigns, twelve missions, progression, audio, and HUD")
+	print("Quest smoke test passed: three campaigns, progression, audio, and HUD")
 	game.queue_free()
 	await process_frame
 	if FileAccess.file_exists(progress_path):

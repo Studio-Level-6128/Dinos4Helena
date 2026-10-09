@@ -454,3 +454,31 @@ loss condition so missions cannot remain active after their goal becomes impossi
 - **A mission is impossible on some seeds:** place required objects in known
   clear locations or replace the relevant generated array with a controlled
   layout.
+
+## Frozen Pass environmental missions
+
+`quests/frozen_pass/setup.gd` creates a deterministic, clear winter corridor.
+Each mission has its own setup/event entry point inheriting the shared quest
+scripts. The `mission_mode` configuration selects footprints, weather, ice,
+stealth, boulder channels, or avalanche logic in `quests/frozen_pass/event.gd`.
+All objective props, collisions, and effect players belong to that event node
+and are freed when the player leaves or starts another mission. Existing free play
+and other quests do not use these environmental rules.
+
+Weather/ice/stealth/avalanche timing is configurable in `missions.cfg`.
+Checkpoints advance in order; recoverable hazards reset position and motion,
+while player death and harm to a sleeping giant produce mission failure.
+English, German, and French strings live in the existing translation catalogs.
+The mission introduction generator includes this quest; synthesized effect
+sources are in `scripts/generate-frozen-pass-sounds.py`.
+
+Additional checks for this quest:
+
+```bash
+./scripts/godot.sh --headless --path . --script res://tests/frozen_pass_smoke.gd
+./scripts/godot.sh --headless --path . --fixed-fps 60 --script res://tests/frozen_pass_routes_smoke.gd
+```
+
+The first covers outcomes, recoverable hazards, progress persistence, and
+language selection. The second moves real player bodies along each route and
+pushes the boulders through normal movement, checking physical reachability.

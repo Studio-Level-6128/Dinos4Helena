@@ -39,3 +39,40 @@ All tile prompts requested polished, photorealistic, family-friendly
 natural-history game key art in a wide 3:2 composition with no text, logos,
 borders, UI, watermark, humans, blood, injuries, or gore. Scene-specific
 subjects and actions match the corresponding mission descriptions.
+
+## Beyond the Frozen Pass — 2026-10-09
+
+Generated with the built-in imagegen tool. Final assets are in `frozen_pass/`:
+`background.png` (1280×720), `cover.png`, and six mission tiles (768×512).
+Images were resized and centered for the existing quest UI. Source originals
+remain in the image generation output directory.
+
+Shared prompt: `Use case: illustration-story. Asset type: dinosaur game quest
+artwork. Polished painterly 3D storybook game illustration, consistent natural
+dinosaur anatomy, cool ice blue and white contrasted with warm sunlight.
+Clear silhouettes readable at thumbnail size. No clothing, no text, no UI,
+no borders, no watermark.`
+
+Scene prompts:
+
+- **background**: Wide panoramic snowy prehistoric mountain pass opening onto
+  a sunlit green valley with steaming pools, distant dinosaurs; atmospheric
+  scene, 16:9.
+- **cover**: A friendly Parasaurolophus looking toward a snowy mountain tunnel
+  and warm green valley beyond; epic journey composition, 3:2.
+- **tracks_in_snow**: Friendly Parasaurolophus examining three branching trails
+  of dinosaur footprints in snow beside an abandoned rocky mountain camp, 3:2.
+- **whiteout**: Friendly Parasaurolophus sheltered beneath snow-covered rock
+  arch as a blizzard blows past, next shelter visible beyond, 3:2.
+- **singing_lake**: Friendly Parasaurolophus carefully stepping across dark
+  blue thick ice islands on a pale cracked frozen lake, 3:2.
+- **sleeping_giants**: Small friendly Parasaurolophus tiptoeing along soft snow
+  past three sleeping enormous Apatosaurus in a sheltered snowy ravine, 3:2.
+- **snowplug**: Friendly Triceratops pushing a rounded boulder into a narrow
+  stream channel, water melting snowy mountain tunnel entrance, 3:2.
+- **last_avalanche**: Friendly Parasaurolophus running down a snowy
+  mountainside between rocky shelters as an avalanche falls behind, warm
+  green valley ahead, exciting but child-friendly, 3:2.
+
+These scenes depict a fictional adventure, rather than an accurate shared
+habitat or geological period for all the depicted species.

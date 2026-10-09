@@ -30,6 +30,12 @@ MISSIONS = (
     "kingpin",
     "lost_baby",
     "eat_the_baby",
+    "tracks_in_snow",
+    "whiteout",
+    "singing_lake",
+    "sleeping_giants",
+    "snowplug",
+    "last_avalanche",
 )
 VOICES = {
     "en": "en-GB-SoniaNeural",

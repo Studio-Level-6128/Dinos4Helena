@@ -53,3 +53,30 @@ The baby follows beside you and has its own health, but no energy meter. It is s
 The world contains forest and grassland regions, rivers, lakes, hills, jumpable ledges, trees, rocks, plants and fallen logs. Solid scenery cannot be walked through, and invisible walls prevent falls from the map edge.
 
 The minimap reveals nearby terrain as you explore. Living predators appear as red dots and herbivores as green dots wherever their current position has been explored. A whole herbivore pack uses a single green marker to keep the map readable. Red-and-cream feast symbols show meat left by defeated dinosaurs. The sun, moving clouds, ambient wildlife, tokens, eggs and dinosaurs all form part of the seeded world.
+
+## Beyond the Frozen Pass
+
+Open **Quests** and select **Beyond the Frozen Pass** for six winter missions.
+The first mission is available immediately; each completion unlocks the next.
+Titles, objectives, hints, and spoken introductions follow the selected English,
+German, or French language.
+
+1. **Tracks in the Snow:** Follow footprints with toes pointing forward.
+   Backward-curving branches return you to your last checkpoint.
+2. **Whiteout:** Wait beneath rocky shelters during strong wind. Shelters
+   restore warmth; calm spells give you time to reach the next one.
+3. **The Singing Lake:** Dark blue islands are safe. Pale ice starts creaking
+   before breaking, so keep moving until you reach the next island.
+4. **Let Sleeping Giants Lie:** Walk on the white snow paths. Running,
+   noisy ice, attacking, or screaming can disturb a nearby giant. Stop when
+   it stirs. Hurting a giant fails the mission.
+5. **The Snowplug:** Stand behind each boulder and walk forward to push it
+   along its blue channel to the highlighted marker. Three ready channels
+   reopen the snow-blocked tunnel.
+6. **The Last Avalanche:** Blue slopes are clear, amber warns of a coming
+   slide, and red means take cover. Reach three rocky checkpoints, then
+   continue into the green valley.
+
+Cold, broken ice, noise, and avalanches return you to your latest checkpoint
+without erasing progress in the mission. Dying ends the attempt. Every warning
+also appears as text, so audio is optional.

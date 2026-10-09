@@ -20,7 +20,7 @@ func _run() -> void:
 		else:
 			assert(keys == expected_keys, "Translation keys differ for: %s" % locale)
 
-	for mission in ["dinner_time", "explore_the_world", "family", "breed", "hunt", "defense", "poison", "water", "prey", "kingpin", "lost_baby", "eat_the_baby"]:
+	for mission in ["dinner_time", "explore_the_world", "family", "breed", "hunt", "defense", "poison", "water", "prey", "kingpin", "lost_baby", "eat_the_baby", "tracks_in_snow", "whiteout", "singing_lake", "sleeping_giants", "snowplug", "last_avalanche"]:
 		for locale in ["en", "de", "fr"]:
 			var audio_path := "res://assets/audio/missions/%s/%s.mp3" % [mission, locale]
 			assert(ResourceLoader.exists(audio_path), "Mission narration is missing: %s" % audio_path)
