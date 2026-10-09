@@ -14,10 +14,10 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	var quest_grid := game.find_child("QuestTiles", true, false) as GridContainer
-	if quest_grid == null or quest_grid.get_child_count() != 3:
-		_fail("Quest overview must have three tiles; check quest config loading in release builds")
+	if quest_grid == null or quest_grid.get_child_count() != 4:
+		_fail("Quest overview must have four tiles; check quest config loading in release builds")
 		return
-	for quest_id in ["getting_started", "sand_land", "frozen_pass"]:
+	for quest_id in ["getting_started", "sand_land", "frozen_pass", "heart_of_volcano"]:
 		game.call("_show_quest_page", quest_id)
 		var mission_grid := game.find_child("MissionTiles", true, false) as GridContainer
 		if mission_grid == null or mission_grid.get_child_count() != 6:
@@ -45,7 +45,18 @@ func _run() -> void:
 		return
 	game.call("_return_to_main_menu")
 	await process_frame
-	print("Release quest smoke test passed: three quest tiles and six missions each")
+	game.call("_show_quest_page", "heart_of_volcano")
+	for mission_id in game.mission_config.get_value("quest", "mission_ids", []):
+		game.quest_progress.set_value("heart_of_volcano", str(mission_id), true)
+	game.call("_start_quest_mission", "heart_of_volcano", "ashfang")
+	await process_frame
+	await physics_frame
+	if game.active_mission_event == null or game.active_mission_event.get("boss") == null or game.find_child("AshfangHealth", true, false) == null:
+		_fail("Ashfang or his phase HUD is missing in the packaged build")
+		return
+	game.call("_return_to_main_menu")
+	await process_frame
+	print("Release quest smoke test passed: four quest tiles and six missions each")
 	game.queue_free()
 	await process_frame
 	quit()

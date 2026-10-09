@@ -76,3 +76,10 @@ Scene prompts:
 
 These scenes depict a fictional adventure, rather than an accurate shared
 habitat or geological period for all the depicted species.
+
+## Heart of the Volcano — 2026-10-09
+
+Eight new images were generated with built-in imagegen and stored under
+`heart_of_volcano/`: one 1280×720 background, one 768×512 cover, and six 768×512
+mission tiles. Full scene prompts and generation details are recorded in
+`heart_of_volcano/GENERATED_ASSETS.md`.

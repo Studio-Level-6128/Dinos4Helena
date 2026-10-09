@@ -22,3 +22,11 @@ edge-tts 7.2.8, the voices above, and the same rate and volume settings.
 The source text is the English, German, and French `mission.<id>.intro`
 translation entry. The existing generator now includes all eighteen missions
 and preserves previously generated audio by default.
+
+## Heart of the Volcano — 2026-10-09
+
+Added 18 English, German, and French MP3 introductions for `echoes_of_warning`,
+`leap_of_fire`, `giants_balance`, `black_wall`, `return_to_sender`, and `ashfang`.
+Generated with edge-tts 7.2.8 using the voices and settings above. All source
+text is stored in `mission.<id>.intro` in the translation catalogs. The generator
+now includes all 24 missions and preserves earlier voiceovers by default.

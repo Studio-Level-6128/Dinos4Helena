@@ -80,3 +80,39 @@ German, or French language.
 Cold, broken ice, noise, and avalanches return you to your latest checkpoint
 without erasing progress in the mission. Dying ends the attempt. Every warning
 also appears as text, so audio is optional.
+
+## Heart of the Volcano
+
+The fourth quest uses a different dinosaur in each of its six lava-world missions.
+Titles, objectives, hints, and narration follow your English, German, or French
+language choice. Completing a mission unlocks the next and saves your progress.
+
+1. **Echoes of Warning — Parasaurolophus:** A dot means a short roar and a line
+   means a long roar. Tap **Scream** (`R`) for short; hold for at least one second
+   and release for long. Answer three patterns. **Replay Call** repeats the
+   sounds and visible words; mistakes only restart the current pattern.
+2. **Leap of Fire — Velociraptor:** Jump onto each moving basalt platform, ride
+   it upward, then jump to the next ledge. You must land on both the platform
+   and ledge for each checkpoint. Walking plus Jump works; Run is optional.
+3. **The Giant’s Balance — Apatosaurus:** Walk up the ramp to the three glowing
+   points. Stay at each point until the slab levels out and its hold meter fills.
+   Keep away from the edges, then cross down the far ramp.
+4. **Break the Black Wall — Triceratops:** Face a glowing crack squarely, hold
+   **Run**, and press **Attack** while approaching it. Open all three wall
+   sections, then pass through. Walking attacks and glancing charges do not
+   break the wall.
+5. **Return to Sender — Stegosaurus:** The challenge starts when you enter the
+   landing circle. Press **Attack** when it turns green to deflect the incoming
+   stone. The normal attack animation has a short wind-up, so press early in
+   the green window. Return five stones into the barriers. Misses allow a retry.
+6. **Ashfang, Lord of the Crater — Spinosaurus:** His three health-bar segments
+   represent three phases. Move away from marked charge lines, stay outside
+   the tail-sweep circle, then approach and **Attack** during green recovery
+   windows. The last phase alternates both attacks and adds lava patches:
+   amber warns, red burns. Defeating a phase restores health and energy.
+   If a boss attack or lava overwhelms you, retry the current phase while
+   keeping earlier phases won. When Ashfang retreats, cross into the green
+   valley to finish the quest.
+
+Falls and balance mistakes return you to your last checkpoint. Ordinary player
+death ends the attempt. No mission requires sound to understand its cues.

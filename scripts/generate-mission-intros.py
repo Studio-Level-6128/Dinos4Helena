@@ -36,6 +36,12 @@ MISSIONS = (
     "sleeping_giants",
     "snowplug",
     "last_avalanche",
+    "echoes_of_warning",
+    "leap_of_fire",
+    "giants_balance",
+    "black_wall",
+    "return_to_sender",
+    "ashfang",
 )
 VOICES = {
     "en": "en-GB-SoniaNeural",

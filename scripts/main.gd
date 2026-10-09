@@ -2006,7 +2006,7 @@ func _on_mission_progress(message: String) -> void:
 
 func _on_mission_completed() -> void:
 	_mark_mission_completed(active_quest_id, active_mission_id)
-	_show_mission_result(true, _t("mission.complete_detail"))
+	_show_mission_result(true, _t(str(mission_config.get_value(active_mission_id, "completion_detail_key", "mission.complete_detail"))))
 
 
 func _on_mission_failed(reason: String) -> void:
@@ -2597,7 +2597,7 @@ func _generate_world_layout() -> void:
 	generated_babies.clear()
 	generated_tokens.clear()
 	generated_eggs.clear()
-	mission_player_start = Vector3(0.0, 0.1, 5.0)
+	mission_player_start = Vector3(0.0, 0.1, 58.0) if selected_map_theme == "volcano" else Vector3(0.0, 0.1, 5.0)
 	generated_lava_streams.clear()
 	volcano_data.clear()
 	var rng := RandomNumberGenerator.new()
@@ -2973,7 +2973,7 @@ func _build_player(dino_id: String) -> void:
 	player.set_script(PLAYER_SCRIPT)
 	player.set("dino_id", dino_id)
 	player.set("texture_variant", posmod(map_seed + DINO_IDS.find(dino_id), GENERATED_MATERIALS.dino_variant_count()))
-	player.position = Vector3(0.0, 0.1, 58.0) if selected_map_theme == "volcano" else mission_player_start
+	player.position = mission_player_start
 	world_root.add_child(player)
 	player.screamed.connect(_on_dino_screamed)
 	player.attacked.connect(_on_player_attacked)

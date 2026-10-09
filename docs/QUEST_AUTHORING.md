@@ -482,3 +482,45 @@ Additional checks for this quest:
 The first covers outcomes, recoverable hazards, progress persistence, and
 language selection. The second moves real player bodies along each route and
 pushes the boulders through normal movement, checking physical reachability.
+
+## Heart of the Volcano
+
+`quests/heart_of_volcano/setup.gd` reserves a deterministic route north of the
+normal volcano and moves scenic lava away from required paths. Volcano free
+play still starts at its original `(0, 0.1, 58)` position, while quest setup can
+now supply `mission_player_start` just as on other themes.
+
+Each mission has its own event script inheriting the shared geometry, sound,
+localization, and checkpoint helpers in `quests/heart_of_volcano/event.gd`.
+The six species are Parasaurolophus, Velociraptor, Apatosaurus, Triceratops,
+Stegosaurus, and Spinosaurus. Gameplay uses the existing touch and keyboard
+controls, including held Scream durations and the delayed Attack impact signal.
+The script recognizes actual platform and ledge landings, balance holds,
+aligned running attacks, and timed projectile deflections. Environmental retries
+restore health and energy without clearing completed steps.
+
+Ashfang uses `quests/heart_of_volcano/boss.gd`, a mission-specific subclass of
+normal wildlife. It keeps model, collision, animations, and normal player
+attack targeting, while the event controls health, guard/recovery windows,
+telegraphs, charges, sweeps, lava, phase retries, and retreat. The boss remains
+alive and retreats after defeat; completion requires reaching the final
+crossing. Phase checkpoints last for the current attempt; replay starts at
+phase one. Settings are in `missions.cfg`. The optional `completion_detail_key`
+provides the translated finale message without changing other quest results.
+
+New asset prompts and audio provenance are recorded in their respective
+`GENERATED_ASSETS.md` files. The existing narration generator includes all six
+new mission IDs; effects can be reproduced with `scripts/generate-volcano-sounds.py`.
+
+Additional checks:
+
+```bash
+./scripts/godot.sh --headless --path . --script res://tests/volcano_quest_smoke.gd
+./scripts/godot.sh --headless --path . --fixed-fps 60 --script res://tests/volcano_routes_smoke.gd
+```
+
+The first checks species, objectives, wrong actions, recovery, persistence,
+translations, voice selection, and all boss phases. The second completes every
+mission using actual player movement and touch inputs, including real attack
+hits against the boss. The packaged release smoke check also boots Ashfang and
+verifies his phase HUD and all 24 missions' scripts, tile images, and narration.
