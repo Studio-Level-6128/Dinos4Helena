@@ -856,7 +856,7 @@ func _drop_meat() -> Node3D:
 
 
 func claim_meal(meat: Node3D) -> void:
-	if diet == "carnivore" and is_instance_valid(meat):
+	if diet == "carnivore" and is_instance_valid(meat) and not bool(meat.get_meta("player_only", false)):
 		food_target = meat
 		forced_target = null
 
@@ -872,6 +872,8 @@ func _nearest_meat(origin: Vector3, maximum_distance: float) -> Node3D:
 		if not candidate is Node3D:
 			continue
 		var meat := candidate as Node3D
+		if bool(meat.get_meta("player_only", false)):
+			continue
 		var distance := origin.distance_to(meat.global_position)
 		if distance < nearest_distance:
 			nearest = meat
@@ -881,6 +883,9 @@ func _nearest_meat(origin: Vector3, maximum_distance: float) -> Node3D:
 
 func _eat_meat(delta: float) -> void:
 	if not is_instance_valid(food_target):
+		return
+	if bool(food_target.get_meta("player_only", false)):
+		food_target = null
 		return
 	energy = minf(energy + meat_energy_per_second * delta, max_energy)
 	var remaining: float = food_target.get_meta("energy_remaining", 55.0)

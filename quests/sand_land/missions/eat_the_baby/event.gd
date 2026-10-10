@@ -12,6 +12,7 @@ func setup(world_controller: Node, mission_objective: Dictionary) -> void:
 		var role := str(npc.get_meta("mission_role", ""))
 		if role == "hunted_baby":
 			baby = npc
+			baby.set_meta("reserve_meat_for_player", true)
 			baby.died.connect(_on_baby_died)
 		elif role == "baby_rescue_leader":
 			rescue_leader = npc

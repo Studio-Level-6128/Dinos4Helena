@@ -163,7 +163,24 @@ func _check_win(game: Node, quest_id: String, mission_id: String) -> void:
 			event.call("_process", 0.1)
 		"eat_the_baby":
 			var baby := _role("hunted_baby")
-			baby.take_damage(999, game.player)
+			var hunter := _role("baby_hunter_pack")
+			baby.take_damage(999, hunter)
+			var meal: Node3D
+			for meat in get_nodes_in_group("edible_meat"):
+				if meat.get_meta("source_dinosaur", null) == baby: meal = meat
+			assert(is_instance_valid(meal) and meal.get_meta("player_only", false), "Mission meat was not reserved")
+			assert(hunter.food_target != meal, "Pack killer claimed the mission meat")
+			assert(hunter._nearest_meat(meal.global_position, 1.0) == null, "Hungry pack can still find reserved meat")
+			var remaining: float = meal.get_meta("energy_remaining")
+			var energy: float = hunter.energy
+			hunter.food_target = meal
+			hunter._eat_meat(100.0)
+			assert(hunter.food_target == null and hunter.energy == energy and meal.get_meta("energy_remaining") == remaining, "Pack consumed reserved meat")
+			# Simulate the normal 12-second corpse cleanup, then eat much later.
+			baby._expire_corpse()
+			assert(is_instance_valid(baby) and not baby.is_queued_for_deletion() and not baby.visible, "Corpse cleanup lost the mission food source")
+			event._process(0.1)
+			assert(not event.ended, "Mission failed while its reserved meat was available")
 			game.player.food_source_consumed.emit(game.player)
 			assert(not event.ended, "Eat the Baby accepted unrelated meat")
 			_eat_source(game.player, baby)

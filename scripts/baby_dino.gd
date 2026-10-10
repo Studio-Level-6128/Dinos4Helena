@@ -179,7 +179,15 @@ func _die(attacker: Node3D = null) -> void:
 	if is_instance_valid(attacker) and attacker.has_method("claim_meal"):
 		attacker.call("claim_meal", meat)
 	died.emit(self)
-	get_tree().create_timer(12.0).timeout.connect(queue_free)
+	get_tree().create_timer(12.0).timeout.connect(_expire_corpse)
+
+
+func _expire_corpse() -> void:
+	if bool(get_meta("reserve_meat_for_player", false)):
+		# The mission still needs this source when the player eats its meat.
+		hide()
+	else:
+		queue_free()
 
 
 func _drop_meat() -> Node3D:
@@ -188,6 +196,7 @@ func _drop_meat() -> Node3D:
 	meat.add_to_group("edible_meat")
 	meat.set_meta("energy_remaining", 24.0)
 	meat.set_meta("source_dinosaur", self)
+	meat.set_meta("player_only", bool(get_meta("reserve_meat_for_player", false)))
 	get_parent().add_child(meat)
 	meat.global_position = global_position + Vector3(0.0, 0.2, 0.0)
 	var mesh_instance := MeshInstance3D.new()
