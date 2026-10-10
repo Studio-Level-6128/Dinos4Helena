@@ -57,14 +57,24 @@ func _run() -> void:
 						await physics_frame
 				await _walk(Vector3(0, 0.1, 142))
 			"black_wall":
-				for point in event.weak_points:
-					await _walk(Vector3(point.x, 0.1, 96))
+				for index in event.weak_points.size():
+					var point: Vector3 = event.weak_points[index]
+					var approach_x := point.x + (2.0 if index == 2 else 0.0)
+					await _walk(Vector3(approach_x, 0.1, 96))
 					game.player.rotation.y = PI
 					game.player.mobile_actions["move_forward"] = true
 					game.player.mobile_actions["run"] = true
-					while game.player.global_position.z < 99: await physics_frame
+					if index == 0:
+						while game.player.global_position.z < 99: await physics_frame
+					else:
+						# Press at contact, when collision has already stopped the body.
+						for frame in 180:
+							await physics_frame
+							if game.player.global_position.z > 102 and absf(game.player.velocity.z) < 0.1: break
+						assert(game.player.global_position.z > 102 and absf(game.player.velocity.z) < 0.1, "Charge did not reach wall contact")
 					game.player.set_mobile_action("attack", true)
 					for frame in 25: await physics_frame
+					assert(event.broken[index], "Real horn impact did not break wall section %d" % index)
 					game.player.set_mobile_action("attack", false)
 					game.player.mobile_actions.clear()
 					await _walk(Vector3(point.x, 0.1, 96))

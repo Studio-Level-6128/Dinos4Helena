@@ -505,6 +505,12 @@ The script recognizes actual platform and ledge landings, balance holds,
 aligned running attacks, and timed projectile deflections. Environmental retries
 restore health and energy without clearing completed steps.
 
+Black Wall remembers forward running for `charge_grace_seconds` (0.6 seconds)
+so wall collision cannot cancel the delayed horn impact. Facing is checked
+against the wall normal; `charge_alignment_tolerance` allows a three-unit
+sideways offset from each crack. The player must keep Run held for the hit;
+standing attacks, reverse movement, sideways hits, and expired charges fail.
+
 Ashfang uses `quests/heart_of_volcano/boss.gd`, a mission-specific subclass of
 normal wildlife. It keeps model, collision, animations, and normal player
 attack targeting, while the event controls health, guard/recovery windows,

@@ -93,6 +93,23 @@ func _check_wrong(mid: String) -> void:
 			game.player.velocity = Vector3.ZERO
 			event._on_attack()
 			assert(event.stage == 0)
+			game.player.mobile_actions["run"] = true
+			event._on_attack()
+			assert(event.stage == 0, "Holding Run while standing still broke the wall")
+			game.player.velocity = Vector3(0, 0, -6)
+			event._physics_process(0.1)
+			event._on_attack()
+			assert(event.stage == 0, "Running backwards broke the wall")
+			game.player.velocity = Vector3(0, 0, 6)
+			event._physics_process(0.1)
+			game.player.rotation.y = PI / 2
+			event._on_attack()
+			assert(event.stage == 0, "A sideways attack broke the wall")
+			game.player.rotation.y = PI
+			game.player.velocity = Vector3.ZERO
+			event._physics_process(0.7)
+			event._on_attack()
+			assert(event.stage == 0, "An expired charge broke the wall")
 		"return_to_sender":
 			game.player.global_position = event.landing
 			event.flight_time = 0.5
@@ -135,10 +152,13 @@ func _check_win(mid: String) -> void:
 			event._physics_process(0.1)
 		"black_wall":
 			for point in event.weak_points:
-				game.player.global_position = point - Vector3(0, 0, 4)
+				game.player.global_position = point + Vector3(2, 0, -0.8)
 				game.player.rotation.y = PI
 				game.player.velocity = Vector3(0, 0, 6)
 				game.player.mobile_actions["run"] = true
+				event._physics_process(0.1)
+				game.player.velocity = Vector3.ZERO
+				event._physics_process(0.24)
 				event._on_attack()
 			assert(event.stage == 3 and not event.ended)
 			game.player.global_position = Vector3(0, 0.1, 114)
