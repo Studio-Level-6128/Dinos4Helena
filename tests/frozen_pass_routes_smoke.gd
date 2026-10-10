@@ -24,12 +24,13 @@ func _run() -> void:
 		assert(is_equal_approx(absf(game.player.rotation.y), PI), "Player must face the trail")
 		match mid:
 			"sleeping_giants":
-				await _walk(Vector3(14, 0.1, 5))
-				await _walk(Vector3(14, 0.1, 36))
-				await _walk(Vector3(-14, 0.1, 36))
-				await _walk(Vector3(-14, 0.1, 60))
-				await _walk(Vector3(14, 0.1, 60))
-				await _walk(Vector3(14, 0.1, 84))
+				# Use the outer soft-snow route, missing the old checkpoint circles.
+				await _walk(Vector3(19, 0.1, 5))
+				await _walk(Vector3(19, 0.1, 37))
+				await _walk(Vector3(-19, 0.1, 37))
+				await _walk(Vector3(-19, 0.1, 61))
+				await _walk(Vector3(19, 0.1, 61))
+				await _walk(Vector3(19, 0.1, 90))
 			"snowplug":
 				for index in 3:
 					await _walk(Vector3(-12 + index * 12, 0.1, 15))

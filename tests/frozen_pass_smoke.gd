@@ -134,6 +134,16 @@ func _check_hazards(mid: String) -> void:
 			assert(not event.ended)
 
 func _check_win(mid: String) -> void:
+	if mid == "sleeping_giants":
+		# Cross outside every old checkpoint circle, then leave down the center.
+		var crossings := [Vector3(19, 0.1, 40), Vector3(-19, 0.1, 64), Vector3(0, 0.1, 90)]
+		for index in crossings.size():
+			game.player.global_position = crossings[index]
+			game.player.velocity = Vector3.ZERO
+			event._process(0.1)
+			assert(event.stage == index + 1, "Passing a giant outside the checkpoint circle did not count")
+			assert(event.ended == (index == 2), "Sleeping Giants must finish only after all three giants")
+		return
 	if mid == "snowplug":
 		for index in 3:
 			# Push from behind using actual proximity and movement, rather than

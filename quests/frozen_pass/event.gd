@@ -115,6 +115,8 @@ func _footprints(from: Vector3, to: Vector3, loop: bool) -> void:
 
 func _build_giants() -> void:
 	checkpoints.assign([Vector3(14, 0.1, 36), Vector3(-14, 0.1, 60), Vector3(14, 0.1, 84)])
+	_box(Vector3(0, 0.05, 84), Vector3(46, 0.04, 2), GREEN)
+	_label(Vector3(0, 4, 84), "exit")
 	for index in 3:
 		var z := 24.0 + index * 24
 		_box(Vector3(0, 0.03, z), Vector3(46, 0.03, 15), BLUE)
@@ -235,7 +237,13 @@ func _stealth(delta: float, position: Vector3) -> void:
 	if noise >= float(objective.get("wake_noise", 2.4)):
 		_retry("retry_noise")
 		return
-	_advance(position)
+	# Passing each giant counts across the whole corridor. The safe snow path
+	# is wider than the old invisible checkpoint circles and could miss them.
+	while stage < checkpoints.size() and position.z >= checkpoints[stage].z:
+		checkpoint = checkpoints[stage]
+		stage += 1
+		_play("checkpoint")
+		if stage == checkpoints.size(): complete()
 
 
 func _push(delta: float, position: Vector3) -> void:
