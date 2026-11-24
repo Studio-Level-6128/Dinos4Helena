@@ -7,7 +7,7 @@ import subprocess
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-OUT = ROOT / 'build' / 'pages'
+OUT = ROOT / 'docs'
 GUIDES = {
     'docs/INSTALL.md': ('install', 'Install the game', 'Set up Android or play on a Linux computer.'),
     'docs/PLAY_GUIDE.md': ('play', 'Player guide', 'Learn the controls, find food, and protect your young.'),
@@ -24,13 +24,8 @@ def page(file, title, content, prefix=''):
 
 
 def build():
-    if OUT.exists():
-        shutil.rmtree(OUT)
-    (OUT / 'guides').mkdir(parents=True)
-    (OUT / 'images').mkdir()
-    for image in ['title.jpg', 'main-menu.jpg', 'getting-started.jpg', 'grassland.jpg',
-                  'winter.jpg', 'studio-level-6128.png']:
-        shutil.copy(ROOT / 'docs/images' / image, OUT / 'images')
+    # docs also holds the source Markdown and screenshots; never clean this tree.
+    (OUT / 'guides').mkdir(exist_ok=True)
     shutil.copy(HERE / 'style.css', OUT)
 
     cards = []

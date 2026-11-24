@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Player guide · Dinos4Helena</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header><nav aria-label="Main navigation"><a class="brand" href="../index.html">Dinos4Helena</a><a href="../guides/install.html">Install</a><a href="../index.html#guides">Field guides</a></nav></header>
+  <main id="main"><article><a href="../index.html#guides">← All field guides</a><h1 id="how-to-play-dinos4helena">How to play Dinos4Helena</h1>
+<h2 id="start-an-adventure">Start an adventure</h2>
+<p>Choose <strong>Free Game</strong> on the landing page, then select one of seven dinosaurs. Each species has different speed, strength, health and jumping ability. Enter a six-digit world seed to revisit the same valley, or select <strong>New Random Seed</strong>.</p>
+<h2 id="play-together">Play together</h2>
+<p>The default multiplayer server is <code>wss://92.205.18.100:8765/</code> with TLS and self-signed certificates enabled. To use another server, open <strong>Configuration</strong> at the bottom-left of the start screen, enter its IP address or host name and port, choose the TLS options, and save. <strong>Test Server Connection</strong> checks the current fields without saving them; it briefly joins the game to verify the connection. On a local network, use the host computer’s LAN address (for example <code>192.168.1.50</code>). Allowing a self-signed certificate encrypts the connection but does not verify the server’s identity. The app remembers saved settings. Then choose <strong>Multiplayer</strong> to browse ongoing sessions. Join one and choose your dinosaur, name, and color, or create a session by selecting a map theme as well. The name and color are saved locally when you connect and restored next time. Each session supports up to ten players and has its own grassland, desert, winter, or volcano map. Wildlife uses the same AI behavior as in free play. The in-game player list shows each name in its color; a matching colored token floats above each human-controlled dinosaur.</p>
+<p>The server runs separately from the game. Whoever hosts it can follow the <a href="multiplayer.html">server setup guide</a>. <code>127.0.0.1</code> works only when the game and server run on the same device.</p>
+<h2 id="controls">Controls</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Touch</th>
+<th>Keyboard</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Move and steer</td>
+<td>Drag the right-hand wheel; every direction combines forward/backward movement with steering</td>
+<td><code>WASD</code> or arrow keys</td>
+</tr>
+<tr class="even">
+<td>Jump</td>
+<td><strong>Jump</strong></td>
+<td><code>Space</code></td>
+</tr>
+<tr class="odd">
+<td>Run</td>
+<td>Hold <strong>Run</strong> while moving</td>
+<td><code>Shift</code></td>
+</tr>
+<tr class="even">
+<td>Duck</td>
+<td>Hold <strong>Duck</strong></td>
+<td><code>C</code> or <code>Ctrl</code></td>
+</tr>
+<tr class="odd">
+<td>Attack</td>
+<td><strong>Attack</strong> — usable while walking, running or jumping</td>
+<td><code>F</code></td>
+</tr>
+<tr class="even">
+<td>Eat</td>
+<td>Hold <strong>Eat</strong> near food</td>
+<td><code>E</code></td>
+</tr>
+<tr class="odd">
+<td>Scream</td>
+<td><strong>Scream</strong></td>
+<td><code>R</code></td>
+</tr>
+</tbody>
+</table>
+<p>The camera follows above and behind your dinosaur. The top-right button returns to the main menu.</p>
+<h2 id="survive">Survive</h2>
+<p>Health and energy appear at the top left. All actions consume energy; running, jumping and attacking consume the most. If energy reaches zero, health begins falling.</p>
+<ul>
+<li>Herbivores recover energy slowly by eating nearby plants.</li>
+<li>Carnivores recover energy quickly from meat left by defeated dinosaurs.</li>
+<li>Glowing purple plants with bright red pods are poisonous. Eating one makes health fall continuously and displays a purple warning.</li>
+<li>Red tokens restore health and cure poisoning immediately.</li>
+<li>Blue speed tokens and orange strength tokens double that attribute temporarily.</li>
+</ul>
+<p>At zero health, the dinosaur dies and the game ends.</p>
+<h2 id="wildlife">Wildlife</h2>
+<p>Herbivores move in packs, flee hunters and fight back when attacked. Packs protect members of their own species, including a matching player. Their moving formation sometimes leaves one animal trailing behind.</p>
+<p>Carnivores hunt alone. Healthy hunters strongly prefer babies and accept riskier baby attacks, although a powerful nearby parent or pack can still deter them. They continue moving through pursuit attacks, avoid hopeless adult fights, feed after a kill, and retreat once their health falls below half. Dinosaurs do not attack their own species.</p>
+<h2 id="breed-a-baby">Breed a baby</h2>
+<p>Look for small eggs sitting in nests. Walk directly over an egg and hold <strong>Duck</strong> for four uninterrupted seconds. The egg hatches into a smaller dinosaur of your species.</p>
+<p>The baby follows beside you and has its own health, but no energy meter. It is slower than an adult and predators can kill it, so keep it close and protect it.</p>
+<h2 id="explore-the-valley">Explore the valley</h2>
+<p>The world contains forest and grassland regions, rivers, lakes, hills, jumpable ledges, trees, rocks, plants and fallen logs. Solid scenery cannot be walked through, and invisible walls prevent falls from the map edge.</p>
+<p>The minimap reveals nearby terrain as you explore. Living predators appear as red dots and herbivores as green dots wherever their current position has been explored. A whole herbivore pack uses a single green marker to keep the map readable. Red-and-cream feast symbols show meat left by defeated dinosaurs. The sun, moving clouds, ambient wildlife, tokens, eggs and dinosaurs all form part of the seeded world.</p>
+<h2 id="beyond-the-frozen-pass">Beyond the Frozen Pass</h2>
+<p>Open <strong>Quests</strong> and select <strong>Beyond the Frozen Pass</strong> for six winter missions. The first mission is available immediately; each completion unlocks the next. Titles, objectives, hints, and spoken introductions follow the selected English, German, or French language.</p>
+<ol type="1">
+<li><strong>Tracks in the Snow:</strong> Follow footprints with toes pointing forward. Backward-curving branches return you to your last checkpoint.</li>
+<li><strong>Whiteout:</strong> Wait beneath rocky shelters during strong wind. Shelters restore warmth; calm spells give you time to reach the next one.</li>
+<li><strong>The Singing Lake:</strong> Dark blue islands are safe. Pale ice starts creaking before breaking, so keep moving until you reach the next island.</li>
+<li><strong>Let Sleeping Giants Lie:</strong> Walk on the white snow paths. Running, noisy ice, attacking, or screaming can disturb a nearby giant. Stop when it stirs. Hurting a giant fails the mission.</li>
+<li><strong>The Snowplug:</strong> Stand behind each boulder and walk forward to push it along its blue channel to the highlighted marker. Three ready channels reopen the snow-blocked tunnel.</li>
+<li><strong>The Last Avalanche:</strong> Blue slopes are clear, amber warns of a coming slide, and red means take cover. Reach three rocky checkpoints, then continue into the green valley.</li>
+</ol>
+<p>Cold, broken ice, noise, and avalanches return you to your latest checkpoint without erasing progress in the mission. Dying ends the attempt. Every warning also appears as text, so audio is optional.</p>
+<h2 id="heart-of-the-volcano">Heart of the Volcano</h2>
+<p>The fourth quest uses a different dinosaur in each of its six lava-world missions. Titles, objectives, hints, and narration follow your English, German, or French language choice. Completing a mission unlocks the next and saves your progress.</p>
+<ol type="1">
+<li><strong>Echoes of Warning — Parasaurolophus:</strong> A dot means a short roar and a line means a long roar. Tap <strong>Scream</strong> (<code>R</code>) for short; hold for at least one second and release for long. Answer three patterns. <strong>Replay Call</strong> repeats the sounds and visible words; mistakes only restart the current pattern.</li>
+<li><strong>Leap of Fire — Velociraptor:</strong> Jump onto each moving basalt platform, ride it upward, then jump to the next ledge. You must land on both the platform and ledge for each checkpoint. Walking plus Jump works; Run is optional.</li>
+<li><strong>The Giant’s Balance — Apatosaurus:</strong> Walk up the ramp to the three glowing points. Stay at each point until the slab levels out and its hold meter fills. Keep away from the edges, then cross down the far ramp.</li>
+<li><strong>Break the Black Wall — Triceratops:</strong> Face a glowing crack squarely, hold <strong>Run</strong>, and press <strong>Attack</strong> while approaching it. Open all three wall sections, then pass through. Walking attacks and glancing charges do not break the wall.</li>
+<li><strong>Return to Sender — Stegosaurus:</strong> The challenge starts when you enter the landing circle. Press <strong>Attack</strong> when it turns green to deflect the incoming stone. The normal attack animation has a short wind-up, so press early in the green window. Return five stones into the barriers. Misses allow a retry.</li>
+<li><strong>Ashfang, Lord of the Crater — Spinosaurus:</strong> His three health-bar segments represent three phases. Move away from marked charge lines, stay outside the tail-sweep circle, then approach and <strong>Attack</strong> during green recovery windows. The last phase alternates both attacks and adds lava patches: amber warns, red burns. Defeating a phase restores health and energy. If a boss attack or lava overwhelms you, retry the current phase while keeping earlier phases won. When Ashfang retreats, cross into the green valley to finish the quest.</li>
+</ol>
+<p>Falls and balance mistakes return you to your last checkpoint. Ordinary player death ends the attempt. No mission requires sound to understand its cues.</p>
+</article></main>
+  <footer><a href="https://studio-level-6128.github.io/website/"><img width="75" height="50" src="../images/studio-level-6128.png" alt="">Created by Studio Level 6128</a></footer>
+</body>
+</html>

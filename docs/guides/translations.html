@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Translations · Dinos4Helena</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header><nav aria-label="Main navigation"><a class="brand" href="../index.html">Dinos4Helena</a><a href="../guides/install.html">Install</a><a href="../index.html#guides">Field guides</a></nav></header>
+  <main id="main"><article><a href="../index.html#guides">← All field guides</a><h1 id="game-translations">Game translations</h1>
+<p>All player-facing copy lives in the locale catalogs in this folder:</p>
+<ul>
+<li><code>en.json</code> — English and the fallback language</li>
+<li><code>de.json</code> — German</li>
+<li><code>fr.json</code> — French</li>
+</ul>
+<p>Every catalog must contain the same keys. Game code and configuration files refer to those keys through the <code>Localization</code> autoload. Add new player-facing text to all three catalogs instead of embedding it in scripts or config files.</p>
+<p>The selected language is stored in <code>user://settings.cfg</code> on every platform. A web export also stores the locale code in the <code>dinos4helena_language</code> cookie for one year.</p>
+</article></main>
+  <footer><a href="https://studio-level-6128.github.io/website/"><img width="75" height="50" src="../images/studio-level-6128.png" alt="">Created by Studio Level 6128</a></footer>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multiplayer hosting · Dinos4Helena</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header><nav aria-label="Main navigation"><a class="brand" href="../index.html">Dinos4Helena</a><a href="../guides/install.html">Install</a><a href="../index.html#guides">Field guides</a></nav></header>
+  <main id="main"><article><a href="../index.html#guides">← All field guides</a><h1 id="dinos4helena-multiplayer-server">Dinos4Helena multiplayer server</h1>
+<p>This server runs independently of Godot on a separate computer. It uses Python 3.10 or newer with no third-party Python packages. OpenSSL must be installed on the host for the initial automatic certificate generation. One server process hosts up to 16 independent sessions, each with a grassland, desert, winter, or volcano map and up to ten players.</p>
+<h2 id="run-on-a-local-network">Run on a local network</h2>
+<ol type="1">
+<li><p>Copy the <code>server</code> folder to the host computer. Check that <code>python3 --version</code> reports Python 3.10 or newer and that <code>openssl version</code> works.</p></li>
+<li><p>From that folder, start the server:</p>
+<pre class="sh"><code>python3 server.py --host 0.0.0.0 --port 8765 --seed 424242</code></pre>
+<p>The first launch creates <code>certs/server.crt</code> and <code>certs/server.key</code> next to the script, then serves encrypted <code>wss://</code> connections. Later launches reuse the same keypair. The private key is mode <code>0600</code> and the <code>certs</code> directory is ignored by Git. Keep the key private and back up both files together. <code>0.0.0.0</code> means listen on all network interfaces; it is <strong>not</strong> the address players enter in the game. The legacy test world uses the six-digit <code>--seed</code> value; each newly created session receives its own six-digit seed. To accept connections only from the host computer, use <code>--host 127.0.0.1</code>.</p></li>
+<li><p>Find the host computer’s LAN IPv4 address in its network settings (for example <code>192.168.1.50</code>). Allow incoming <strong>TCP 8765</strong> in its firewall. The server and devices must be able to reach each other on the same network.</p></li>
+<li><p>On each device, open <strong>Configuration</strong> at the bottom-left of the start screen. The default is <code>92.205.18.100:8765</code> with TLS and self-signed certificates enabled. For your own server, enter its IP or DNS name in <strong>Server IP / Host</strong> and enter <code>8765</code> as <strong>Port</strong>. Keep <strong>Secure connection</strong> and <strong>Allow self-signed certificate</strong> checked for the automatically generated certificate. Use <strong>Test Server Connection</strong> to check the current fields without saving; it briefly joins and leaves the game. Save the settings, then open <strong>Multiplayer</strong> to see current sessions. Choose <strong>Join</strong> and select a dinosaur, name, and color, or choose <strong>Create Session</strong> to select a map theme as well. Do not enter <code>0.0.0.0</code> or <code>127.0.0.1</code> on a different device; those addresses refer to that device itself.</p></li>
+</ol>
+<p>The app saves the host, port, and TLS settings locally for the next session. If a session already has ten players, its Join button is disabled. Empty sessions are removed automatically; restarting the server clears all sessions.</p>
+<h2 id="check-a-server-setup">Check a server setup</h2>
+<p>Run this from the <strong>device or computer whose connection you want to test</strong>, using the same host and port entered in the app. Copy <code>check_server.py</code> there; it needs only Python 3.10 or newer, not Godot or third-party packages:</p>
+<pre class="sh"><code>python3 check_server.py wss://192.168.1.50:8765/ --allow-self-signed</code></pre>
+<p>For a certificate trusted by the operating system, omit <code>--allow-self-signed</code>. To verify a self-signed certificate without disabling identity checks, use <code>--ca-cert /path/to/server.crt</code> and connect using a host name or IP included in that certificate. For a server started with <code>--no-tls</code>, use <code>ws://192.168.1.50:8765/</code> without either TLS option. You can also set <code>--dino trex</code> and <code>--timeout 10</code>.</p>
+<p>The script performs the TLS connection, WebSocket upgrade, and actual game join. It prints the map, seed, player ID, other-player count, and a TLS status on success; it exits with status <code>1</code> and a diagnostic on failure. A full server rejects the test join. The check briefly occupies one player slot and then disconnects. <code>--allow-self-signed</code> disables certificate <strong>and host-name</strong> verification for this check, just like the corresponding app option; use it only for a server you trust by other means. Run it from another network if you need to check Internet reachability rather than only local access.</p>
+<h2 id="host-on-the-internet">Host on the Internet</h2>
+<p>Use a DNS name pointing to the server’s public IP. Allow the chosen TCP port in the host and cloud firewalls. If the server sits behind a home router, forward that TCP port to the host’s LAN IP. A private LAN address such as <code>192.168.x.x</code> will not work from outside the LAN.</p>
+<p>The automatically generated certificate also works over the Internet when players explicitly allow self-signed certificates. That option encrypts traffic but does <strong>not</strong> verify that the remote server is the intended one; an attacker could impersonate it. For a public server, use a certificate trusted by the players’ devices and leave <strong>Allow self-signed certificate</strong> unchecked. Pass your own certificate and key to the server:</p>
+<pre class="sh"><code>python3 server.py --host 0.0.0.0 --port 8765 --seed 424242 --cert /path/to/cert.pem --key /path/to/key.pem</code></pre>
+<p>In the app’s start-screen <strong>Configuration</strong>, enter the certificate’s DNS name as <strong>Server IP / Host</strong>, the chosen port, and check <strong>Secure connection (TLS / wss)</strong>. A TLS reverse proxy is also possible; forward WebSocket traffic on <code>/</code> to the Python server and enter the proxy’s public port in the app. This first version has no accounts or access control. Use a private network or add authentication before exposing a server intended only for invited players.</p>
+<p>To put the host’s address in a newly generated certificate, add <code>--cert-host 192.168.1.50</code> or <code>--cert-host game.example.org</code> on its <strong>first</strong> run. Existing certificates are deliberately reused; changing <code>--cert-host</code> later does not replace them. To generate a new pair, first stop the server and safely move both existing files out of <code>certs/</code>, then start it again. Clients that explicitly allow self-signed certificates do not check the certificate’s host name.</p>
+<p>Plain <code>ws://</code> is still available for a private test network via <code>--no-tls</code>; in that case, uncheck both TLS options in the app. <code>--cert-dir /another/private/path</code> changes where the automatic pair is stored.</p>
+<h2 id="keep-it-running-on-linux-optional">Keep it running on Linux (optional)</h2>
+<p>Create a systemd service with paths and user adjusted for your installation:</p>
+<pre class="ini"><code>[Unit]
+Description=Dinos4Helena multiplayer server
+After=network-online.target
+
+[Service]
+User=YOUR_USER
+WorkingDirectory=/opt/dinos4helena/server
+ExecStart=/usr/bin/python3 /opt/dinos4helena/server/server.py --host 0.0.0.0 --port 8765 --seed 424242
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+<p>Save it as <code>/etc/systemd/system/dinos4helena.service</code>, then run <code>sudo systemctl daemon-reload</code> and <code>sudo systemctl enable --now dinos4helena</code>. Inspect logs with <code>journalctl -u dinos4helena -f</code>. The service user needs write access to the certificate directory on first start and read access afterward. Add <code>--cert</code> and <code>--key</code> to <code>ExecStart</code> if you provide a trusted certificate instead of using the generated one.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+<li><strong>Cannot reach server:</strong> Check that the server process is running, host/IP and port match, TCP traffic is allowed, and both devices can reach each other. Use the host’s LAN IP on a LAN, not <code>127.0.0.1</code> from another device.</li>
+<li><strong>TLS connection fails:</strong> Check that <strong>Secure connection</strong> is on for the default server, and that <strong>Allow self-signed certificate</strong> is on for its generated certificate. For a trusted certificate, leave the second option off and check that its host name matches.</li>
+<li><strong>OpenSSL not found:</strong> Install the OpenSSL command-line program, or supply an existing certificate and key with <code>--cert</code> and <code>--key</code>.</li>
+<li><strong>World full:</strong> Ten clients are already connected; wait for one to leave.</li>
+</ul>
+<h2 id="current-game-rules-and-protocol">Current game rules and protocol</h2>
+<p>The server assigns a player ID and spawn slot, distributes the shared seed, relays position, rotation, action animation, and screams, removes disconnected players, and validates proximity, facing, cooldown, and species for player attacks. Same-species attacks are ignored. A defeated player leaves edible meat at the death position and respawns at a different, server-selected location after five seconds. The map is generated locally from the server seed. Each session has its own seeded grassland, desert, winter, or volcano map and holds up to 10 players; the server allows up to 16 simultaneous sessions. The first player in a session simulates wildlife with the single-player AI and sends NPC snapshots through the server. The server validates player-to-NPC attacks and NPC-to-player damage; if that player leaves, AI authority moves to another player. Multiplayer maps include local health, speed, and strength tokens; speed and strength effects are also applied to server movement and damage validation. Eggs remain absent from multiplayer, while food plants behave locally. Sessions disappear when the last player leaves.</p>
+<p>The protocol is JSON over WebSocket text frames. A new client sends <code>{"type":"list"}</code> and receives a <code>sessions</code> list, then sends <code>{"type":"create","map":"desert","dino":"triceratops","name":"Helena","color":"#f47ac2"}</code> or <code>{"type":"join","session":1,"dino":"trex","name":"Dad","color":"#4ecdc4"}</code>. The legacy <code>hello</code> request still joins a shared grassland test world for older clients and the setup checker. Names must be 1–20 printable characters; colors must be one of the eight choices in the game. For compatibility with older clients and the setup checker, omitted identity fields receive a generated player name and the default blue color. The server replies with <code>welcome</code> (ID, seed, spawn, current roster), broadcasts <code>joined</code> and <code>left</code>, relays <code>state</code> and <code>scream</code>, and broadcasts authoritative <code>hit</code>, <code>death</code>, and <code>respawn</code> events. Spawn, roster, join, state, and respawn player objects include the name and color. Clients send <code>state</code>, <code>attack</code>, <code>scream</code>, <code>health</code>, or a speed/strength <code>powerup</code> event after joining. Malformed, oversized, unmasked, or fragmented frames are rejected, and idle clients are dropped after 30 seconds. Deploy this updated server together with the updated game for session browsing and synchronized wildlife.</p>
+</article></main>
+  <footer><a href="https://studio-level-6128.github.io/website/"><img width="75" height="50" src="../images/studio-level-6128.png" alt="">Created by Studio Level 6128</a></footer>
+</body>
+</html>

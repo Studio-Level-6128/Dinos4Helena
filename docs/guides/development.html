@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Development · Dinos4Helena</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header><nav aria-label="Main navigation"><a class="brand" href="../index.html">Dinos4Helena</a><a href="../guides/install.html">Install</a><a href="../index.html#guides">Field guides</a></nav></header>
+  <main id="main"><article><a href="../index.html#guides">← All field guides</a><h1 id="dinos4helena-development-guide">Dinos4Helena development guide</h1>
+<p>This guide explains how the project is organized, how its runtime systems fit together, and how to extend it safely. The game targets Godot 4.7 and Android, while remaining runnable from VS Code on the desktop.</p>
+<h2 id="quick-start">Quick start</h2>
+<p>Open the repository as a VS Code workspace and use <code>Terminal &gt; Run Task</code>.</p>
+<ul>
+<li><code>Godot: Open editor</code> opens the project in Godot.</li>
+<li><code>Godot: Run game</code> launches the desktop build.</li>
+<li><code>Android: Build debug APK</code> exports the signed debug APK.</li>
+<li>The individual <code>Godot: … test</code> tasks run headless smoke tests.</li>
+</ul>
+<p>Equivalent terminal commands are:</p>
+<pre class="bash"><code>./scripts/godot.sh --editor --path .
+./scripts/godot.sh --path .
+./scripts/build-android.sh</code></pre>
+<p>Run <code>./scripts/setup-dev.sh</code> if the ignored local Godot/Android toolchain under <code>.tools/</code> has been removed.</p>
+<h2 id="repository-map">Repository map</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Path</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>scenes/main.tscn</code></td>
+<td>Minimal entry scene; most runtime nodes are built by code.</td>
+</tr>
+<tr class="even">
+<td><code>scripts/main.gd</code></td>
+<td>Application flow, splash/menu/HUD, procedural layout, landscape and actor spawning.</td>
+</tr>
+<tr class="odd">
+<td><code>scripts/player_dino.gd</code></td>
+<td>Input, movement, camera, actions, audio, health, energy and player combat.</td>
+</tr>
+<tr class="even">
+<td><code>scripts/virtual_joystick.gd</code></td>
+<td>Analog multitouch movement wheel, dead zone and visual feedback.</td>
+</tr>
+<tr class="odd">
+<td><code>scripts/npc_dino.gd</code></td>
+<td>Herbivore packs, carnivore strategy, wildlife movement and combat.</td>
+</tr>
+<tr class="even">
+<td><code>scripts/egg_nest.gd</code></td>
+<td>Non-solid duck-to-incubate interaction and egg visuals.</td>
+</tr>
+<tr class="odd">
+<td><code>scripts/baby_dino.gd</code></td>
+<td>Baby companion following, health, death and meat drop.</td>
+</tr>
+<tr class="even">
+<td><code>scripts/minimap.gd</code></td>
+<td>Runtime map drawing, fog of war, grouped wildlife markers and feast markers.</td>
+</tr>
+<tr class="odd">
+<td><code>scripts/powerup_token.gd</code></td>
+<td>Health, speed and strength collectibles.</td>
+</tr>
+<tr class="even">
+<td><code>scripts/generated_materials.gd</code></td>
+<td>Shared textured-material construction.</td>
+</tr>
+<tr class="odd">
+<td><code>config/dinosaurs.cfg</code></td>
+<td>Species balance plus energy, token and breeding settings.</td>
+</tr>
+<tr class="even">
+<td><code>config/quests.cfg</code></td>
+<td>Available quest catalog and quest-level art/config paths.</td>
+</tr>
+<tr class="odd">
+<td><code>quests/&lt;quest&gt;/</code></td>
+<td>Mission config plus one setup and one event script per mission.</td>
+</tr>
+<tr class="even">
+<td><code>tests/</code></td>
+<td>Headless integration/smoke tests.</td>
+</tr>
+<tr class="odd">
+<td><code>assets/</code></td>
+<td>Models, generated artwork/textures, audio and license metadata.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="runtime-lifecycle">Runtime lifecycle</h2>
+<p><code>main.gd</code> loads configuration and builds the menu, then places the startup splash above it. Dismissing the splash reveals <code>LandingPage</code>, which contains the Quests and Free Game tiles plus Credits. Quests switches through the catalog and mission pages; Free Game switches to <code>FreeGamePage</code>, which owns the seed controls, two-row dinosaur selection, play guide, and back button. Starting a game performs this sequence:</p>
+<ol type="1">
+<li>Validate and commit the six-digit seed.</li>
+<li>Generate deterministic layout dictionaries.</li>
+<li>Apply an active mission’s setup script to the generated layout.</li>
+<li>Build lighting, weather, terrain, water and solid scenery.</li>
+<li>Spawn tokens, the player, egg nests and wildlife.</li>
+<li>Build the HUD and initialize the minimap.</li>
+<li>Start the mission event loop, when playing a quest.</li>
+</ol>
+<p>Returning to the menu frees the world and HUD, resets the UI to <code>LandingPage</code>, and retains the already-built menu. Keep world-owned nodes below <code>world_root</code>; otherwise they may survive between sessions.</p>
+<h2 id="quests-and-missions">Quests and missions</h2>
+<p>For a complete step-by-step workflow, configuration reference, script templates, and testing checklist, see the <a href="quests.html">quest and mission authoring guide</a>.</p>
+<p><code>config/quests.cfg</code> is the catalog used by the overview page. Add a quest ID to <code>[quests].quest_ids</code>, then give it a title, description, cover image and mission-config path. Each quest’s <code>missions.cfg</code> defines ordered mission IDs and, for every mission, the dinosaur, map theme, objective values, tile art, setup script and event script.</p>
+<p>Setup scripts extend <code>RefCounted</code> and implement <code>setup(controller)</code>. They run after deterministic world layout generation but before any world nodes are built, so they can add, replace or mark entries in <code>generated_vegetation</code>, <code>generated_eggs</code> and <code>generated_dinosaurs</code>.</p>
+<p>Event scripts extend <code>quests/mission_event.gd</code> and implement <code>setup()</code>, <code>_process()</code>, or signal callbacks. Use <code>set_progress()</code>, <code>complete()</code> and <code>fail(reason)</code> to update the objective HUD and finish the mission. Keep mission-only tuning in its mission config rather than <code>main.gd</code>.</p>
+<p>Mission order is sequential. The first mission is always available; completing one unlocks the next. Completion is stored by quest and mission ID in <code>user://quest_progress.cfg</code>, which maps to private persistent application storage on desktop and Android. Completed missions remain replayable.</p>
+<h2 id="configuration-and-balancing">Configuration and balancing</h2>
+<p>Use <code>config/dinosaurs.cfg</code> instead of hard-coding species balance. Each dinosaur section defines its model, diet, scale, speeds, strength, jump ability, health, collision and camera framing. Shared sections define energy costs, token behavior, poisonous-plant count and damage, and breeding values. Optional <code>audio_profile</code> and <code>run_animation_speed_scale</code> values let a species share an existing sound family or reuse a walk clip for running.</p>
+<p>Selection cards and runtime actors read the same file. When adding a setting, give code a sensible fallback and add a smoke-test assertion where practical.</p>
+<h3 id="adding-a-dinosaur">Adding a dinosaur</h3>
+<ol type="1">
+<li>Add the model and its license/source information under <code>assets/models/</code>.</li>
+<li>Add a complete species section to <code>config/dinosaurs.cfg</code>.</li>
+<li>Add the identifier to the player-facing <code>DINO_IDS</code>. Add it to a diet list only if it should also spawn as wildlife; Spinosaurus intentionally is not in either wildlife list.</li>
+<li>Add its menu portrait and action sounds using the existing naming scheme.</li>
+<li>Verify model facing, scale, collision, animation names and camera distance.</li>
+<li>Run the dinosaur-selection, gameplay, wildlife and Android export tests.</li>
+</ol>
+<h2 id="procedural-world-generation">Procedural world generation</h2>
+<p><code>_generate_world_layout()</code> uses a local <code>RandomNumberGenerator</code> seeded from the menu. It creates data only; <code>_build_landscape()</code> and the actor builders turn that data into nodes. Maintaining this separation keeps seed reproducibility testable.</p>
+<p>Use <code>_find_world_position()</code> for solid objects and <code>_find_biome_position()</code> for biome-specific decoration. Add solid footprints to the local <code>occupied</code> list, and reject water positions with <code>_is_position_in_water()</code>. If a new generated collection affects the world identity, include it in <code>procedural_world_smoke.gd</code>’s layout signature.</p>
+<h3 id="map-topics">Map topics</h3>
+<p><code>MAP_THEMES</code> defines the Free Game choices. Grassland retains the original seed stream; every additional topic has a fixed salt so the same six-digit seed remains deterministic within that topic. Prefer branching counts, biome names and materials inside the existing layout/build stages over copying the full generator.</p>
+<p>Theme terrain belongs in <code>GeneratedMaterials.theme_ground_material()</code>. Environment tinting stays centralized in <code>tint_environment()</code>. Winter footprints use one capped 256-instance <code>MultiMesh</code> for all actors. Volcano streams use shared ribbon geometry plus low-frequency <code>Area3D</code> damage, and both static placement and pack navigation must reject <code>_is_position_in_lava()</code>. Add topic-specific behavior to <code>map_themes_smoke.gd</code>.</p>
+<h2 id="adaptive-mobile-performance">Adaptive mobile performance</h2>
+<p>Gameplay starts in the high-quality tier at native 3D resolution. After an eight-second warm-up, <code>main.gd</code> samples delivered frame rate in two-second windows. Two sustained samples below 42 FPS lower the tier; five samples above 56 FPS restore one tier. A cooldown prevents rapid oscillation.</p>
+<ul>
+<li>High preserves native resolution, original draw ranges, shadows and minimap refresh.</li>
+<li>Medium uses 86% 3D resolution, shorter shadow/draw distances and cheaper distant LODs.</li>
+<li>Low uses 72% 3D resolution, disables the world shadow and shortens scenery/camera ranges further.</li>
+<li>UI remains at native resolution in every tier.</li>
+</ul>
+<p>Register new environment or actor renderables through <code>_register_quality_geometry()</code> with the closest existing category. Collision and AI remain active outside visual culling range. Update <code>performance_scaling_smoke.gd</code> when changing tier values.</p>
+<h2 id="wildlife-ai">Wildlife AI</h2>
+<p>The wildlife controller uses explicit states rather than a behavior-tree plugin.</p>
+<ul>
+<li>Carnivores prioritize injury retreat, feeding, risk assessment, stalking and attacking in that order. Injury retreat begins below 50% health. Favorable close-range strikes retain the pursuit direction and run speed instead of stopping movement.</li>
+<li>Combat odds combine current/max health, strength, size and energy, plus partial power from nearby defenders.</li>
+<li>Herbivores prioritize pack defense, direct retaliation/fleeing and formation movement.</li>
+<li>Every pack has a slot-zero leader. It retains a 55–105 unit world goal until arrival and uses temporary collision-tangent steering rather than discarding a blocked goal. Followers use staggered formation targets and local separation.</li>
+<li>Same-pack collision exceptions prevent physical deadlocks. Slot one periodically trails beyond the pack-support radius, then regroups.</li>
+<li>Same-species checks exist both during target selection and damage application; preserve both layers.</li>
+<li>Pack and same-species membership are cached after spawning; use those caches for frequent AI queries and reserve whole-tree group scans for dynamic targets such as babies.</li>
+</ul>
+<p>Babies join the prey and NPC groups so predators can target them, but use a separate script with no energy or hunting logic. Hunters give baby targets a strong selection bonus and use lower stalking/strike odds (0.55/0.68 instead of 0.78/1.0), while the combat-risk calculation still counts the nearby parent and herd before permitting an attack.</p>
+<h2 id="ui-and-controls">UI and controls</h2>
+<p>The project uses a 1280×720 reference canvas with <code>canvas_items</code> stretching. Anchor controls before applying offsets so layouts scale correctly on Android. Action buttons call <code>player.set_mobile_action()</code> and share names with <code>InputMap</code>; the right-hand <code>virtual_joystick.gd</code> emits proportional throttle and steering through <code>player.set_mobile_movement()</code>.</p>
+<p>The splash and menu artwork are project assets under <code>assets/ui/menu/</code>. Keep generated-asset prompts and dates in <code>GENERATED_ASSETS.md</code>. Overlay important text in Godot rather than baking it into images. Quest artwork and its generation notes live under <code>assets/ui/quests/</code>.</p>
+<h2 id="tests">Tests</h2>
+<p>Every smoke test is a standalone <code>SceneTree</code> script. Tests instantiate the real main scene, exercise a focused behavior, free it and quit. Add new tests to <code>.vscode/tasks.json</code>.</p>
+<p>Run all smoke tests from a shell with:</p>
+<pre class="bash"><code>for test in tests/*_smoke.gd; do
+  ./scripts/godot.sh --headless --path . --script &quot;res://$test&quot; || exit 1
+done</code></pre>
+<p>Before handing off a change, also run:</p>
+<pre class="bash"><code>./scripts/godot.sh --headless --editor --path . --quit
+git diff --check
+jq empty .vscode/tasks.json
+./scripts/build-android.sh</code></pre>
+<p>Headless Godot may print resource-leak cleanup warnings after a successful test. Treat script errors, assertion failures, nonzero exits, or failed export verification as failures.</p>
+<h2 id="android-debugging-and-release">Android debugging and release</h2>
+<p>The debug APK is written to <code>build/android/Dinos4Helena-debug.apk</code>. Install it with:</p>
+<pre class="bash"><code>.tools/android-sdk/platform-tools/adb install -r build/android/Dinos4Helena-debug.apk</code></pre>
+<p>For a Play Store release, use a package ID you own, create an external release keystore, enable the Gradle build template, export an AAB, and test through Play’s internal track. Never commit signing secrets or <code>.env</code> files.</p>
+<h2 id="coding-conventions">Coding conventions</h2>
+<ul>
+<li>Use typed GDScript values where inference from <code>Variant</code> would be ambiguous.</li>
+<li>Prefer small actor scripts and keep global orchestration in <code>main.gd</code>.</li>
+<li>Explain intent, priority, or non-obvious engine behavior in comments; do not restate straightforward assignments.</li>
+<li>Preserve deterministic RNG by using the seeded generator passed through world layout code.</li>
+<li>Keep mobile costs predictable: reuse materials/models and avoid creating nodes every frame.</li>
+<li>Add a focused smoke test for every gameplay regression.</li>
+</ul>
+</article></main>
+  <footer><a href="https://studio-level-6128.github.io/website/"><img width="75" height="50" src="../images/studio-level-6128.png" alt="">Created by Studio Level 6128</a></footer>
+</body>
+</html>

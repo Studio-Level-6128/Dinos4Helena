@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Install the game · Dinos4Helena</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header><nav aria-label="Main navigation"><a class="brand" href="../index.html">Dinos4Helena</a><a href="../guides/install.html">Install</a><a href="../index.html#guides">Field guides</a></nav></header>
+  <main id="main"><article><a href="../index.html#guides">← All field guides</a><h1 id="install-dinos4helena">Install Dinos4Helena</h1>
+<h2 id="play-on-android-with-an-apk">Play on Android with an APK</h2>
+<p>An APK is the file that installs the game on your phone. If you don’t have one, follow the Linux build steps below first.</p>
+<ol type="1">
+<li>Copy the game’s <code>.apk</code> file to the phone’s <strong>Downloads</strong> folder.</li>
+<li>Open <strong>Files</strong>, find the APK in <strong>Downloads</strong>, and tap it. If Android asks to allow installs from this app, allow it only if you trust the file. You can turn that permission off again afterward.</li>
+<li>Tap <strong>Install</strong>, then <strong>Open</strong>. Choose <strong>Quests → Getting Started</strong> to play the first campaign.</li>
+</ol>
+<h2 id="run-from-source-on-linux">Run from source on Linux</h2>
+<p>The included setup script is for <strong>64-bit Intel or AMD Linux</strong>. You’ll need an internet connection, Bash, Git, <code>curl</code>, <code>unzip</code>, and <code>tar</code>. Setup downloads Godot and the Android build tools into the project folder and accepts the Android SDK licenses.</p>
+<pre class="bash"><code>git clone https://github.com/Studio-Level-6128/Dinos4Helena.git
+cd Dinos4Helena
+./scripts/setup-dev.sh
+./scripts/godot.sh --path .</code></pre>
+<p>The last command launches the desktop game. If you already have the source, start in the project folder and skip the first two commands.</p>
+<h2 id="build-the-android-apk-on-linux">Build the Android APK on Linux</h2>
+<ol type="1">
+<li>Complete the Linux setup above and close the game.</li>
+<li>From the project folder, run <code>./scripts/godot.sh --editor --path .</code>. In Godot, choose <strong>Project → Install Android Build Template</strong>, confirm, and close the editor after installation.</li>
+<li>Run <code>./scripts/build-android.sh</code>. The installer is <code>build/android/Dinos4Helena-debug.apk</code>. Copy that file to your phone and follow <strong>Play on Android with an APK</strong> above.</li>
+</ol>
+<p>For USB installation instead, enable <strong>USB debugging</strong> in the phone’s developer options, connect it to the computer, and approve the debugging prompt. Then run:</p>
+<pre class="bash"><code>.tools/android-sdk/platform-tools/adb devices
+.tools/android-sdk/platform-tools/adb install -r build/android/Dinos4Helena-debug.apk</code></pre>
+<p>If the device list says <code>unauthorized</code>, unlock the phone and approve the prompt before running the install command. Once the game opens, the <a href="play.html">player guide</a> explains the controls.</p>
+</article></main>
+  <footer><a href="https://studio-level-6128.github.io/website/"><img width="75" height="50" src="../images/studio-level-6128.png" alt="">Created by Studio Level 6128</a></footer>
+</body>
+</html>

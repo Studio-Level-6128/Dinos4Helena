@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quest writing · Dinos4Helena</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header><nav aria-label="Main navigation"><a class="brand" href="../index.html">Dinos4Helena</a><a href="../guides/install.html">Install</a><a href="../index.html#guides">Field guides</a></nav></header>
+  <main id="main"><article><a href="../index.html#guides">← All field guides</a><h1 id="quest-and-mission-authoring-guide">Quest and mission authoring guide</h1>
+<p>This guide explains how to add a quest, add or reorder missions, customize a mission’s generated world, implement win and loss conditions, persist progress, add artwork, and test the result.</p>
+<h2 id="concepts-and-runtime-order">Concepts and runtime order</h2>
+<p>A <strong>quest</strong> is an ordered campaign. A <strong>mission</strong> is one playable step in that campaign. Mission order is significant:</p>
+<ol type="1">
+<li>The first mission is unlocked in normal progression.</li>
+<li>Completing a mission unlocks the next mission in the configured list.</li>
+<li>Completed missions remain replayable.</li>
+<li>Completion is saved by quest ID and mission ID in <code>user://quest_progress.cfg</code>.</li>
+</ol>
+<p>For debugging, <code>config/quests.cfg</code> currently enables <code>[debug]</code> <code>unlock_all_missions=true</code>. Every quest mission is immediately available, including the final boss, without changing saved completion. Set it to <code>false</code> and restart the game to restore sequential unlocking. Omitting the setting also uses normal progression.</p>
+<p>When a mission starts, the game:</p>
+<ol type="1">
+<li>Generates the normal deterministic world-layout data.</li>
+<li>Runs the mission’s setup script, which may modify that data.</li>
+<li>Builds the landscape, player, wildlife, eggs, tokens, HUD, and minimap.</li>
+<li>Instantiates the mission’s event script.</li>
+<li>Saves completion when the event script calls <code>complete()</code>.</li>
+</ol>
+<p>The setup script therefore changes what will be built. The event script observes and controls the live game.</p>
+<h2 id="folder-layout">Folder layout</h2>
+<p>Use lowercase <code>snake_case</code> for IDs and directories. A quest with two missions should look like this:</p>
+<pre class="text"><code>config/
+└── quests.cfg
+quests/
+└── river_journey/
+    ├── missions.cfg
+    └── missions/
+        ├── find_the_river/
+        │   ├── setup.gd
+        │   └── event.gd
+        └── cross_the_river/
+            ├── setup.gd
+            └── event.gd
+assets/ui/quests/
+├── river-journey.png
+├── find-the-river.png
+└── cross-the-river.png</code></pre>
+<p>IDs become save-data keys. Do not rename a published quest or mission ID unless you also implement a progress migration. Titles and descriptions can be changed freely.</p>
+<h2 id="add-a-quest">Add a quest</h2>
+<h3 id="create-its-directory">1. Create its directory</h3>
+<p>Create <code>quests/&lt;quest_id&gt;/missions/</code>, then add one subdirectory per mission. Each mission must have a <code>setup.gd</code> and <code>event.gd</code>.</p>
+<h3 id="register-the-quest">2. Register the quest</h3>
+<p>Add the quest ID to <code>[quests].quest_ids</code> in <code>config/quests.cfg</code>. The array controls the order on the quest overview.</p>
+<pre class="ini"><code>[quests]
+quest_ids=[&quot;getting_started&quot;, &quot;river_journey&quot;]
+overview_background=&quot;res://assets/ui/quests/quest-overview-background.png&quot;
+
+[river_journey]
+title=&quot;River Journey&quot;
+description=&quot;Follow the valley river and find a safe crossing.&quot;
+image=&quot;res://assets/ui/quests/river-journey.png&quot;
+mission_config=&quot;res://quests/river_journey/missions.cfg&quot;</code></pre>
+<p>Required quest fields:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>title</code></td>
+<td>Display name shown on the quest tile and page.</td>
+</tr>
+<tr class="even">
+<td><code>description</code></td>
+<td>Short overview-tile description.</td>
+</tr>
+<tr class="odd">
+<td><code>image</code></td>
+<td>Quest cover image loaded through a <code>res://</code> path.</td>
+</tr>
+<tr class="even">
+<td><code>mission_config</code></td>
+<td>Path to this quest’s mission configuration.</td>
+</tr>
+</tbody>
+</table>
+<p>No change to <code>main.gd</code> is required for an ordinary new quest.</p>
+<h3 id="create-the-mission-configuration">3. Create the mission configuration</h3>
+<p>Create <code>quests/&lt;quest_id&gt;/missions.cfg</code>:</p>
+<pre class="ini"><code>[quest]
+mission_ids=[&quot;find_the_river&quot;, &quot;cross_the_river&quot;]
+
+[find_the_river]
+title=&quot;Find the River&quot;
+description=&quot;Reach the river bank.&quot;
+dinosaur=&quot;parasaurolophus&quot;
+map_theme=&quot;grassland&quot;
+image=&quot;res://assets/ui/quests/find-the-river.png&quot;
+setup_script=&quot;res://quests/river_journey/missions/find_the_river/setup.gd&quot;
+event_script=&quot;res://quests/river_journey/missions/find_the_river/event.gd&quot;
+target_distance=8.0
+
+[cross_the_river]
+title=&quot;Cross the River&quot;
+description=&quot;Reach the far bank without losing all health.&quot;
+dinosaur=&quot;spinosaurus&quot;
+map_theme=&quot;grassland&quot;
+image=&quot;res://assets/ui/quests/cross-the-river.png&quot;
+setup_script=&quot;res://quests/river_journey/missions/cross_the_river/setup.gd&quot;
+event_script=&quot;res://quests/river_journey/missions/cross_the_river/event.gd&quot;</code></pre>
+<p>Required mission fields:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>title</code></td>
+<td>Mission name shown on its tile and objective HUD.</td>
+</tr>
+<tr class="even">
+<td><code>description</code></td>
+<td>Brief objective shown on the tile and initially in the HUD.</td>
+</tr>
+<tr class="odd">
+<td><code>dinosaur</code></td>
+<td>Player dinosaur ID from <code>config/dinosaurs.cfg</code>.</td>
+</tr>
+<tr class="even">
+<td><code>map_theme</code></td>
+<td>One of <code>grassland</code>, <code>desert</code>, <code>winter</code>, or <code>volcano</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>image</code></td>
+<td>Mission tile artwork.</td>
+</tr>
+<tr class="even">
+<td><code>setup_script</code></td>
+<td>Script that modifies the generated layout before building.</td>
+</tr>
+<tr class="odd">
+<td><code>event_script</code></td>
+<td>Live objective and failure-condition script.</td>
+</tr>
+</tbody>
+</table>
+<p>Any additional fields are mission-specific objective data. The event script receives the complete section as its <code>objective</code> dictionary. Prefer these config values over hard-coded counts, distances, and durations.</p>
+<p>Mission order in <code>mission_ids</code> controls progression. Inserting a mission between two existing missions changes which prerequisite unlocks the later mission but does not erase existing completion flags.</p>
+<h2 id="write-a-setup-script">Write a setup script</h2>
+<p>Every setup script extends <code>RefCounted</code> and exposes <code>setup(controller: Node)</code>:</p>
+<pre class="gdscript"><code>extends RefCounted
+
+
+func setup(controller: Node) -&gt; void:
+    controller.generated_vegetation.append({
+        &quot;type&quot;: &quot;grass&quot;,
+        &quot;position&quot;: Vector3(0.0, 0.015, 18.0),
+        &quot;scale&quot;: 1.2,
+        &quot;rotation&quot;: 0.0
+    })</code></pre>
+<p>Setup runs after normal procedural generation. Use <code>append()</code> to add mission-specific objects while keeping the normal world, or <code>clear()</code> / replacement assignment when the mission requires a controlled scenario.</p>
+<h3 id="useful-controller-data">Useful controller data</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Property</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>map_seed</code></td>
+<td>Current deterministic world seed. Use it when deriving NPC RNG seeds.</td>
+</tr>
+<tr class="even">
+<td><code>selected_map_theme</code></td>
+<td>Active theme selected from the mission config.</td>
+</tr>
+<tr class="odd">
+<td><code>generated_vegetation</code></td>
+<td>Plants that will be built.</td>
+</tr>
+<tr class="even">
+<td><code>generated_eggs</code></td>
+<td>Egg nests that will be built.</td>
+</tr>
+<tr class="odd">
+<td><code>generated_dinosaurs</code></td>
+<td>Wildlife that will be spawned.</td>
+</tr>
+<tr class="even">
+<td><code>generated_tokens</code></td>
+<td>Power-up tokens that will be spawned.</td>
+</tr>
+<tr class="odd">
+<td><code>generated_ponds</code>, <code>generated_rivers</code></td>
+<td>Generated water layout.</td>
+</tr>
+<tr class="even">
+<td><code>generated_hills</code>, <code>generated_trees</code>, <code>generated_rocks</code>, <code>generated_logs</code></td>
+<td>Solid world features.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="vegetation-entry">Vegetation entry</h3>
+<pre class="gdscript"><code>{
+    &quot;type&quot;: &quot;grass&quot;, # grass, poisonous, cycad, horsetail, fiddlehead, etc.
+    &quot;position&quot;: Vector3(0.0, 0.015, 18.0),
+    &quot;scale&quot;: 1.2,
+    &quot;rotation&quot;: 0.0
+}</code></pre>
+<p><code>grass</code> and other safe plant types join the <code>edible_plant</code> group when built. <code>poisonous</code> plants are also tagged <code>poisonous_plant</code>.</p>
+<h3 id="egg-entry">Egg entry</h3>
+<pre class="gdscript"><code>{
+    &quot;position&quot;: Vector3(-6.0, 0.1, 20.0),
+    &quot;rotation&quot;: 1.4
+}</code></pre>
+<p>To require an exact number of nests, replace the existing array:</p>
+<pre class="gdscript"><code>controller.generated_eggs = [
+    {&quot;position&quot;: Vector3(-6.0, 0.1, 20.0), &quot;rotation&quot;: 0.4},
+    {&quot;position&quot;: Vector3(6.0, 0.1, 24.0), &quot;rotation&quot;: 2.0}
+]</code></pre>
+<h3 id="wildlife-entry">Wildlife entry</h3>
+<pre class="gdscript"><code>controller.generated_dinosaurs.append({
+    &quot;species&quot;: &quot;triceratops&quot;,
+    &quot;position&quot;: Vector3(0.0, 0.1, 30.0),
+    &quot;pack_id&quot;: 1000,
+    &quot;pack_slot&quot;: 0,
+    &quot;patrol_center&quot;: Vector3(0.0, 0.0, 30.0),
+    &quot;rng_seed&quot;: controller.map_seed + 1000,
+    &quot;texture_variant&quot;: 0,
+    &quot;mission_role&quot;: &quot;river_guide&quot;
+})</code></pre>
+<p>Required wildlife fields are <code>species</code>, <code>position</code>, <code>pack_id</code>, <code>pack_slot</code>, <code>patrol_center</code>, and <code>rng_seed</code>. <code>texture_variant</code> is optional.</p>
+<p><code>mission_role</code> is optional metadata and is the preferred way for the event script to find mission-specific actors without depending on generated node names. Mission carnivores may also set:</p>
+<ul>
+<li><code>can_retreat=false</code> to disable injury retreat.</li>
+<li><code>ignore_combat_odds=true</code> to make a forced target ignore normal risk checks.</li>
+</ul>
+<p>Use unique positive <code>pack_id</code> values for separate herbivore packs. Use <code>-1</code> for solitary hunters. Avoid placing actors inside water, lava, or solid landmarks. The central spawn area is near <code>Vector3(0, 0.1, 5)</code> on normal themes.</p>
+<h2 id="write-an-event-script">Write an event script</h2>
+<p>Every event script extends the shared base:</p>
+<pre class="gdscript"><code>extends &quot;res://quests/mission_event.gd&quot;</code></pre>
+<p>The base provides:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Member</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>controller</code></td>
+<td>The live <code>main.gd</code> world controller.</td>
+</tr>
+<tr class="even">
+<td><code>objective</code></td>
+<td>Dictionary containing every value from the mission’s config section.</td>
+</tr>
+<tr class="odd">
+<td><code>ended</code></td>
+<td>Becomes <code>true</code> after completion or failure.</td>
+</tr>
+<tr class="even">
+<td><code>set_progress(message)</code></td>
+<td>Updates the mission objective HUD.</td>
+</tr>
+<tr class="odd">
+<td><code>complete()</code></td>
+<td>Ends successfully, saves completion, and unlocks the next mission.</td>
+</tr>
+<tr class="even">
+<td><code>fail(reason)</code></td>
+<td>Ends unsuccessfully and shows the supplied reason.</td>
+</tr>
+</tbody>
+</table>
+<p>When overriding <code>setup()</code>, call <code>super.setup()</code> first:</p>
+<pre class="gdscript"><code>extends &quot;res://quests/mission_event.gd&quot;
+
+var collected := 0
+
+
+func setup(world_controller: Node, mission_objective: Dictionary) -&gt; void:
+    super.setup(world_controller, mission_objective)
+    controller.player.food_consumed.connect(_on_food_consumed)
+    set_progress(&quot;Food: 0 / %d&quot; % int(objective.get(&quot;target_count&quot;, 3)))
+
+
+func _on_food_consumed(food_kind: String) -&gt; void:
+    if ended or food_kind != &quot;plant&quot;:
+        return
+    collected += 1
+    var target := int(objective.get(&quot;target_count&quot;, 3))
+    set_progress(&quot;Food: %d / %d&quot; % [collected, target])
+    if collected &gt;= target:
+        complete()</code></pre>
+<p>For continuous conditions, use <code>_process(delta)</code>, guard against invalid objects, and throttle UI updates:</p>
+<pre class="gdscript"><code>extends &quot;res://quests/mission_event.gd&quot;
+
+var elapsed := 0.0
+var update_time := 0.0
+
+
+func _process(delta: float) -&gt; void:
+    if ended or not is_instance_valid(controller.player):
+        return
+    elapsed += delta
+    update_time -= delta
+    if update_time &lt;= 0.0:
+        update_time = 0.5
+        set_progress(&quot;Survive: %d seconds&quot; % int(elapsed))
+    if elapsed &gt;= float(objective.get(&quot;target_seconds&quot;, 60.0)):
+        complete()</code></pre>
+<h3 id="useful-live-objects-groups-and-signals">Useful live objects, groups, and signals</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>API</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>controller.player</code></td>
+<td>Player <code>CharacterBody3D</code>.</td>
+</tr>
+<tr class="even">
+<td><code>controller.world_root</code></td>
+<td>Parent of the live generated world.</td>
+</tr>
+<tr class="odd">
+<td><code>controller.active_minimap.get_explored_fraction()</code></td>
+<td>Returns explored map fraction from <code>0.0</code> to <code>1.0</code>.</td>
+</tr>
+<tr class="even">
+<td>Player signal <code>food_consumed(food_kind)</code></td>
+<td>Emits <code>"plant"</code> or <code>"meat"</code> after food is fully consumed.</td>
+</tr>
+<tr class="odd">
+<td>Player signal <code>died</code></td>
+<td>Use when player death needs a mission-specific result.</td>
+</tr>
+<tr class="even">
+<td>NPC signal <code>died(npc)</code></td>
+<td>Emitted by wildlife on death.</td>
+</tr>
+<tr class="odd">
+<td>Baby signal <code>died(baby)</code></td>
+<td>Emitted by baby dinosaurs on death.</td>
+</tr>
+<tr class="even">
+<td>Group <code>npc_dinosaur</code></td>
+<td>All living or dying wildlife and babies.</td>
+</tr>
+<tr class="odd">
+<td>Group <code>hunter_dinosaur</code></td>
+<td>Living carnivore NPCs.</td>
+</tr>
+<tr class="even">
+<td>Group <code>prey_dinosaur</code></td>
+<td>Living herbivore NPCs and babies.</td>
+</tr>
+<tr class="odd">
+<td>Group <code>baby_dinosaur</code></td>
+<td>Hatched children.</td>
+</tr>
+<tr class="even">
+<td>Group <code>dinosaur_egg</code></td>
+<td>Unhatched egg nests.</td>
+</tr>
+<tr class="odd">
+<td>Groups <code>edible_plant</code>, <code>edible_meat</code></td>
+<td>Current food nodes.</td>
+</tr>
+</tbody>
+</table>
+<p>NPCs record their most recent attacker in <code>last_attacker</code>. This lets a hunt mission distinguish a player kill from a kill caused by other wildlife.</p>
+<h3 id="actor-specific-win-and-loss-example">Actor-specific win and loss example</h3>
+<p>Use <code>mission_role</code> rather than names:</p>
+<pre class="gdscript"><code>extends &quot;res://quests/mission_event.gd&quot;
+
+
+func setup(world_controller: Node, mission_objective: Dictionary) -&gt; void:
+    super.setup(world_controller, mission_objective)
+    for npc in get_tree().get_nodes_in_group(&quot;npc_dinosaur&quot;):
+        match str(npc.get_meta(&quot;mission_role&quot;, &quot;&quot;)):
+            &quot;target&quot;:
+                npc.died.connect(_on_target_died)
+            &quot;protected&quot;:
+                npc.died.connect(_on_protected_died)
+    set_progress(&quot;Defeat the target and protect your ally&quot;)
+
+
+func _on_target_died(_npc: CharacterBody3D) -&gt; void:
+    complete()
+
+
+func _on_protected_died(_npc: CharacterBody3D) -&gt; void:
+    fail(&quot;Your ally was killed&quot;)</code></pre>
+<p>Always guard callbacks and <code>_process()</code> with <code>ended</code> if they perform work beyond calling <code>complete()</code> or <code>fail()</code>. The base methods themselves ignore duplicate endings.</p>
+<h2 id="artwork">Artwork</h2>
+<p>Store quest artwork under <code>assets/ui/quests/</code>:</p>
+<ul>
+<li>Overview background: 1280×720, wide 16:9.</li>
+<li>Quest covers: 768×512, wide 3:2.</li>
+<li>Mission tiles: 768×512, wide 3:2.</li>
+</ul>
+<p>Keep important subjects readable at thumbnail size. Do not bake titles, progress marks, locks, or borders into the image; Godot renders those elements. For generated artwork, record the date, prompts or prompt summary, and any scientific caveats in <code>assets/ui/quests/GENERATED_ASSETS.md</code>.</p>
+<p>After adding or replacing images, force an import validation:</p>
+<pre class="bash"><code>./scripts/godot.sh --headless --path . --editor --quit</code></pre>
+<h2 id="progress-and-local-testing">Progress and local testing</h2>
+<p>Progress is saved in <code>user://quest_progress.cfg</code>, using this shape:</p>
+<pre class="ini"><code>[river_journey]
+find_the_river=true
+cross_the_river=true</code></pre>
+<p>During automated tests, override <code>game.quest_progress_path</code> with a test-specific <code>user://</code> filename and clear <code>game.quest_progress</code>. Never let tests write to the real player-progress path.</p>
+<p>If you need to test a later mission directly, either complete its prerequisite through <code>_mark_mission_completed()</code> using an isolated test file or start from a prepared test-only <code>ConfigFile</code>.</p>
+<h2 id="testing-checklist">Testing checklist</h2>
+<p>For every new quest or mission, verify:</p>
+<ul>
+<li>Every <code>res://</code> image and script path exists.</li>
+<li>Quest and mission IDs are unique and stable.</li>
+<li>The configured dinosaur exists in <code>config/dinosaurs.cfg</code>.</li>
+<li>The setup script creates a reachable, winnable world.</li>
+<li>The event script has an explicit completion condition.</li>
+<li>Intended failure conditions call <code>fail()</code>.</li>
+<li>Mission 1 is available and later missions are initially locked.</li>
+<li>Completing each mission unlocks exactly the next mission.</li>
+<li>Completed missions are marked and replayable after restarting the game.</li>
+<li>Tile art has the correct species and no embedded UI text.</li>
+<li>The mission remains practical on a 1280×720 touch layout.</li>
+</ul>
+<p>Run:</p>
+<pre class="bash"><code>./scripts/godot.sh --headless --path . --script res://tests/quests_smoke.gd
+./scripts/godot.sh --headless --path . --script res://tests/quest_missions_smoke.gd
+./scripts/godot.sh --headless --path . --script res://tests/quest_outcomes_smoke.gd
+./scripts/godot.sh --headless --path . --script res://tests/quest_release_smoke.gd
+./scripts/godot.sh --headless --path . --editor --quit
+git diff --check
+./scripts/build-android.sh</code></pre>
+<p>The release smoke check uses explicit runtime checks rather than <code>assert()</code>, which is omitted from release builds. To test the exported code and data before installing on a device, export a pack and run it outside the project directory:</p>
+<pre class="bash"><code>./scripts/godot.sh --headless --path . --export-pack &quot;Android Release&quot; /tmp/dinos4helena-quests.zip
+cd /tmp
+/path/to/Dinos4Helena/scripts/godot.sh --headless --main-pack /tmp/dinos4helena-quests.zip --script res://tests/quest_release_smoke.gd</code></pre>
+<p>Never put required setup or configuration loads inside <code>assert()</code>: Godot does not evaluate those expressions in release builds.</p>
+<p>Extend <code>tests/quests_smoke.gd</code> when adding catalog or progression behavior. Extend <code>tests/quest_missions_smoke.gd</code> with assertions for the new mission’s setup data and important actor roles. Add a focused test for complex objective logic rather than relying only on the generic boot test. Extend <code>tests/quest_outcomes_smoke.gd</code> with at least one win and each explicit loss condition so missions cannot remain active after their goal becomes impossible.</p>
+<h2 id="common-mistakes">Common mistakes</h2>
+<ul>
+<li><strong>A later mission stays locked:</strong> its immediate predecessor has not called <code>complete()</code>, or an ID was changed after progress was saved.</li>
+<li><strong>A mission can be opened out of order:</strong> start it through <code>_start_quest_mission()</code>; do not bypass its unlock guard.</li>
+<li><strong>The event cannot find an actor:</strong> add a unique <code>mission_role</code> in the setup data and query that metadata after actors are built.</li>
+<li><strong>The event receives no config value:</strong> check the key’s spelling in that mission’s section and use <code>objective.get("key", fallback)</code>.</li>
+<li><strong>A setup object does not appear:</strong> setup scripts change generated data, not live nodes. Use the expected dictionary fields and a valid <code>res://</code> script.</li>
+<li><strong>An objective fires multiple times:</strong> guard callbacks with <code>ended</code>; the base class also protects <code>complete()</code> and <code>fail()</code>.</li>
+<li><strong>A mission is impossible on some seeds:</strong> place required objects in known clear locations or replace the relevant generated array with a controlled layout.</li>
+</ul>
+<h2 id="frozen-pass-environmental-missions">Frozen Pass environmental missions</h2>
+<p><code>quests/frozen_pass/setup.gd</code> creates a deterministic, clear winter corridor. Each mission has its own setup/event entry point inheriting the shared quest scripts. The <code>mission_mode</code> configuration selects footprints, weather, ice, stealth, boulder channels, or avalanche logic in <code>quests/frozen_pass/event.gd</code>. All objective props, collisions, and effect players belong to that event node and are freed when the player leaves or starts another mission. Existing free play and other quests do not use these environmental rules.</p>
+<p>Weather/ice/stealth/avalanche timing is configurable in <code>missions.cfg</code>. Checkpoints advance in order; recoverable hazards reset position and motion, while player death and harm to a sleeping giant produce mission failure. English, German, and French strings live in the existing translation catalogs. The mission introduction generator includes this quest; synthesized effect sources are in <code>scripts/generate-frozen-pass-sounds.py</code>.</p>
+<p>Additional checks for this quest:</p>
+<pre class="bash"><code>./scripts/godot.sh --headless --path . --script res://tests/frozen_pass_smoke.gd
+./scripts/godot.sh --headless --path . --fixed-fps 60 --script res://tests/frozen_pass_routes_smoke.gd</code></pre>
+<p>The first covers outcomes, recoverable hazards, progress persistence, and language selection. The second moves real player bodies along each route and pushes the boulders through normal movement, checking physical reachability.</p>
+<h2 id="heart-of-the-volcano">Heart of the Volcano</h2>
+<p><code>quests/heart_of_volcano/setup.gd</code> reserves a deterministic route north of the normal volcano and moves scenic lava away from required paths. Volcano free play still starts at its original <code>(0, 0.1, 58)</code> position, while quest setup can now supply <code>mission_player_start</code> just as on other themes.</p>
+<p>Each mission has its own event script inheriting the shared geometry, sound, localization, and checkpoint helpers in <code>quests/heart_of_volcano/event.gd</code>. The six species are Parasaurolophus, Velociraptor, Apatosaurus, Triceratops, Stegosaurus, and Spinosaurus. Gameplay uses the existing touch and keyboard controls, including held Scream durations and the delayed Attack impact signal. The script recognizes actual platform and ledge landings, balance holds, aligned running attacks, and timed projectile deflections. Environmental retries restore health and energy without clearing completed steps.</p>
+<p>Black Wall remembers forward running for <code>charge_grace_seconds</code> (0.6 seconds) so wall collision cannot cancel the delayed horn impact. Facing is checked against the wall normal; <code>charge_alignment_tolerance</code> allows a three-unit sideways offset from each crack. The player must keep Run held for the hit; standing attacks, reverse movement, sideways hits, and expired charges fail.</p>
+<p>Ashfang uses <code>quests/heart_of_volcano/boss.gd</code>, a mission-specific subclass of normal wildlife. It keeps model, collision, animations, and normal player attack targeting, while the event controls health, guard/recovery windows, telegraphs, charges, sweeps, lava, phase retries, and retreat. The boss remains alive and retreats after defeat; completion requires reaching the final crossing. Phase checkpoints last for the current attempt; replay starts at phase one. Settings are in <code>missions.cfg</code>. The optional <code>completion_detail_key</code> provides the translated finale message without changing other quest results.</p>
+<p>New asset prompts and audio provenance are recorded in their respective <code>GENERATED_ASSETS.md</code> files. The existing narration generator includes all six new mission IDs; effects can be reproduced with <code>scripts/generate-volcano-sounds.py</code>.</p>
+<p>Additional checks:</p>
+<pre class="bash"><code>./scripts/godot.sh --headless --path . --script res://tests/volcano_quest_smoke.gd
+./scripts/godot.sh --headless --path . --fixed-fps 60 --script res://tests/volcano_routes_smoke.gd</code></pre>
+<p>The first checks species, objectives, wrong actions, recovery, persistence, translations, voice selection, and all boss phases. The second completes every mission using actual player movement and touch inputs, including real attack hits against the boss. The packaged release smoke check also boots Ashfang and verifies his phase HUD and all 24 missions’ scripts, tile images, and narration.</p>
+</article></main>
+  <footer><a href="https://studio-level-6128.github.io/website/"><img width="75" height="50" src="../images/studio-level-6128.png" alt="">Created by Studio Level 6128</a></footer>
+</body>
+</html>
