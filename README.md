@@ -2,7 +2,7 @@
 
 # Dinos4Helena
 
-[Visit the game website and field guides](https://keuperj.github.io/Dinos4Helena/)
+[Visit the game website and field guides](https://studio-level-6128.github.io/Dinos4Helena/)
 
 Play as one of seven dinosaurs in a 3D survival game for Android and desktop. Graze with a herd, hunt for your next meal, or find a nest and hatch a baby that follows you around the valley.
 

@@ -13,7 +13,7 @@ An APK is the file that installs the game on your phone. If you don’t have one
 The included setup script is for **64-bit Intel or AMD Linux**. You’ll need an internet connection, Bash, Git, `curl`, `unzip`, and `tar`. Setup downloads Godot and the Android build tools into the project folder and accepts the Android SDK licenses.
 
 ```bash
-git clone https://github.com/keuperj/Dinos4Helena.git
+git clone https://github.com/Studio-Level-6128/Dinos4Helena.git
 cd Dinos4Helena
 ./scripts/setup-dev.sh
 ./scripts/godot.sh --path .

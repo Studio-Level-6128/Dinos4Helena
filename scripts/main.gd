@@ -2198,7 +2198,7 @@ func _build_credits_overlay(parent: Control) -> void:
 	var github := LinkButton.new()
 	github.name = "GithubLink"
 	github.text = _t("credits.github")
-	github.set_meta("uri", "https://github.com/keuperj/Dinos4Helena")
+	github.set_meta("uri", "https://github.com/Studio-Level-6128/Dinos4Helena")
 	github.custom_minimum_size = Vector2(600, 34)
 	github.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	github.add_theme_font_size_override("font_size", 18)
@@ -2298,7 +2298,7 @@ func _close_play_guide() -> void:
 
 
 func _open_credits_github() -> void:
-	OS.shell_open("https://github.com/keuperj/Dinos4Helena")
+	OS.shell_open("https://github.com/Studio-Level-6128/Dinos4Helena")
 
 
 func _credits_style() -> StyleBoxFlat:

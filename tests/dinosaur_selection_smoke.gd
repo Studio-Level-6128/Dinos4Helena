@@ -53,7 +53,7 @@ func _run() -> void:
 	assert(dedication.text == "For Helena - have fun. Dad.", "Credits dedication is incorrect")
 	assert(author.text == "Open Source Game by Janis Keuper.", "Credits author line is incorrect")
 	assert(license.text == "License: GPL v3", "Credits license line is incorrect")
-	assert(github.get_meta("uri") == "https://github.com/keuperj/Dinos4Helena", "Credits GitHub link is incorrect")
+	assert(github.get_meta("uri") == "https://github.com/Studio-Level-6128/Dinos4Helena", "Credits GitHub link is incorrect")
 	app._close_credits()
 	assert(not app.credits_overlay.visible, "Credits page did not close")
 
